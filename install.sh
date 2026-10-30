@@ -21,6 +21,8 @@
 #   ~/.config/mealplan/             configuration
 #   ~/.local/share/mealplan/data/   database and backups/
 #   ~/.config/systemd/user/mealplan.service, ~/.local/bin/mealplan
+#   Without a systemd user manager (or with MEALPLAN_SERVICE=process) the app runs as
+#   a plain background process instead; it then won't restart after a reboot.
 #
 # Everything runs inside functions and main() is called on the last line, so a
 # partially downloaded script does nothing.
@@ -470,6 +472,10 @@ backup_db() {
 # SERVICE_KIND: "system" (systemd unit), "user" (systemd user unit), or "process"
 # (plain background process: test mode, or per-user without a systemd user manager).
 default_service_kind() {
+  if [[ -n "${MEALPLAN_SERVICE:-}" && "$MODE" != system ]]; then
+    [[ "$MEALPLAN_SERVICE" == user || "$MEALPLAN_SERVICE" == process ]] || die "MEALPLAN_SERVICE must be user or process"
+    echo "$MEALPLAN_SERVICE"; return
+  fi
   case "$MODE" in
     system) echo system ;;
     test) echo process ;;
