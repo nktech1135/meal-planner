@@ -9,12 +9,13 @@ from app.schemas import CalculateIn, DeriveIn, NutritionOut, YieldIn, YieldOut
 from app.security import current_user
 from app.services.access import form_factors, get_food, get_recipe, get_yield, recipe_yields, visible
 from app.services.nutrition import NutritionError, derive_yield, food_nutrition, recipe_portion
+from app.services.sharing import acting_user
 
 router = APIRouter(prefix="/api", tags=["conversions"])
 
 
 @router.get("/foods/{food_id}/yields", response_model=list[YieldOut])
-def list_yields(food_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def list_yields(food_id: int, user: User = Depends(acting_user), db: Session = Depends(get_db)):
     get_food(db, user, food_id)
     return list(db.scalars(
         select(CookingYield).where(CookingYield.raw_food_id == food_id, visible(CookingYield, user))

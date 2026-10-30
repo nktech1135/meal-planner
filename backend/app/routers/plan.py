@@ -2,7 +2,7 @@
 
 from datetime import UTC, date, datetime, time, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ from app.schemas import (
 from app.security import current_user
 from app.services.access import get_food, get_recipe, get_yield, recipe_yields
 from app.services.nutrition import NutritionError, add_into, food_nutrition, rounded
+from app.services.sharing import name_of, plan_owner
 from app.services.summary import evaluate, user_tz
 from app.services.targets import compute_targets
 
@@ -31,6 +32,8 @@ router = APIRouter(prefix="/api/plan", tags=["plan"])
 MEAL_TIMES = {"breakfast": time(8, 0), "lunch": time(12, 30), "snack": time(15, 30), "dinner": time(18, 30),
               "supplement": time(8, 0)}
 MAX_DAYS = 62
+# Whose plan: another user who shared theirs with you. Omitted: your own.
+OF = Query(None, description="Owner of a plan shared with you; omit for your own")
 
 
 def _range(start: date, end: date) -> None:
@@ -56,6 +59,8 @@ def validate_item(db: Session, user: User, body) -> str:
 def item_out(db: Session, user: User, item: PlanItem) -> dict:
     out = {k: getattr(item, k) for k in ("id", "date", "meal", "position", "food_id", "recipe_id", "label", "quantity",
                                          "unit", "weighed_state", "yield_id", "note", "origin", "logged_entry_id")}
+    added_by = db.get(User, item.created_by_id) if item.created_by_id and item.created_by_id != item.user_id else None
+    out["added_by"] = name_of(added_by) if added_by else None
     try:
         result = calculate_nutrition(db, user, item)
         out.update(nutrients=result.nutrients, trust_level=result.trust_level, grams=result.grams, error=None)
@@ -85,28 +90,33 @@ def plan_days(db: Session, user: User, start: date, end: date) -> list[dict]:
 
 
 @router.get("")
-def get_plan(start: date, end: date, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def get_plan(start: date, end: date, of: int | None = OF, user: User = Depends(current_user),
+             db: Session = Depends(get_db)):
     _range(start, end)
-    return plan_days(db, user, start, end)
+    return plan_days(db, plan_owner(db, user, of, edit=False), start, end)
 
 
 @router.post("", status_code=201)
-def add_item(body: PlanItemIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    return create_item(db, user, body, "manual")
+def add_item(body: PlanItemIn, of: int | None = OF, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return create_item(db, plan_owner(db, user, of, edit=True), body, "manual", added_by=user)
 
 
-def create_item(db: Session, user: User, body: PlanItemIn, origin: str) -> dict:
+def create_item(db: Session, user: User, body: PlanItemIn, origin: str, added_by: User | None = None) -> dict:
+    """Add to ``user``'s plan; the item is checked as them, so it must be something they can see."""
     label = validate_item(db, user, body)
     last = db.scalar(select(PlanItem.position).where(PlanItem.user_id == user.id, PlanItem.date == body.date)
                      .order_by(PlanItem.position.desc()).limit(1))
-    item = PlanItem(user_id=user.id, label=label, position=(last or 0) + 1, origin=origin, **body.model_dump())
+    item = PlanItem(user_id=user.id, label=label, position=(last or 0) + 1, origin=origin,
+                    created_by_id=(added_by or user).id, **body.model_dump())
     db.add(item)
     db.commit()
     return item_out(db, user, item)
 
 
 @router.patch("/{item_id}")
-def update_item(item_id: int, body: PlanItemUpdate, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def update_item(item_id: int, body: PlanItemUpdate, of: int | None = OF, user: User = Depends(current_user),
+                db: Session = Depends(get_db)):
+    user = plan_owner(db, user, of, edit=True)
     item = _own(db, user, item_id)
     changes = body.model_dump(exclude_unset=True)
     merged = PlanItemIn(**{**{k: getattr(item, k) for k in PlanItemIn.model_fields}, **changes})
@@ -118,8 +128,8 @@ def update_item(item_id: int, body: PlanItemUpdate, user: User = Depends(current
 
 
 @router.delete("/{item_id}", status_code=204)
-def delete_item(item_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    db.delete(_own(db, user, item_id))
+def delete_item(item_id: int, of: int | None = OF, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    db.delete(_own(db, plan_owner(db, user, of, edit=True), item_id))
     db.commit()
 
 
@@ -160,7 +170,8 @@ def log_day(body: PlanLogIn, user: User = Depends(current_user), db: Session = D
 
 
 @router.post("/copy", status_code=201)
-def copy_plan(body: PlanCopyIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def copy_plan(body: PlanCopyIn, of: int | None = OF, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    actor, user = user, plan_owner(db, user, of, edit=True)
     _range(body.from_start, body.from_end)
     shift = body.to_start - body.from_start
     sources = list(db.scalars(select(PlanItem).where(PlanItem.user_id == user.id, PlanItem.date >= body.from_start,
@@ -170,22 +181,25 @@ def copy_plan(body: PlanCopyIn, user: User = Depends(current_user), db: Session 
     for it in sources:
         db.add(PlanItem(user_id=user.id, date=it.date + shift, meal=it.meal, position=it.position, food_id=it.food_id,
                         recipe_id=it.recipe_id, label=it.label, quantity=it.quantity, unit=it.unit,
-                        weighed_state=it.weighed_state, yield_id=it.yield_id, note=it.note, origin="copy"))
+                        weighed_state=it.weighed_state, yield_id=it.yield_id, note=it.note, origin="copy",
+                        created_by_id=actor.id))
     db.commit()
     return {"copied": len(sources)}
 
 
 @router.post("/from-saved-meal", status_code=201)
-def plan_saved_meal(body: PlanFromSavedIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def plan_saved_meal(body: PlanFromSavedIn, of: int | None = OF, user: User = Depends(current_user),
+                    db: Session = Depends(get_db)):
+    actor, user = user, plan_owner(db, user, of, edit=True)
     meal = db.get(SavedMeal, body.saved_meal_id)
-    if meal is None or meal.owner_id != user.id:
+    if meal is None or meal.owner_id != user.id:  # the plan owner's saved meals
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Saved meal not found")
     out = []
     for it in meal.items:
         out.append(create_item(db, user, PlanItemIn(date=body.date, meal=body.meal or meal.default_meal,
                                                     food_id=it.food_id, recipe_id=it.recipe_id, quantity=it.quantity,
                                                     unit=it.unit, weighed_state=it.weighed_state, yield_id=it.yield_id),
-                               "saved_meal"))
+                               "saved_meal", added_by=actor))
     return out
 
 
@@ -211,9 +225,10 @@ def _food_need(db: Session, user: User, food: Food, quantity: float, unit: str, 
 
 
 @router.get("/shopping")
-def shopping_list(start: date, end: date, include_logged: bool = False, user: User = Depends(current_user),
-                  db: Session = Depends(get_db)):
+def shopping_list(start: date, end: date, include_logged: bool = False, of: int | None = OF,
+                  user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Everything needed for the planned days, with recipes broken down into their ingredients."""
+    user = plan_owner(db, user, of, edit=False)
     _range(start, end)
     needs: dict[tuple[int, str], dict] = {}
 
@@ -264,7 +279,9 @@ def shopping_list(start: date, end: date, include_logged: bool = False, user: Us
 
 
 @router.put("/shopping/check", status_code=204)
-def check_item(body: ShoppingCheckIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def check_item(body: ShoppingCheckIn, of: int | None = OF, user: User = Depends(current_user),
+               db: Session = Depends(get_db)):
+    user = plan_owner(db, user, of, edit=True)  # ticks are shared: everyone shopping for this plan sees them
     key = f"{body.start}:{body.end}:{body.key}"
     if body.checked:
         if db.get(ShoppingCheck, (user.id, key)) is None:

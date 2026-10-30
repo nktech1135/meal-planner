@@ -27,6 +27,7 @@ from app.routers.foods import food_out
 from app.schemas import BodyOut, LogOut, ProfileOut, SavedMealOut, UserOut
 from app.security import clear_session, current_user, hash_password, issue_session, verify_password
 from app.services.accounts import delete_user, end_sessions
+from app.services.sharing import shares_of
 
 router = APIRouter(prefix="/api/account", tags=["account"])
 
@@ -97,6 +98,7 @@ def export_data(user: User = Depends(current_user), db: Session = Depends(get_db
         "meal_plan": [{k: (getattr(p, k).isoformat() if k == "date" else getattr(p, k)) for k in (
             "date", "meal", "label", "food_id", "recipe_id", "quantity", "unit", "weighed_state", "note")}
             for p in rows(PlanItem, PlanItem.user_id)],
+        "plan_sharing": shares_of(db, user),
         "form_choices": [{"food_id": c.food_id, "component": c.component_name, "option": c.option_key}
                          for c in rows(FormChoice, FormChoice.user_id)],
         "advisor_conversations": [{"title": c.title, "messages": render(c)}

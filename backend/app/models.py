@@ -377,6 +377,19 @@ class PlanItem(Base):
     note: Mapped[str] = mapped_column(String(500), default="")
     origin: Mapped[str] = mapped_column(String(20), default="manual")  # manual | advisor | copy | saved_meal
     logged_entry_id: Mapped[int | None] = mapped_column(ForeignKey("log_entries.id", ondelete="SET NULL"))
+    # Who added it, when that wasn't the plan's owner (someone they shared their plan with).
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PlanShare(Base):
+    """One user letting another see, and optionally edit, their meal plan and shopping list."""
+
+    __tablename__ = "plan_shares"
+
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    can_edit: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

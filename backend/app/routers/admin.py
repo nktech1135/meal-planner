@@ -3,7 +3,7 @@ import secrets
 import anthropic
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -162,6 +162,9 @@ class UserAdminUpdate(BaseModel):
 class InviteIn(BaseModel):
     email: EmailStr
     display_name: str = ""
+    # Set a password now instead of sending a link; pass it on to the person yourself.
+    password: str | None = Field(default=None, min_length=10, max_length=200)
+    is_admin: bool = False
 
 
 def _user_row(db: Session, u: User) -> dict:
@@ -185,14 +188,18 @@ def list_users(_: User = Depends(admin_user), db: Session = Depends(get_db)):
 @router.post("/admin/users", status_code=201)
 def invite_user(body: InviteIn, request: Request, admin: User = Depends(admin_user), db: Session = Depends(get_db),
                 settings: Settings = Depends(get_runtime)):
-    """Create an account (even with sign-ups closed) and return a link for the person to set a password."""
+    """Create an account (even with sign-ups closed): with a password set here, or with a link for the
+    person to choose their own."""
     if db.scalar(select(User).where(User.email == body.email.lower())):
         raise HTTPException(status.HTTP_409_CONFLICT, "An account with that email already exists")
-    user = User(email=body.email.lower(), display_name=body.display_name,
-                password_hash=hash_password(secrets.token_urlsafe(32)))  # unusable until they set one
+    user = User(email=body.email.lower(), display_name=body.display_name, is_admin=body.is_admin,
+                # Without a password, a random one keeps the account unusable until they set their own.
+                password_hash=hash_password(body.password or secrets.token_urlsafe(32)))
     user.profile = Profile()
     db.add(user)
     db.commit()
+    if body.password:
+        return {"user": _user_row(db, user), "link": None, "emailed": False}
     link = reset_link(settings, request, new_reset_token(db, user))
     emailed = False
     if mail_configured(settings):

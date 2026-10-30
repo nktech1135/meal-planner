@@ -8,6 +8,7 @@ from app.schemas import RecipeIn, RecipeOut
 from app.security import current_user
 from app.services.access import get_food, get_recipe, get_yield, recipe_yields
 from app.services.nutrition import NutritionError, recipe_nutrition
+from app.services.sharing import acting_user
 
 router = APIRouter(prefix="/api/recipes", tags=["recipes"])
 
@@ -42,13 +43,13 @@ def _apply(db: Session, user: User, recipe: Recipe, body: RecipeIn) -> None:
 
 
 @router.get("", response_model=list[RecipeOut])
-def list_recipes(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def list_recipes(user: User = Depends(acting_user), db: Session = Depends(get_db)):
     recipes = db.scalars(select(Recipe).where(Recipe.owner_id == user.id).order_by(Recipe.name))
     return [recipe_out(db, user, r) for r in recipes]
 
 
 @router.get("/{recipe_id}", response_model=RecipeOut)
-def read_recipe(recipe_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def read_recipe(recipe_id: int, user: User = Depends(acting_user), db: Session = Depends(get_db)):
     return recipe_out(db, user, get_recipe(db, user, recipe_id))
 
 

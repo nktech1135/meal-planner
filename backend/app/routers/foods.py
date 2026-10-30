@@ -15,6 +15,7 @@ from app.security import current_user
 from app.services.access import get_food, visible
 from app.services.datasets import DATASETS
 from app.services.forms import options_for
+from app.services.sharing import acting_user
 from app.sources.base import normalize_barcode
 
 router = APIRouter(prefix="/api", tags=["foods"])
@@ -50,7 +51,7 @@ def search_foods(
     kind: str | None = None,
     mine: bool = False,
     limit: int = Query(50, le=200),
-    user: User = Depends(current_user),
+    user: User = Depends(acting_user),
     db: Session = Depends(get_db),
 ):
     stmt = select(Food).where(Food.owner_id == user.id if mine else visible(Food, user))
@@ -103,7 +104,7 @@ def search_rank(food: Food, terms: list[str], user_id: int, preferred: str = "us
 
 
 @router.get("/foods/{food_id}", response_model=FoodOut)
-def read_food(food_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def read_food(food_id: int, user: User = Depends(acting_user), db: Session = Depends(get_db)):
     return food_out(get_food(db, user, food_id))
 
 
