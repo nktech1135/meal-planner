@@ -60,33 +60,46 @@ class UsdaFdc(DataSource):
 
     def fetch(self, source_id: str, name_hint: str | None = None) -> ExternalFood:
         f = self._get(f"{BASE}/food/{int(source_id)}", params={"api_key": self.settings.usda_fdc_api_key})
-        data_type = f.get("dataType")
-        rows = []
-        for n in f.get("foodNutrients", []):
-            nut = n.get("nutrient") or {}
-            derivation = (n.get("foodNutrientDerivation") or {}).get("description")
-            rows.append((nut.get("number"), nut.get("unitName"), n.get("amount"), derivation))
-        name = f.get("description", name_hint or "")
-        state, method = guess_state(name)
+        return parse_fdc_food(f)
 
-        portions = []
-        for p in f.get("foodPortions", []) or []:
-            label, grams = _portion_label(p), p.get("gramWeight")
-            if label and grams:
-                portions.append((label, float(grams)))
-        serving_g = None
-        if data_type == "Branded" and f.get("servingSize") and (f.get("servingSizeUnit") or "").lower() in ("g", "grm"):
-            serving_g = float(f["servingSize"])
-            household = f.get("householdServingFullText")
-            portions.append((f"1 serving ({household})" if household else "1 serving", serving_g))
 
-        return ExternalFood(
-            source=self.key, source_id=str(f["fdcId"]), name=name,
-            brand=f.get("brandName") or f.get("brandOwner"), kind="food", state=state, cooking_method=method,
-            basis="100g", serving_size_g=serving_g, serving_quantity=1 if serving_g else None,
-            serving_unit="serving" if serving_g else None, data_type=data_type,
-            trust_level=trust_for(data_type), source_url=f"https://fdc.nal.usda.gov/food-details/{f['fdcId']}/nutrients",
-            citation=f"U.S. Department of Agriculture, Agricultural Research Service. FoodData Central ({data_type}), "
-                     f"FDC ID {f['fdcId']}.",
-            nutrients=map_numbered_nutrients(rows), portions=portions, payload=f,
-        )
+def category_of(f: dict) -> str | None:
+    cat = f.get("foodCategory") or f.get("wweiaFoodCategory")
+    if isinstance(cat, dict):
+        return cat.get("description") or cat.get("wweiaFoodCategoryDescription")
+    return cat if isinstance(cat, str) else None
+
+
+def parse_fdc_food(f: dict, release: str | None = None, keep_payload: bool = True) -> ExternalFood:
+    """Map one FDC food record (API detail or bulk-download JSON; same shape) to an ExternalFood."""
+    data_type = f.get("dataType")
+    rows = []
+    for n in f.get("foodNutrients", []):
+        nut = n.get("nutrient") or {}
+        derivation = (n.get("foodNutrientDerivation") or {}).get("description")
+        rows.append((nut.get("number"), nut.get("unitName"), n.get("amount"), derivation))
+    name = f.get("description", "")
+    state, method = guess_state(name)
+
+    portions = []
+    for p in f.get("foodPortions", []) or []:
+        label, grams = _portion_label(p), p.get("gramWeight")
+        if label and grams:
+            portions.append((label, float(grams)))
+    serving_g = None
+    if data_type == "Branded" and f.get("servingSize") and (f.get("servingSizeUnit") or "").lower() in ("g", "grm"):
+        serving_g = float(f["servingSize"])
+        household = f.get("householdServingFullText")
+        portions.append((f"1 serving ({household})" if household else "1 serving", serving_g))
+
+    edition = f"{data_type}, {release} release" if release else data_type
+    return ExternalFood(
+        source=UsdaFdc.key, source_id=str(f["fdcId"]), name=name,
+        brand=f.get("brandName") or f.get("brandOwner"), kind="food", state=state, cooking_method=method,
+        basis="100g", serving_size_g=serving_g, serving_quantity=1 if serving_g else None,
+        serving_unit="serving" if serving_g else None, data_type=data_type, category=category_of(f),
+        trust_level=trust_for(data_type), source_url=f"https://fdc.nal.usda.gov/food-details/{f['fdcId']}/nutrients",
+        citation=f"U.S. Department of Agriculture, Agricultural Research Service. FoodData Central ({edition}), "
+                 f"FDC ID {f['fdcId']}.",
+        nutrients=map_numbered_nutrients(rows), portions=portions, payload=f if keep_payload else None,
+    )

@@ -144,6 +144,7 @@ class FoodSummary(ORM):
     serving_size_g: float | None
     source: str
     source_data_type: str | None
+    category: str | None = None
     trust_level: str
     owner_id: int | None
     macros: dict[str, float] = {}
@@ -210,6 +211,7 @@ class YieldIn(BaseModel):
     raw_weight_g: float | None = Field(default=None, gt=0)
     cooked_weight_g: float | None = Field(default=None, gt=0)
     retention: dict[str, float] = {}
+    retention_profile_code: int | None = None  # USDA retention table profile; fills `retention`
     basis: Literal["measured", "published", "derived"] = "measured"
     citation: str | None = Field(default=None, max_length=1000)
     notes: str | None = Field(default=None, max_length=1000)
@@ -229,6 +231,7 @@ class YieldOut(ORM):
     id: int
     raw_food_id: int
     cooked_food_id: int | None
+    generated_by: str | None = None
     method: str
     yield_factor: float
     retention: dict[str, float]

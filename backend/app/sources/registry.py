@@ -30,8 +30,11 @@ def build_sources(settings: Settings, client: httpx.Client | None = None) -> dic
     return {cls.key: cls(settings, client) for cls in SOURCE_CLASSES}
 
 
-def upsert_external_food(db: Session, ext: ExternalFood) -> Food:
-    """Store an imported record as a shared food, replacing any earlier copy of it."""
+def upsert_external_food(db: Session, ext: ExternalFood, commit: bool = True) -> Food:
+    """Store an imported record as a shared food, replacing any earlier copy of it.
+
+    Bulk imports pass ``commit=False`` and commit in batches themselves.
+    """
     food = db.scalar(select(Food).where(Food.source == ext.source, Food.source_id == ext.source_id))
     if food is None:
         food = Food(source=ext.source, source_id=ext.source_id, owner_id=None)
@@ -47,6 +50,7 @@ def upsert_external_food(db: Session, ext: ExternalFood) -> Food:
     food.serving_size_g = ext.serving_size_g
     food.source_url = ext.source_url
     food.source_data_type = ext.data_type
+    food.category = ext.category
     food.trust_level = str(ext.trust_level)
     food.citation = ext.citation
     food.other_components = ext.other_components
@@ -58,6 +62,9 @@ def upsert_external_food(db: Session, ext: ExternalFood) -> Food:
     db.flush()
     food.nutrients = [FoodNutrient(nutrient_code=c, amount=a, derivation=d) for c, (a, d) in ext.nutrients.items()]
     food.portions = [FoodPortion(label=label[:200], gram_weight=g) for label, g in ext.portions]
-    db.commit()
-    db.refresh(food)
+    if commit:
+        db.commit()
+        db.refresh(food)
+    else:
+        db.flush()
     return food

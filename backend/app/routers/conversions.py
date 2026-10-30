@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import CookingYield, User
+from app.models import CookingYield, RetentionProfile, User
 from app.nutrients import Trust, weakest
 from app.schemas import CalculateIn, DeriveIn, NutritionOut, YieldIn, YieldOut
 from app.security import current_user
@@ -48,9 +48,17 @@ def create_yield(body: YieldIn, user: User = Depends(current_user), db: Session 
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Give a yield factor or raw and cooked weights")
     if body.basis == "published" and not body.citation:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Published yields need a citation")
+    retention, citation = body.retention, body.citation
+    if body.retention_profile_code is not None:
+        profile = db.get(RetentionProfile, body.retention_profile_code)
+        if profile is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown retention profile")
+        retention = profile.factors
+        ref = f"Retention factors: USDA Table of Nutrient Retention Factors, {profile.release}, {profile.description}."
+        citation = f"{citation} {ref}" if citation else ref
     y = CookingYield(
         raw_food_id=raw.id, cooked_food_id=cooked.id if cooked else None, method=body.method, yield_factor=factor,
-        retention=body.retention, basis=body.basis, trust_level=trust, citation=body.citation, notes=notes,
+        retention=retention, basis=body.basis, trust_level=trust, citation=citation, notes=notes,
         owner_id=user.id,
     )
     db.add(y)
@@ -95,3 +103,32 @@ def calculate_nutrition(db: Session, user: User, body) -> NutritionOut:
 @router.post("/nutrition/calculate", response_model=NutritionOut)
 def calculate(body: CalculateIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     return calculate_nutrition(db, user, body)
+
+
+# SR food group codes used by the retention table.
+FOOD_GROUPS = {
+    1: "Dairy and Egg Products", 5: "Poultry Products", 8: "Breakfast Cereals", 9: "Fruits and Fruit Juices",
+    10: "Pork Products", 11: "Vegetables and Vegetable Products", 12: "Nut and Seed Products", 13: "Beef Products",
+    14: "Beverages", 15: "Finfish and Shellfish Products", 16: "Legumes and Legume Products",
+    17: "Lamb, Veal, and Game Products", 20: "Cereal Grains and Pasta",
+}
+GROUP_BY_CATEGORY = {v: k for k, v in FOOD_GROUPS.items()}
+
+
+@router.get("/retention-profiles")
+def retention_profiles(q: str = "", food_id: int | None = None, user: User = Depends(current_user),
+                       db: Session = Depends(get_db)):
+    """USDA retention profiles, optionally narrowed to the food group of ``food_id``."""
+    stmt = select(RetentionProfile).order_by(RetentionProfile.food_group, RetentionProfile.description)
+    group = None
+    if food_id is not None:
+        group = GROUP_BY_CATEGORY.get(get_food(db, user, food_id).category or "")
+        if group is not None:
+            stmt = stmt.where(RetentionProfile.food_group == group)
+    for term in q.upper().split():
+        stmt = stmt.where(RetentionProfile.description.ilike(f"%{term}%"))
+    return {
+        "food_group": FOOD_GROUPS.get(group) if group else None,
+        "profiles": [{"code": p.code, "description": p.description, "food_group": FOOD_GROUPS.get(p.food_group),
+                      "factors": p.factors, "release": p.release} for p in db.scalars(stmt.limit(200))],
+    }

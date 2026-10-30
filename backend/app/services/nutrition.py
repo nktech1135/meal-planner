@@ -96,18 +96,25 @@ def food_nutrition(
             if cooked_grams is None:
                 raise NutritionError("Log cooked weight in grams")
         raw_grams = cooked_grams / cooking_yield.yield_factor
-        base = scale(food.nutrient_map(), raw_grams / 100)
-        retention = cooking_yield.retention or {}
-        nutrients = {k: v * float(retention.get(k, 1.0)) for k, v in base.items()}
         trust.append(cooking_yield.trust_level)
         notes.append(
             f"{cooked_grams:g} g {cooking_yield.method} ≈ {raw_grams:.1f} g raw "
             f"(yield {cooking_yield.yield_factor:.3f}, {cooking_yield.basis})"
         )
-        notes.append(
-            "Cooking-loss retention factors applied." if retention
-            else "No retention factors on this yield: nutrients assumed fully retained (vitamins may be overstated)."
-        )
+        cooked_food = cooking_yield.cooked_food
+        if cooked_food is not None and cooked_food.basis == "100g" and cooked_food.nutrients:
+            # A separately analysed cooked entry already reflects cooking losses: use it directly.
+            nutrients = scale(cooked_food.nutrient_map(), cooked_grams / 100)
+            trust.append(cooked_food.trust_level)
+            notes.append(f"Nutrients from the cooked entry “{cooked_food.name}”.")
+        else:
+            base = scale(food.nutrient_map(), raw_grams / 100)
+            retention = cooking_yield.retention or {}
+            nutrients = {k: v * float(retention.get(k, 1.0)) for k, v in base.items()}
+            notes.append(
+                "Cooking-loss retention factors applied." if retention
+                else "No retention factors on this yield: nutrients assumed fully retained (vitamins may be overstated)."
+            )
         factor, grams = raw_grams / 100, raw_grams
     else:
         factor, grams = _basis_factor(food, quantity, unit)

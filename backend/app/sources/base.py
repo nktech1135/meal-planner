@@ -41,6 +41,7 @@ class ExternalFood:
     serving_unit: str | None = None
     serving_size_g: float | None = None
     data_type: str | None = None
+    category: str | None = None
     source_url: str | None = None
     citation: str | None = None
     nutrients: dict[str, tuple[float, str | None]] = field(default_factory=dict)  # code -> (amount, derivation)

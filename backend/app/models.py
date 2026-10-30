@@ -88,6 +88,7 @@ class Food(Base):
     source_id: Mapped[str | None] = mapped_column(String(120))
     source_url: Mapped[str | None] = mapped_column(String(500))
     source_data_type: Mapped[str | None] = mapped_column(String(60))  # e.g. FDC "Foundation", "Branded"
+    category: Mapped[str | None] = mapped_column(String(120))  # e.g. FDC food category "Poultry Products"
     trust_level: Mapped[str] = mapped_column(String(20))
     citation: Mapped[str | None] = mapped_column(Text)
     # Unmapped label components, e.g. supplement botanicals: [{"name","amount","unit"}]
@@ -146,6 +147,8 @@ class CookingYield(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    generated_by: Mapped[str | None] = mapped_column(String(40))  # e.g. "usda-pairs" for yields derived in bulk
 
     raw_food: Mapped[Food] = relationship(foreign_keys=[raw_food_id])
     cooked_food: Mapped[Food | None] = relationship(foreign_keys=[cooked_food_id])
@@ -295,3 +298,33 @@ class FormChoice(Base):
     nutrient_code: Mapped[str] = mapped_column(String(40))
     option_key: Mapped[str] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RetentionProfile(Base):
+    """A row group of the USDA Table of Nutrient Retention Factors (fraction of each nutrient retained)."""
+
+    __tablename__ = "retention_profiles"
+
+    code: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    food_group: Mapped[int] = mapped_column(Integer, index=True)
+    description: Mapped[str] = mapped_column(String(255))
+    factors: Mapped[dict] = mapped_column(JSON, default=dict)  # {nutrient_code: fraction}
+    release: Mapped[str] = mapped_column(String(80))
+
+
+class ImportJob(Base):
+    """A background dataset import started from the admin UI."""
+
+    __tablename__ = "import_jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dataset: Mapped[str] = mapped_column(String(40))
+    release: Mapped[str | None] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(20), default="queued")  # queued | running | done | failed
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    total: Mapped[int | None] = mapped_column(Integer)
+    message: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

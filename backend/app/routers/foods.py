@@ -50,13 +50,35 @@ def search_foods(
     db: Session = Depends(get_db),
 ):
     stmt = select(Food).where(Food.owner_id == user.id if mine else visible(Food, user))
-    for term in q.split():
+    terms = q.lower().split()
+    for term in terms:
         like = f"%{term}%"
         stmt = stmt.where(or_(Food.name.ilike(like), Food.brand.ilike(like)))
     if kind:
         stmt = stmt.where(Food.kind == kind)
-    stmt = stmt.order_by(Food.name).limit(limit)
-    return [food_summary(f) for f in db.scalars(stmt)]
+    if not terms:
+        return [food_summary(f) for f in db.scalars(stmt.order_by(Food.name).limit(limit))]
+    candidates = list(db.scalars(stmt.limit(1000)))
+    candidates.sort(key=lambda f: search_rank(f, terms, user.id))
+    return [food_summary(f) for f in candidates[:limit]]
+
+
+_TYPE_RANK = {"Foundation": 0, "SR Legacy": 1, "Survey (FNDDS)": 2}
+
+
+def search_rank(food: Food, terms: list[str], user_id: int) -> tuple:
+    """Lower sorts first: your own foods, names starting with the query, whole-word matches,
+    generic before branded, lab data before survey data, then shorter (less specific) names."""
+    name = food.name.lower()
+    words = set(name.replace(",", " ").split())
+    return (
+        food.owner_id != user_id,
+        not name.startswith(terms[0]),
+        -sum(t in words for t in terms),
+        food.brand is not None,
+        _TYPE_RANK.get(food.source_data_type or "", 3),
+        len(name),
+    )
 
 
 @router.get("/foods/{food_id}", response_model=FoodOut)
