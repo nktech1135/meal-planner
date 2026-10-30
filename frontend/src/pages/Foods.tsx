@@ -2,9 +2,10 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { useAuth } from "../auth";
 import { ErrorBox, Loading, MacroLine } from "../components/common";
 import { TrustBadge, TrustLegend, TRUST_INFO } from "../components/TrustBadge";
-import { basisLabel, SOURCE_NAMES } from "../lib";
+import { basisLabel, SOURCE_NAMES, useAppInfo } from "../lib";
 import type { SearchHit, Source } from "../types";
 
 function LocalSearch() {
@@ -93,8 +94,25 @@ function SourceCard({ s, selected, onSelect }: { s: Source; selected: boolean; o
   );
 }
 
+function UsdaDemoNotice() {
+  const { user } = useAuth();
+  return (
+    <div className="alert alert-info">
+      USDA searches use a shared, heavily rate-limited demo key, so they may fail at busy times.{" "}
+      {user?.is_admin ? (
+        <>
+          <Link to="/settings">Add a free USDA key in Settings</Link>.
+        </>
+      ) : (
+        "Ask an admin to add a free USDA key."
+      )}
+    </div>
+  );
+}
+
 function OnlineSearch() {
   const navigate = useNavigate();
+  const info = useAppInfo();
   const qc = useQueryClient();
   const sources = useQuery({ queryKey: ["sources"], queryFn: api.sources });
   const [key, setKey] = useState<string | null>(null);
@@ -130,6 +148,7 @@ function OnlineSearch() {
           <SourceCard key={s.key} s={s} selected={s.key === active} onSelect={() => setKey(s.key)} />
         ))}
       </div>
+      {activeSource?.key === "usda_fdc" && info?.usda_demo_key && <UsdaDemoNotice />}
       {activeSource && (
         <form className="row wrap" onSubmit={submit}>
           <input

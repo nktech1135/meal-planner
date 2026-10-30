@@ -30,6 +30,7 @@ export interface Profile {
   timezone: string | null; // null until the user picks one (server uses UTC meanwhile)
   health_notes: string;
   target_overrides: Record<string, TargetBound>;
+  pinned_nutrients: string[]; // nutrient codes always shown on Today
 }
 
 export interface Target {
@@ -258,11 +259,25 @@ export interface LogEntry {
   note: string;
 }
 
+/** A label amount that couldn't be counted toward a nutrient (e.g. vitamin A in IU of unknown form). */
+export interface Uncounted {
+  name: string;
+  amount: number;
+  unit: string | null;
+  item: string;
+  entry_id: number;
+  food_id: number | null;
+  resolvable: boolean; // the user can pick the chemical form on the food page
+}
+
+export type EvaluationStatus = "ok" | "below" | "above_max" | "partial";
+
 export interface Evaluation extends Target {
   code: string;
   amount: number;
   limit_amount: number;
-  status: "ok" | "below" | "above_max";
+  status: EvaluationStatus;
+  uncounted: Uncounted[];
 }
 
 export interface DaySummary {
@@ -298,4 +313,124 @@ export interface ChatMessage {
 
 export interface ConversationDetail extends Conversation {
   messages: ChatMessage[];
+}
+
+export interface LogUpdate {
+  consumed_at?: string;
+  meal?: Meal;
+  quantity?: number;
+  unit?: string;
+  weighed_state?: WeighedState;
+  yield_id?: number | null;
+  note?: string;
+}
+
+export interface CopyInput {
+  from_date: string;
+  to_date: string;
+  meal?: Meal | null;
+  to_meal?: Meal | null;
+}
+
+export interface Suggestion {
+  food_id: number | null;
+  recipe_id: number | null;
+  label: string;
+  kind: Kind | "recipe";
+  trust_level: Trust;
+  quantity: number;
+  unit: string;
+  weighed_state: WeighedState;
+  yield_id: number | null;
+  meal: Meal;
+  times: number;
+  last_used: string;
+  energy_kcal: number | null;
+}
+
+export interface SavedMealItemInput {
+  food_id: number | null;
+  recipe_id: number | null;
+  quantity: number;
+  unit: string;
+  weighed_state: WeighedState;
+  yield_id: number | null;
+}
+
+export interface SavedMealItem extends SavedMealItemInput {
+  id: number;
+  label: string;
+}
+
+export interface SavedMealInput {
+  name: string;
+  default_meal: Meal;
+  items: SavedMealItemInput[];
+}
+
+export interface SavedMeal {
+  id: number;
+  name: string;
+  default_meal: Meal;
+  items: SavedMealItem[];
+}
+
+// --- supplement form choices --------------------------------------------------
+
+export interface FormOption {
+  key: string;
+  label: string;
+  factor: number;
+  result: number;
+  unit: string;
+  note: string;
+  source: string;
+}
+
+export interface FormRow {
+  component_name: string;
+  amount: number;
+  unit: string | null;
+  nutrient_code: string;
+  nutrient_name: string;
+  chosen: string | null;
+  options: FormOption[];
+}
+
+export interface FormChoiceResult {
+  forms: FormRow[];
+  recalculated_entries: number;
+}
+
+// --- app settings (admin) -------------------------------------------------------
+
+export interface AppInfo {
+  allow_registration: boolean;
+  advisor_configured: boolean;
+  usda_demo_key: boolean;
+}
+
+export type SettingKind = "secret" | "string" | "bool" | "int" | "choice";
+export type SettingValue = string | number | boolean | null;
+
+export interface SettingRow {
+  key: string;
+  label: string;
+  group: string;
+  kind: SettingKind;
+  description: string;
+  choices: string[];
+  minimum: number | null;
+  maximum: number | null;
+  link: string | null;
+  value: SettingValue; // secrets come back masked, e.g. "••••••••WXYZ"
+  is_set: boolean;
+  source: "settings" | "environment" | "default";
+}
+
+export type Integration = "anthropic" | "usda_fdc" | "nutritionix" | "edamam";
+
+export interface TestResult {
+  ok: boolean;
+  message: string;
 }

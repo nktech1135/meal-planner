@@ -1,36 +1,14 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { QuantityFields, unitChoices, WeighedFields } from "../components/AmountFields";
 import { ComponentList, ErrorBox, Field, MacroLine, Notes, NutrientTable } from "../components/common";
 import { FoodPicker } from "../components/FoodPicker";
+import { SavedMeals } from "../components/SavedMeals";
 import { TrustBadge } from "../components/TrustBadge";
-import { basisLabel, fmtNum, nowLocalInput, parseNum } from "../lib";
-import { MEALS, type CalculateInput, type Food, type FoodSummary, type Meal, type WeighedState } from "../types";
-
-function defaultMeal(): Meal {
-  const h = new Date().getHours();
-  if (h < 10) return "breakfast";
-  if (h < 15) return "lunch";
-  if (h < 21) return "dinner";
-  return "snack";
-}
-
-function unitOptions(f: Food, weighed: WeighedState): { value: string; label: string }[] {
-  if (weighed === "cooked") return [{ value: "g", label: "grams (cooked weight)" }];
-  if (f.basis === "100g") {
-    const opts = [{ value: "g", label: "grams" }];
-    if (f.serving_size_g) opts.push({ value: "serving", label: `servings (${fmtNum(f.serving_size_g)} g)` });
-    for (const p of f.portions) opts.push({ value: `portion:${p.id}`, label: `${p.label} (${fmtNum(p.gram_weight)} g)` });
-    return opts;
-  }
-  const opts = [
-    { value: "serving", label: `servings (${fmtNum(f.serving_quantity ?? 1)} ${f.serving_unit ?? "unit"})` },
-    { value: "unit", label: f.serving_unit ? `individual ${f.serving_unit}` : "individual units" },
-  ];
-  if (f.serving_size_g) opts.push({ value: "g", label: "grams" });
-  return opts;
-}
+import { basisLabel, defaultMeal, fmtNum, mealLabel, nowLocalInput, parseNum, unitText } from "../lib";
+import { MEALS, type CalculateInput, type FoodSummary, type LogEntry, type Meal, type Suggestion, type WeighedState } from "../types";
 
 function useDebouncedValue<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value);
@@ -41,29 +19,73 @@ function useDebouncedValue<T>(value: T, ms = 300): T {
   return v;
 }
 
+type Mode = "food" | "recipe" | "saved";
+
+function SuggestionItem({
+  s,
+  onLog,
+  onAdjust,
+  busy,
+}: {
+  s: Suggestion;
+  onLog: () => void;
+  onAdjust: () => void;
+  busy: boolean;
+}) {
+  const amount = `${fmtNum(s.quantity)} ${unitText(s.unit)}${s.weighed_state === "cooked" ? " cooked" : ""}`;
+  return (
+    <li className="suggestion">
+      <div className="suggestion-main">
+        <strong className="suggestion-label">{s.label}</strong>
+        <div className="row wrap small">
+          <TrustBadge level={s.trust_level} />
+          {s.kind === "recipe" && <span className="chip">recipe</span>}
+          {s.kind === "supplement" && <span className="chip">supplement</span>}
+          <span className="muted">last: {amount}</span>
+          {s.energy_kcal !== null && <span className="muted">· {Math.round(s.energy_kcal)} kcal</span>}
+          <span className="muted">· used {s.times}×</span>
+        </div>
+      </div>
+      <div className="suggestion-actions">
+        <button type="button" className="btn btn-primary btn-sm" onClick={onLog} disabled={busy} aria-label={`Log ${s.label} again, ${amount}`}>
+          Log again
+        </button>
+        <button type="button" className="btn btn-sm" onClick={onAdjust} aria-label={`Adjust ${s.label} before logging`}>
+          Adjust…
+        </button>
+      </div>
+    </li>
+  );
+}
+
 export default function AddEntryPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [mode, setMode] = useState<"food" | "recipe">("food");
+  const [mode, setMode] = useState<Mode>("food");
   const [picked, setPicked] = useState<FoodSummary | null>(null);
   const [recipeId, setRecipeId] = useState<number | null>(null);
   const [quantity, setQuantity] = useState("100");
   const [unit, setUnit] = useState("g");
   const [weighed, setWeighed] = useState<WeighedState>("as_is");
   const [yieldId, setYieldId] = useState<number | null>(null);
-  const [meal, setMeal] = useState<Meal>(defaultMeal());
-  const [when, setWhen] = useState(nowLocalInput());
+  const [meal, setMeal] = useState<Meal>(defaultMeal);
+  const [savedMeal, setSavedMeal] = useState<Meal | "">("");
+  const [when, setWhen] = useState(nowLocalInput);
   const [note, setNote] = useState("");
+  const [searchQ, setSearchQ] = useState("");
+  const [logged, setLogged] = useState<LogEntry | null>(null);
+  const onQueryChange = useCallback((q: string) => setSearchQ(q), []);
 
   const food = useQuery({ queryKey: ["food", picked?.id], queryFn: () => api.food(picked!.id), enabled: !!picked });
   const recipes = useQuery({ queryKey: ["recipes"], queryFn: api.recipes, enabled: mode === "recipe" });
-  const canCook = !!food.data && food.data.basis === "100g" && food.data.state !== "cooked";
-  const yields = useQuery({
-    queryKey: ["yields", picked?.id],
-    queryFn: () => api.yields(picked!.id),
-    enabled: !!picked && canCook && weighed === "cooked",
-  });
   const recipe = recipes.data?.find((r) => r.id === recipeId) ?? null;
+  const showSuggestions = mode === "food" && !picked;
+  const suggestions = useQuery({
+    queryKey: ["suggestions", meal, searchQ],
+    queryFn: () => api.suggestions(meal, searchQ, searchQ ? 6 : 12),
+    enabled: showSuggestions,
+    placeholderData: (prev) => prev,
+  });
 
   function pickFood(f: FoodSummary) {
     setPicked(f);
@@ -98,11 +120,57 @@ export default function AddEntryPage() {
   });
 
   const save = useMutation({
-    mutationFn: () =>
-      api.addLog({ ...calcInput!, meal, consumed_at: new Date(when).toISOString(), note }),
+    mutationFn: () => api.addLog({ ...calcInput!, meal, consumed_at: new Date(when).toISOString(), note }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["day"] });
+      qc.invalidateQueries({ queryKey: ["suggestions"] });
       navigate("/");
+    },
+  });
+
+  const again = useMutation({
+    mutationFn: (s: Suggestion) =>
+      api.addLog({
+        food_id: s.food_id,
+        recipe_id: s.recipe_id,
+        quantity: s.quantity,
+        unit: s.unit,
+        weighed_state: s.weighed_state,
+        yield_id: s.yield_id,
+        meal,
+        consumed_at: new Date(when).toISOString(),
+      }),
+    onMutate: () => setLogged(null),
+    onSuccess: (entry) => {
+      setLogged(entry);
+      qc.invalidateQueries({ queryKey: ["day"] });
+      qc.invalidateQueries({ queryKey: ["suggestions"] });
+    },
+  });
+  const undo = useMutation({
+    mutationFn: (id: number) => api.deleteLog(id),
+    onSuccess: () => {
+      setLogged(null);
+      qc.invalidateQueries({ queryKey: ["day"] });
+      qc.invalidateQueries({ queryKey: ["suggestions"] });
+    },
+  });
+
+  const adjust = useMutation({
+    mutationFn: async (s: Suggestion) => {
+      if (s.food_id) {
+        const f = await qc.fetchQuery({ queryKey: ["food", s.food_id], queryFn: () => api.food(s.food_id!) });
+        setMode("food");
+        setPicked(f);
+      } else {
+        setMode("recipe");
+        setRecipeId(s.recipe_id);
+      }
+      setQuantity(String(s.quantity));
+      setUnit(s.unit);
+      setWeighed(s.weighed_state);
+      setYieldId(s.yield_id);
+      setLogged(null);
     },
   });
 
@@ -111,193 +179,200 @@ export default function AddEntryPage() {
     if (calcInput) save.mutate();
   }
 
+  function switchMode(m: Mode) {
+    setMode(m);
+    if (m === "recipe") {
+      setUnit("serving");
+      setQuantity("1");
+      setWeighed("as_is");
+      setYieldId(null);
+    } else if (m === "food" && picked) {
+      pickFood(picked);
+    }
+  }
+
+  const suggestionList = (heading: string) =>
+    suggestions.data && suggestions.data.length > 0 ? (
+      <section className="suggestions" aria-label={heading}>
+        <h2 className="h-sm">{heading}</h2>
+        <ul className="plain-list">
+          {suggestions.data.map((s) => (
+            <SuggestionItem
+              key={`${s.food_id ?? ""}-${s.recipe_id ?? ""}`}
+              s={s}
+              busy={again.isPending}
+              onLog={() => again.mutate(s)}
+              onAdjust={() => adjust.mutate(s)}
+            />
+          ))}
+        </ul>
+      </section>
+    ) : null;
+
+  const tab = (m: Mode, label: string) => (
+    <button type="button" role="tab" aria-selected={mode === m} className={mode === m ? "active" : ""} onClick={() => switchMode(m)}>
+      {label}
+    </button>
+  );
+
   return (
     <div className="stack">
       <h1>Add entry</h1>
       <div className="tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={mode === "food"} className={mode === "food" ? "active" : ""} onClick={() => setMode("food")}>
-          Food or supplement
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === "recipe"}
-          className={mode === "recipe" ? "active" : ""}
-          onClick={() => {
-            setMode("recipe");
-            setUnit("serving");
-            setQuantity("1");
-          }}
-        >
-          Recipe
-        </button>
+        {tab("food", "Food or supplement")}
+        {tab("recipe", "Recipe")}
+        {tab("saved", "Saved meals")}
       </div>
 
-      <form className="card stack" onSubmit={submit}>
-        {mode === "food" &&
-          (picked ? (
-            <div className="selected">
-              <div>
-                <strong>{picked.name}</strong> {picked.brand && <span className="muted">· {picked.brand}</span>}
-                <div className="row small">
-                  <TrustBadge level={picked.trust_level} />
-                  {picked.state && <span className="chip">{picked.state}</span>}
-                  <span className="muted">{basisLabel(picked)}</span>
-                </div>
-              </div>
-              <button type="button" className="btn-link" onClick={() => setPicked(null)}>
-                Change
-              </button>
-            </div>
-          ) : (
-            <>
-              <FoodPicker onPick={pickFood} />
-              <p className="muted small">
-                Can't find it? <Link to="/foods">Search online sources or add it manually</Link>.
-              </p>
-            </>
-          ))}
-
-        {mode === "recipe" && (
-          <Field label="Recipe">
-            <select
-              value={recipeId ?? ""}
-              onChange={(e) => {
-                setRecipeId(e.target.value ? Number(e.target.value) : null);
-                setUnit("serving");
-              }}
-            >
-              <option value="">Choose a recipe…</option>
-              {recipes.data?.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
-        {mode === "recipe" && recipes.data?.length === 0 && (
-          <p className="muted">
-            No recipes yet. <Link to="/recipes/new">Create one</Link>.
-          </p>
-        )}
-
-        {((mode === "food" && food.data) || (mode === "recipe" && recipe)) && (
-          <>
-            {mode === "food" && canCook && (
-              <fieldset className="fieldset">
-                <legend>How did you weigh it?</legend>
-                <label className="radio">
-                  <input
-                    type="radio"
-                    checked={weighed === "as_is"}
-                    onChange={() => {
-                      setWeighed("as_is");
-                      setYieldId(null);
-                    }}
-                  />
-                  As described ({food.data!.state ?? "as sold"})
-                </label>
-                <label className="radio">
-                  <input
-                    type="radio"
-                    checked={weighed === "cooked"}
-                    onChange={() => {
-                      setWeighed("cooked");
-                      setUnit("g");
-                    }}
-                  />
-                  I weighed it after cooking
-                </label>
-                {weighed === "cooked" && (
-                  <Field label="Cooking yield" hint="Converts cooked weight back to raw weight for the nutrient calculation.">
-                    {yields.data && yields.data.length === 0 ? (
-                      <p className="alert alert-warn">
-                        No cooking yields for this food yet. <Link to={`/foods/${picked!.id}`}>Add one on the food page</Link> (weigh it raw and cooked once).
-                      </p>
-                    ) : (
-                      <select value={yieldId ?? ""} onChange={(e) => setYieldId(e.target.value ? Number(e.target.value) : null)} required>
-                        <option value="">Choose a yield…</option>
-                        {yields.data?.map((y) => (
-                          <option key={y.id} value={y.id}>
-                            {y.method} — ×{fmtNum(y.yield_factor, 3)} ({y.basis}, {y.trust_level})
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </Field>
-                )}
-              </fieldset>
+      <div className="card stack">
+        <div className="grid-2">
+          <Field label="Meal">
+            {mode === "saved" ? (
+              <select value={savedMeal} onChange={(e) => setSavedMeal(e.target.value as Meal | "")}>
+                <option value="">Each saved meal's usual meal</option>
+                {MEALS.map((m) => (
+                  <option key={m} value={m}>
+                    {mealLabel(m)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select value={meal} onChange={(e) => setMeal(e.target.value as Meal)}>
+                {MEALS.map((m) => (
+                  <option key={m} value={m}>
+                    {mealLabel(m)}
+                  </option>
+                ))}
+              </select>
             )}
+          </Field>
+          <Field label="When">
+            <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} required />
+          </Field>
+        </div>
 
-            <div className="grid-2">
-              <Field label="Amount">
-                <input type="number" inputMode="decimal" min="0" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
-              </Field>
-              <Field label="Unit">
-                <select value={unit} onChange={(e) => setUnit(e.target.value)}>
-                  {mode === "food" && food.data
-                    ? unitOptions(food.data, weighed).map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))
-                    : [
-                        <option key="serving" value="serving">
-                          servings (of {fmtNum(recipe?.servings ?? 1)})
-                        </option>,
-                        recipe?.cooked_weight_g ? (
-                          <option key="g" value="g">
-                            grams of finished dish
-                          </option>
-                        ) : null,
-                      ]}
-                </select>
-              </Field>
-              <Field label="Meal">
-                <select value={meal} onChange={(e) => setMeal(e.target.value as Meal)}>
-                  {MEALS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
+        {logged && (
+          <div className="result result-ok" role="status">
+            <span aria-hidden="true">✓</span> Logged {logged.label} ({fmtNum(logged.quantity)} {unitText(logged.unit)}) to {logged.meal}.{" "}
+            <button type="button" className="btn-link" onClick={() => undo.mutate(logged.id)} disabled={undo.isPending}>
+              Undo
+            </button>{" "}
+            <Link to="/">View day</Link>
+          </div>
+        )}
+        <ErrorBox error={again.error || adjust.error || undo.error} />
+
+        {mode === "saved" && <SavedMeals logMeal={savedMeal} when={when} />}
+
+        {mode !== "saved" && (
+          <form className="stack" onSubmit={submit}>
+            {mode === "food" &&
+              (picked ? (
+                <div className="selected">
+                  <div className="min-0">
+                    <strong>{picked.name}</strong> {picked.brand && <span className="muted">· {picked.brand}</span>}
+                    <div className="row wrap small">
+                      <TrustBadge level={picked.trust_level} />
+                      {picked.state && <span className="chip">{picked.state}</span>}
+                      <span className="muted">{basisLabel(picked)}</span>
+                    </div>
+                  </div>
+                  <button type="button" className="btn-link" onClick={() => setPicked(null)}>
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <FoodPicker onPick={pickFood} onQueryChange={onQueryChange} beforeResults={suggestionList("From your log")} />
+                  {!searchQ && suggestionList(`Your usual for ${meal}`)}
+                  {!searchQ && suggestions.data?.length === 0 && (
+                    <p className="muted small">Things you log will show up here for one-click logging next time.</p>
+                  )}
+                  <p className="muted small">
+                    Can't find it? <Link to="/foods">Search online sources or add it manually</Link>.
+                  </p>
+                </>
+              ))}
+
+            {mode === "recipe" && (
+              <Field label="Recipe">
+                <select
+                  value={recipeId ?? ""}
+                  onChange={(e) => {
+                    setRecipeId(e.target.value ? Number(e.target.value) : null);
+                    setUnit("serving");
+                  }}
+                >
+                  <option value="">Choose a recipe…</option>
+                  {recipes.data?.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
                     </option>
                   ))}
                 </select>
               </Field>
-              <Field label="When">
-                <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} required />
-              </Field>
-            </div>
-            <Field label="Note (optional)">
-              <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
-            </Field>
+            )}
+            {mode === "recipe" && recipes.data?.length === 0 && (
+              <p className="muted">
+                No recipes yet. <Link to="/recipes/new">Create one</Link>.
+              </p>
+            )}
 
-            <section className="preview">
-              <h3>Preview</h3>
-              {!calcInput && <p className="muted">Enter an amount{weighed === "cooked" ? " and choose a cooking yield" : ""}.</p>}
-              <ErrorBox error={preview.error} />
-              {preview.data && (
-                <>
-                  <div className="row">
-                    <TrustBadge level={preview.data.trust_level} />
-                    {preview.data.grams !== null && <span className="muted">{fmtNum(preview.data.grams)} g</span>}
-                  </div>
-                  <MacroLine values={preview.data.nutrients} />
-                  <Notes notes={preview.data.notes} />
-                  <details>
-                    <summary>All nutrients</summary>
-                    <NutrientTable values={preview.data.nutrients} />
-                  </details>
-                  <ComponentList items={preview.data.other_components} />
-                </>
-              )}
-            </section>
-            <ErrorBox error={save.error} />
-            <button type="submit" className="btn btn-primary" disabled={!calcInput || save.isPending}>
-              {save.isPending ? "Saving…" : "Log it"}
-            </button>
-          </>
+            {((mode === "food" && food.data) || (mode === "recipe" && recipe)) && (
+              <>
+                {mode === "food" && food.data && (
+                  <WeighedFields
+                    food={food.data}
+                    weighed={weighed}
+                    yieldId={yieldId}
+                    onWeighed={(w) => {
+                      setWeighed(w);
+                      if (w === "cooked") setUnit("g");
+                      else setYieldId(null);
+                    }}
+                    onYield={setYieldId}
+                  />
+                )}
+                <QuantityFields
+                  quantity={quantity}
+                  unit={unit}
+                  options={unitChoices(mode === "food" ? food.data : null, mode === "recipe" ? recipe : null, weighed, unit)}
+                  onQuantity={setQuantity}
+                  onUnit={setUnit}
+                />
+                <Field label="Note (optional)">
+                  <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
+                </Field>
+
+                <section className="preview">
+                  <h3>Preview</h3>
+                  {!calcInput && <p className="muted">Enter an amount{weighed === "cooked" ? " and choose a cooking yield" : ""}.</p>}
+                  <ErrorBox error={preview.error} />
+                  {preview.data && (
+                    <>
+                      <div className="row">
+                        <TrustBadge level={preview.data.trust_level} />
+                        {preview.data.grams !== null && <span className="muted">{fmtNum(preview.data.grams)} g</span>}
+                      </div>
+                      <MacroLine values={preview.data.nutrients} />
+                      <Notes notes={preview.data.notes} />
+                      <details>
+                        <summary>All nutrients</summary>
+                        <NutrientTable values={preview.data.nutrients} />
+                      </details>
+                      <ComponentList items={preview.data.other_components} />
+                    </>
+                  )}
+                </section>
+                <ErrorBox error={save.error} />
+                <button type="submit" className="btn btn-primary" disabled={!calcInput || save.isPending}>
+                  {save.isPending ? "Saving…" : "Log it"}
+                </button>
+              </>
+            )}
+          </form>
         )}
-      </form>
+      </div>
     </div>
   );
 }

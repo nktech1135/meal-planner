@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { FoodSummary } from "../types";
@@ -21,14 +21,23 @@ export function FoodPicker({
   kind,
   placeholder = "Search your food database…",
   excludeId,
+  onQueryChange,
+  beforeResults,
 }: {
   onPick: (f: FoodSummary) => void;
   kind?: "food" | "supplement";
   placeholder?: string;
   excludeId?: number;
+  /** Called with the debounced search text. */
+  onQueryChange?: (q: string) => void;
+  /** Shown between the search box and the database results while searching. */
+  beforeResults?: ReactNode;
 }) {
   const [q, setQ] = useState("");
   const dq = useDebounced(q);
+  useEffect(() => {
+    onQueryChange?.(dq.trim());
+  }, [dq, onQueryChange]);
   const results = useQuery({
     queryKey: ["foods", dq, kind ?? ""],
     queryFn: () => api.foods(dq, { kind, limit: 25 }),
@@ -38,8 +47,9 @@ export function FoodPicker({
   return (
     <div className="picker">
       <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label="Search foods" />
+      {dq.trim() && beforeResults}
       {dq.trim() && (
-        <ul className="pick-list">
+        <ul className="pick-list" aria-label="Food database results">
           {results.isLoading && <li className="muted">Searching…</li>}
           {!results.isLoading && items.length === 0 && (
             <li className="muted">No matches. Import from an online source or add it manually under Foods.</li>

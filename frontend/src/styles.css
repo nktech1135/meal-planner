@@ -923,3 +923,269 @@ textarea {
 .composer textarea {
   flex: 1;
 }
+
+/* --- shared additions ------------------------------------------------------- */
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.min-0 {
+  min-width: 0;
+}
+.nowrap {
+  white-space: nowrap;
+}
+.align-end {
+  align-items: flex-end;
+}
+.h-sm {
+  font-size: 0.95rem;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 4px 0 6px;
+}
+.ok-text {
+  color: var(--ok);
+}
+[id] {
+  scroll-margin-top: 72px; /* clear the sticky top bar when jumping to #forms, #pinned */
+}
+.result {
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  overflow-wrap: anywhere;
+}
+.result-ok {
+  border-color: var(--ok);
+  background: var(--t-analytical-bg);
+}
+.result-fail {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.result-info {
+  border-color: var(--t-label);
+  background: var(--info-bg);
+}
+.inline-panel {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inline-panel .field {
+  flex: 1 1 160px;
+}
+.inline-panel p {
+  margin: 0;
+}
+
+/* settings */
+.setting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+.setting:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+.setting-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.setting-head .chip {
+  overflow-wrap: anywhere;
+}
+.setting-toggle {
+  margin-right: 0;
+}
+.setting-desc {
+  margin: 0;
+}
+.source-note {
+  font-style: italic;
+}
+
+/* suggestions on Add entry */
+.suggestions .plain-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 8px 12px;
+}
+.suggestion + .suggestion {
+  border-top: 1px solid var(--border);
+}
+.suggestion-main {
+  flex: 1 1 220px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.suggestion-label {
+  overflow-wrap: anywhere;
+}
+.suggestion-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.saved-items li {
+  padding: 1px 0;
+}
+.saved-item-edit {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Today */
+.day-controls .date-input {
+  width: 9.5em;
+}
+.entry-text {
+  min-width: 0;
+  flex: 1 1 200px;
+  overflow-wrap: anywhere;
+}
+.entry-actions {
+  flex-wrap: wrap;
+}
+.entry-editor {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+}
+.entry-editor .fieldset {
+  background: var(--surface);
+}
+.meal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+.meal-head h3 {
+  margin-bottom: 0.2em;
+}
+.meal-actions {
+  gap: 4px;
+}
+.copy-prev {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.copy-prev .btn {
+  white-space: normal;
+}
+.status-pill.status-partial {
+  color: var(--t-label);
+  border-color: var(--t-label);
+  border-style: dashed;
+}
+.status-partial .bar-fill {
+  background: repeating-linear-gradient(45deg, var(--bar-fill) 0 6px, var(--bar-bg) 6px 9px);
+}
+.uncounted {
+  margin: 2px 0 2px;
+}
+.uncounted li {
+  padding: 1px 0;
+  overflow-wrap: anywhere;
+}
+.uncounted-text {
+  color: var(--t-label);
+}
+.components-details > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.components-details[open] > summary {
+  margin-bottom: 8px;
+}
+
+/* food page: form choices */
+.form-choice legend {
+  overflow-wrap: anywhere;
+}
+.option {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.option:hover {
+  background: var(--surface-2);
+}
+.option input {
+  margin-top: 4px;
+}
+.option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* profile: pinned nutrients */
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 4px 12px;
+}
+.check-grid .checkbox {
+  margin-right: 0;
+  align-items: flex-start;
+}
+.check-grid .checkbox input {
+  margin-top: 4px;
+}
+
+@media (max-width: 480px) {
+  .tabs button {
+    padding: 8px 8px;
+    font-size: 0.94rem;
+  }
+}
+@media (max-width: 640px) {
+  .nav {
+    flex-wrap: wrap; /* keep every section (incl. Settings) visible instead of scrolled off-screen */
+    overflow-x: visible;
+  }
+  .nav a {
+    padding: 5px 8px;
+  }
+}

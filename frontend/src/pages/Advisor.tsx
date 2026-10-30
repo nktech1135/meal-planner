@@ -2,8 +2,10 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
+import { useAuth } from "../auth";
 import { ErrorBox, Loading } from "../components/common";
 import { RichText } from "../components/RichText";
+import { useAppInfo } from "../lib";
 import type { ChatMessage } from "../types";
 
 const QUICK_PROMPTS = [
@@ -51,7 +53,28 @@ function Bubble({ m }: { m: ChatMessage }) {
   );
 }
 
+function SetupNotice() {
+  const { user } = useAuth();
+  return (
+    <div className="alert alert-info stack-sm" role="status">
+      <strong>The advisor isn't set up yet.</strong>
+      <span>
+        It needs an Anthropic API key.{" "}
+        {user?.is_admin ? (
+          <>
+            <Link to="/settings">Add one in Settings</Link> and it will be ready straight away.
+          </>
+        ) : (
+          "Ask an admin to add one in Settings."
+        )}
+      </span>
+      <span className="small">Your log, targets and the rest of the app work without it.</span>
+    </div>
+  );
+}
+
 export default function AdvisorPage() {
+  const info = useAppInfo();
   const { id } = useParams();
   const conversationId = id ? Number(id) : null;
   const navigate = useNavigate();
@@ -98,6 +121,7 @@ export default function AdvisorPage() {
   }
 
   const friendly = friendlyError(send.error);
+  const unavailable = info?.advisor_configured === false;
 
   return (
     <div className="advisor">
@@ -130,10 +154,11 @@ export default function AdvisorPage() {
           The advisor reads your logged data to give general nutrition guidance. It is not medical advice — check with your doctor, pharmacist or a
           registered dietitian about medical conditions, medications or supplement interactions.
         </p>
+        {unavailable && <SetupNotice />}
         <div className="thread" aria-live="polite">
           {conversationId && convo.isLoading && <Loading />}
           <ErrorBox error={convo.error} />
-          {messages.length === 0 && !pending && (
+          {messages.length === 0 && !pending && !unavailable && (
             <div className="stack">
               <p className="muted">Ask about your intake, targets, supplements or meal ideas. Some starting points:</p>
               <div className="quick">
@@ -159,7 +184,7 @@ export default function AdvisorPage() {
           <div ref={endRef} />
         </div>
         {friendly ? <div className="alert alert-warn">{friendly}</div> : <ErrorBox error={send.error} />}
-        {messages.length > 0 && (
+        {messages.length > 0 && !unavailable && (
           <div className="quick small">
             {QUICK_PROMPTS.slice(0, 3).map((p) => (
               <button key={p} type="button" className="btn btn-sm" disabled={send.isPending} onClick={() => send.mutate(p)}>
@@ -168,25 +193,27 @@ export default function AdvisorPage() {
             ))}
           </div>
         )}
-        <form className="composer" onSubmit={submit}>
-          <textarea
-            rows={2}
-            maxLength={8000}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Ask the advisor…"
-            aria-label="Message"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submit(e);
-              }
-            }}
-          />
-          <button type="submit" className="btn btn-primary" disabled={send.isPending || !text.trim()}>
-            {send.isPending ? "…" : "Send"}
-          </button>
-        </form>
+        {!unavailable && (
+          <form className="composer" onSubmit={submit}>
+            <textarea
+              rows={2}
+              maxLength={8000}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Ask the advisor…"
+              aria-label="Message"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submit(e);
+                }
+              }}
+            />
+            <button type="submit" className="btn btn-primary" disabled={send.isPending || !text.trim()}>
+              {send.isPending ? "…" : "Send"}
+            </button>
+          </form>
+        )}
       </section>
     </div>
   );

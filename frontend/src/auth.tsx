@@ -31,13 +31,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const state: AuthState = {
     user: me.data ?? null,
     loading: me.isLoading,
+    // Drop every other user's cached data but keep the mounted "me" query, so its observer
+    // (this provider) is notified of the new value; qc.clear() would orphan it.
     setUser: (u) => {
-      qc.clear();
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "me" });
       qc.setQueryData(["me"], u);
     },
     logout: async () => {
       await api.logout();
-      qc.clear();
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "me" });
       qc.setQueryData(["me"], null);
     },
   };

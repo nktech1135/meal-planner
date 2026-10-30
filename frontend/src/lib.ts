@@ -1,12 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
-import type { NutrientDef } from "./types";
+import type { AppInfo, Food, Meal, NutrientDef, Recipe, WeighedState } from "./types";
 
 export function useNutrients() {
   const q = useQuery({ queryKey: ["nutrients"], queryFn: api.nutrients, staleTime: Infinity });
   const list = q.data ?? [];
   const byCode: Record<string, NutrientDef> = Object.fromEntries(list.map((n) => [n.code, n]));
   return { list, byCode, isLoading: q.isLoading };
+}
+
+/** Public server facts (sign-ups open, advisor configured, USDA demo key). Works signed out. */
+export function useAppInfo(): AppInfo | undefined {
+  return useQuery({ queryKey: ["app-info"], queryFn: api.appInfo, staleTime: 5 * 60_000 }).data;
 }
 
 export function fmtNum(v: number | null | undefined, digits = 3): string {
@@ -43,6 +48,94 @@ export function nowLocalInput(): string {
   d.setSeconds(0, 0);
   const off = d.getTimezoneOffset();
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
+}
+
+/** Convert an ISO timestamp to a <input type="datetime-local"> value in the browser's zone. */
+export function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  d.setSeconds(0, 0);
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
+}
+
+/** Shift a YYYY-MM-DD date by whole days. */
+export function addDays(day: string, days: number): string {
+  const d = new Date(`${day}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return localDateISO(d);
+}
+
+export function fmtDay(day: string): string {
+  if (day === todayISO()) return "today";
+  if (day === addDays(todayISO(), -1)) return "yesterday";
+  if (day === addDays(todayISO(), 1)) return "tomorrow";
+  return new Date(`${day}T12:00:00`).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+}
+
+/** A sensible meal for the current time of day. */
+export function defaultMeal(): Meal {
+  const h = new Date().getHours();
+  if (h < 10) return "breakfast";
+  if (h < 15) return "lunch";
+  if (h < 21) return "dinner";
+  return "snack";
+}
+
+export const mealLabel = (m: string) => m[0].toUpperCase() + m.slice(1);
+
+/** Human text for a logged unit ("portion:12" -> the portion's label when known). */
+export function unitText(unit: string, food?: Food | null): string {
+  if (unit.startsWith("portion:")) {
+    const p = food?.portions.find((x) => `portion:${x.id}` === unit);
+    return p ? p.label : "portion";
+  }
+  if (unit === "serving") return "serving";
+  return unit;
+}
+
+export type UnitOption = { value: string; label: string };
+
+/** Units a food can be logged in (g / serving / unit / portion:<id>). */
+export function unitOptions(f: Food, weighed: WeighedState): UnitOption[] {
+  if (weighed === "cooked") return [{ value: "g", label: "grams (cooked weight)" }];
+  if (f.basis === "100g") {
+    const opts = [{ value: "g", label: "grams" }];
+    if (f.serving_size_g) opts.push({ value: "serving", label: `servings (${fmtNum(f.serving_size_g)} g)` });
+    for (const p of f.portions) opts.push({ value: `portion:${p.id}`, label: `${p.label} (${fmtNum(p.gram_weight)} g)` });
+    return opts;
+  }
+  const opts = [
+    { value: "serving", label: `servings (${fmtNum(f.serving_quantity ?? 1)} ${f.serving_unit ?? "unit"})` },
+    { value: "unit", label: f.serving_unit ? `individual ${f.serving_unit}` : "individual units" },
+  ];
+  if (f.serving_size_g) opts.push({ value: "g", label: "grams" });
+  return opts;
+}
+
+export function recipeUnitOptions(r: Pick<Recipe, "servings" | "cooked_weight_g">): UnitOption[] {
+  const opts = [{ value: "serving", label: `servings (of ${fmtNum(r.servings)})` }];
+  if (r.cooked_weight_g) opts.push({ value: "g", label: "grams of finished dish" });
+  return opts;
+}
+
+/** Raw (uncooked, per-100 g) foods can be weighed after cooking via a cooking yield. */
+export const canWeighCooked = (f: Food) => f.basis === "100g" && f.state !== "cooked";
+
+/** Per-viewer preference in localStorage; storage may be unavailable (private mode etc.). */
+export function readPref(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export function writePref(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // ignore: the preference just won't persist
+  }
 }
 
 export function browserTimezone(): string {

@@ -11,6 +11,7 @@ import RecipesPage from "./pages/Recipes";
 import RecipeEditPage from "./pages/RecipeEdit";
 import AdvisorPage from "./pages/Advisor";
 import ProfilePage from "./pages/Profile";
+import SettingsPage from "./pages/Settings";
 
 const NAV = [
   { to: "/", label: "Today", end: true },
@@ -45,7 +46,7 @@ export default function App() {
         <div className="topbar-inner">
           <span className="brand">Mealplan</span>
           <nav className="nav" aria-label="Main">
-            {NAV.map((n) => (
+            {[...NAV, ...(user.is_admin ? [{ to: "/settings", label: "Settings", end: false }] : [])].map((n) => (
               <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? "active" : "")}>
                 {n.label}
               </NavLink>
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="/advisor" element={<AdvisorPage />} />
           <Route path="/advisor/:id" element={<AdvisorPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

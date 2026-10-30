@@ -1,13 +1,13 @@
-import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import { ComponentList, ErrorBox, Field, Loading, NutrientTable } from "../components/common";
+import { ComponentList, ErrorBox, Field, Loading, NutrientTable, ResultNote } from "../components/common";
 import { FoodPicker } from "../components/FoodPicker";
 import { TrustBadge, TRUST_INFO } from "../components/TrustBadge";
 import { basisLabel, fmtNum, parseNum, SOURCE_NAMES, useNutrients } from "../lib";
-import type { DerivedYield, Food, FoodSummary, YieldInput } from "../types";
+import type { DerivedYield, Food, FoodSummary, FormRow, YieldInput } from "../types";
 
 type YieldMode = "measured" | "published" | "derived";
 
@@ -247,6 +247,91 @@ function Yields({ food }: { food: Food }) {
   );
 }
 
+function FormChoice({ food, row }: { food: Food; row: FormRow }) {
+  const qc = useQueryClient();
+  const [done, setDone] = useState<number | null>(null);
+  const choose = useMutation({
+    mutationFn: (key: string | null) => api.setFoodForm(food.id, row.component_name, key),
+    onMutate: () => setDone(null),
+    onSuccess: (res) => {
+      qc.setQueryData(["food-forms", food.id], res.forms);
+      setDone(res.recalculated_entries);
+      qc.invalidateQueries({ queryKey: ["day"] });
+      qc.invalidateQueries({ queryKey: ["range"] });
+      qc.invalidateQueries({ queryKey: ["suggestions"] });
+      qc.invalidateQueries({ queryKey: ["calc"] });
+    },
+  });
+  const name = `form-${food.id}-${row.component_name}`;
+  const fromUnit = row.unit ?? "";
+  return (
+    <fieldset className="fieldset form-choice" disabled={choose.isPending}>
+      <legend>
+        {row.component_name}: {fmtNum(row.amount)} {fromUnit} → {row.nutrient_name}
+      </legend>
+      <div className="stack-sm">
+        {row.options.map((o) => (
+          <label key={o.key} className="option">
+            <input type="radio" name={name} checked={row.chosen === o.key} onChange={() => choose.mutate(o.key)} />
+            <span className="option-body">
+              <span>
+                {o.label}{" "}
+                <strong className="nowrap">
+                  = {fmtNum(o.result)} {o.unit}
+                </strong>
+              </span>
+              <span className="muted small">
+                ×{fmtNum(o.factor, 3)} per {fromUnit}
+                {o.note ? ` · ${o.note}` : ""} ·{" "}
+                <a href={o.source} target="_blank" rel="noopener noreferrer">
+                  NIH ODS fact sheet ↗
+                </a>
+              </span>
+            </span>
+          </label>
+        ))}
+        <label className="option">
+          <input type="radio" name={name} checked={row.chosen === null} onChange={() => choose.mutate(null)} />
+          <span className="option-body">
+            <span>Not sure (don't count)</span>
+            <span className="muted small">The amount stays listed as uncounted; your totals for {row.nutrient_name} will read low.</span>
+          </span>
+        </label>
+      </div>
+      {choose.isPending && <p className="muted small">Saving…</p>}
+      {done !== null && (
+        <ResultNote ok>
+          Recalculated {done} entr{done === 1 ? "y" : "ies"}.
+        </ResultNote>
+      )}
+      <ErrorBox error={choose.error} />
+    </fieldset>
+  );
+}
+
+function FormChoices({ food }: { food: Food }) {
+  const forms = useQuery({ queryKey: ["food-forms", food.id], queryFn: () => api.foodForms(food.id) });
+  const { hash } = useLocation();
+  const ready = !!forms.data?.length;
+  useEffect(() => {
+    if (ready && hash === "#forms") document.getElementById("forms")?.scrollIntoView({ block: "start" });
+  }, [ready, hash]);
+  if (forms.error) return <ErrorBox error={forms.error} />;
+  if (!forms.data?.length) return null;
+  return (
+    <section className="card stack" id="forms" aria-labelledby="forms-title">
+      <h2 id="forms-title">Choose the form</h2>
+      <p className="muted small">
+        The label gives these in units that depend on the chemical form. Check the label for the form (e.g. "as retinyl palmitate") and choose
+        it; your choice applies to past and future entries.
+      </p>
+      {forms.data.map((r) => (
+        <FormChoice key={r.component_name} food={food} row={r} />
+      ))}
+    </section>
+  );
+}
+
 export default function FoodDetailPage() {
   const id = Number(useParams().id);
   const { user } = useAuth();
@@ -377,6 +462,8 @@ export default function FoodDetailPage() {
           </ul>
         </section>
       )}
+
+      <FormChoices food={f} />
 
       {f.other_components.length > 0 && (
         <section className="card">

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Field } from "../components/common";
+import { useAppInfo } from "../lib";
 
 export default function LoginPage() {
   const { setUser } = useAuth();
@@ -11,6 +12,10 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const info = useAppInfo();
+  const [firstAccount, setFirstAccount] = useState(false);
+  // The very first account can always be created (it becomes the admin); the server says so if it can't.
+  const closed = mode === "register" && info?.allow_registration === false && !firstAccount;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -39,30 +44,44 @@ export default function LoginPage() {
             Create account
           </button>
         </div>
-        <form onSubmit={submit} className="stack">
-          {mode === "register" && (
-            <Field label="Display name">
-              <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" />
+        {closed ? (
+          <div className="stack">
+            <div className="alert alert-info" role="status">
+              Sign-ups are closed; ask an admin for an account.
+            </div>
+            <p className="muted small">
+              Setting up a brand-new server?{" "}
+              <button type="button" className="btn-link" onClick={() => setFirstAccount(true)}>
+                Create the first (admin) account
+              </button>
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="stack">
+            {mode === "register" && (
+              <Field label="Display name">
+                <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" />
+              </Field>
+            )}
+            <Field label="Email">
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
             </Field>
-          )}
-          <Field label="Email">
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-          </Field>
-          <Field label="Password" hint={mode === "register" ? "At least 10 characters." : undefined}>
-            <input
-              type="password"
-              required
-              minLength={mode === "register" ? 10 : undefined}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-            />
-          </Field>
-          <ErrorBox error={error} />
-          <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
-          </button>
-        </form>
+            <Field label="Password" hint={mode === "register" ? "At least 10 characters." : undefined}>
+              <input
+                type="password"
+                required
+                minLength={mode === "register" ? 10 : undefined}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+              />
+            </Field>
+            <ErrorBox error={error} />
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
+            </button>
+          </form>
+        )}
       </div>
     </main>
   );

@@ -88,11 +88,11 @@ export function NutrientTable({
   );
 }
 
-export function ComponentList({ items, title = "Other label components" }: { items: Component[]; title?: string }) {
+export function ComponentList({ items, title = "Other label components" }: { items: Component[]; title?: string | null }) {
   if (!items?.length) return null;
   return (
     <section>
-      <h3>{title}</h3>
+      {title && <h3>{title}</h3>}
       <ul className="plain-list">
         {items.map((c, i) => (
           <li key={`${c.name}-${i}`}>
@@ -114,5 +114,14 @@ export function Notes({ notes }: { notes: string[] }) {
         <li key={i}>{n}</li>
       ))}
     </ul>
+  );
+}
+
+/** Inline success/failure message; the icon and wording carry the status, not just colour. */
+export function ResultNote({ ok, children }: { ok: boolean; children: ReactNode }) {
+  return (
+    <div className={`result ${ok ? "result-ok" : "result-fail"}`} role="status">
+      <span aria-hidden="true">{ok ? "✓" : "✗"}</span> <span className="sr-only">{ok ? "Success:" : "Failed:"}</span> {children}
+    </div>
   );
 }

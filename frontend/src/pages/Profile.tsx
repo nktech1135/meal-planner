@@ -1,10 +1,67 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Field, Loading } from "../components/common";
 import { browserTimezone, fmtNum, nutrientName, parseNum, useNutrients } from "../lib";
-import type { Profile, TargetBound } from "../types";
+import type { NutrientDef, Profile, TargetBound } from "../types";
+
+const CATEGORY_LABELS: Record<string, string> = {
+  energy: "Energy",
+  macro: "Macronutrients",
+  carb: "Carbohydrates",
+  lipid: "Fats",
+  vitamin: "Vitamins",
+  mineral: "Minerals",
+  other: "Other",
+};
+const MAX_PINNED = 40;
+/** Always shown on Today anyway. */
+const CORE = ["energy_kcal", "protein_g", "fat_g", "carbs_g", "fiber_g"];
+
+function PinnedNutrients({ defs, value, onChange }: { defs: NutrientDef[]; value: string[]; onChange: (v: string[]) => void }) {
+  const categories: string[] = [];
+  for (const d of defs) if (!categories.includes(d.category)) categories.push(d.category);
+  const full = value.length >= MAX_PINNED;
+  return (
+    <section className="card stack" id="pinned" aria-labelledby="pinned-title">
+      <h2 id="pinned-title">Pinned nutrients</h2>
+      <p className="muted small">
+        Today shows energy, protein, fat, carbs and fiber plus anything flagged. Pin the nutrients you also want to see every day
+        {value.length ? ` (${value.length} pinned)` : ""}.
+      </p>
+      {categories.map((cat) => (
+        <fieldset key={cat} className="fieldset">
+          <legend>{CATEGORY_LABELS[cat] ?? cat}</legend>
+          <div className="check-grid">
+            {defs
+              .filter((d) => d.category === cat)
+              .map((d) => {
+                const checked = value.includes(d.code);
+                const core = CORE.includes(d.code);
+                return (
+                  <label key={d.code} className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={checked || core}
+                      disabled={core || (!checked && full)}
+                      onChange={(e) => onChange(e.target.checked ? [...value, d.code] : value.filter((c) => c !== d.code))}
+                    />
+                    <span>
+                      {d.name}
+                      {core && <span className="muted small"> (always shown)</span>}
+                    </span>
+                  </label>
+                );
+              })}
+          </div>
+        </fieldset>
+      ))}
+      {full && <p className="muted small">You can pin up to {MAX_PINNED} nutrients.</p>}
+    </section>
+  );
+}
 
 function timezones(): string[] {
   const intl = Intl as unknown as { supportedValuesOf?: (k: string) => string[] };
@@ -39,9 +96,15 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!profile.data) return;
     // A profile that never had a timezone set gets the browser's zone suggested.
-    setForm({ ...profile.data, timezone: profile.data.timezone ?? browserTz });
+    setForm({ ...profile.data, timezone: profile.data.timezone ?? browserTz, pinned_nutrients: profile.data.pinned_nutrients ?? [] });
     setOverrides(toRows(profile.data.target_overrides ?? {}));
   }, [profile.data, browserTz]);
+
+  const { hash } = useLocation();
+  const formReady = !!form;
+  useEffect(() => {
+    if (formReady && hash.length > 1) document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" });
+  }, [formReady, hash]);
 
   const save = useMutation({
     mutationFn: api.saveProfile,
@@ -168,6 +231,8 @@ export default function ProfilePage() {
             + Add override
           </button>
         </section>
+
+        <PinnedNutrients defs={nutrientDefs} value={form.pinned_nutrients} onChange={(v) => set("pinned_nutrients", v)} />
 
         <ErrorBox error={save.error} />
         <div className="row">
