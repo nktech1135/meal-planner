@@ -128,3 +128,22 @@ def test_smtp_settings_accept_display_names(user_client):
     assert user_client.put("/api/admin/settings", json={"values": {"smtp_password": "has space"}}).status_code == 422
     result = user_client.post("/api/admin/settings/test-email").json()
     assert result["ok"] is False and "Sending failed" in result["message"]  # no server at smtp.example.com
+
+
+def test_cli_reset_link_and_make_admin(client, db_session, monkeypatch, capsys):
+    from app import cli
+
+    register(client, "admin@example.com")
+    client.cookies.clear()
+    register(client, "user@example.com")
+    monkeypatch.setattr(cli, "SessionLocal", lambda: db_session)
+    monkeypatch.setattr(db_session, "close", lambda: None)
+    assert cli.main(["reset-link", "nobody@example.com"]) == 1
+    assert cli.main(["reset-link", "admin@example.com", "--base-url", "https://meals.example.com/"]) == 0
+    link = capsys.readouterr().out.strip()
+    assert link.startswith("https://meals.example.com/reset-password?token=")
+    client.cookies.clear()
+    ok = client.post("/api/auth/reset", json={"token": link.split("token=")[1], "new_password": "recovered pass 1"})
+    assert ok.status_code == 200
+    assert cli.main(["make-admin", "user@example.com"]) == 0
+    assert [u for u in client.get("/api/admin/users").json() if u["email"] == "user@example.com"][0]["is_admin"]

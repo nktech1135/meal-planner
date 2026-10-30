@@ -129,6 +129,8 @@ Commands:
   status      Show installed version, service state and URL
   restart     Restart the app (e.g. after editing the configuration)
   backup      Back up the database now
+  reset-link EMAIL   Print a one-time password reset link (for a locked-out admin)
+  make-admin EMAIL   Give an account admin rights
   help        Show this help
 EOF
 }
@@ -855,6 +857,14 @@ cmd_restart() {
   log "Restarted; running at $(public_url)"
 }
 
+cmd_app() {  # cmd_app reset-link|make-admin EMAIL: run a server-side app command
+  local action="$1" email="${2:-}"
+  [[ -n "$email" ]] || die "usage: mealplan $action EMAIL"
+  load_state
+  [[ -n "$(current_release)" ]] || die "no current release found under $PREFIX"
+  as_service "cd '$CURRENT/backend' && exec '$CURRENT/venv/bin/python' -m app.cli $action $(printf '%q' "$email")"
+}
+
 cmd_backup() {
   load_state
   take_lock
@@ -874,6 +884,7 @@ main() {
     status) cmd_status "$@" ;;
     restart) cmd_restart "$@" ;;
     backup) cmd_backup "$@" ;;
+    reset-link|make-admin) cmd_app "$cmd" "$@" ;;
     help|-h|--help) usage ;;
     -*) cmd_install "$cmd" "$@" ;;  # options without a command: install
     *) usage >&2; die "unknown command: $cmd" ;;
