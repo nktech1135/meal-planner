@@ -314,17 +314,47 @@ build_release() {  # build_release REV -> path of the built release
     "$rel/venv/bin/python" -m compileall -q app alembic >/dev/null
   ) >&2
 
-  log "Building the web interface"
-  (
-    cd "$rel/frontend"
-    # shellcheck disable=SC2030  # PATH is meant to change only inside this subshell
-    export PATH="$TOOLS/node/bin:$PATH" npm_config_cache="$CACHE/npm" npm_config_update_notifier=false
-    npm ci --ignore-scripts --no-audit --no-fund --loglevel=error >/dev/null
-    npm run --silent build >/dev/null
-    rm -rf node_modules
-  ) >&2
+  check_build_memory
+  log "Downloading web interface packages"
+  web_step "$rel" 900 "the package download" \
+    npm ci --ignore-scripts --no-audit --no-fund --prefer-offline --fetch-timeout=60000 --fetch-retries=4
+  log "Bundling the web interface"
+  # Type-checking is CI's job; the installer only needs the bundle, which takes less memory.
+  web_step "$rel" 900 "bundling" node_modules/.bin/vite build --logLevel warn
+  rm -rf "$rel/frontend/node_modules"
   [[ -f "$rel/frontend/dist/index.html" ]] || die "web interface build produced no index.html"
   echo "$rel"
+}
+
+# Output goes to a log file rather than the screen, and a stalled step fails after LIMIT seconds
+# with that log's tail, instead of sitting silently forever.
+web_step() {  # web_step RELEASE LIMIT DESCRIPTION CMD...
+  local rel="$1" limit="$2" what="$3" out="$1/web-build.log" rc=0 start=$SECONDS
+  shift 3
+  # exec and the outer braces keep the shell's "Killed" notice out of the log and off the screen.
+  { (
+    cd "$rel/frontend"
+    exec env PATH="$TOOLS/node/bin:$PATH" npm_config_cache="$CACHE/npm" npm_config_update_notifier=false \
+      timeout --kill-after=15 "$limit" "$@"
+  ) >>"$out" 2>&1; } 2>/dev/null || rc=$?
+  ((rc == 0)) && return 0
+  tail -n 25 "$out" >&2
+  if ((SECONDS - start >= limit)); then
+    if [[ "$what" == bundling ]]; then
+      die "$what took over $((limit / 60)) minutes and was stopped; the machine is probably short of memory (full log: $out)"
+    fi
+    die "$what took over $((limit / 60)) minutes and was stopped; check that this machine can reach https://registry.npmjs.org (a proxy, firewall or broken IPv6 can stall it). Full log: $out"
+  fi
+  ((rc == 137)) && die "$what was killed, most likely because the machine ran out of memory (adding swap helps). Full log: $out"
+  die "$what failed (exit $rc, see above; full log: $out)"
+}
+
+check_build_memory() {
+  local kb
+  kb="$(awk '/^(MemAvailable|SwapFree):/ {s += $2} END {print s + 0}' /proc/meminfo 2>/dev/null || echo 0)"
+  if ((kb > 0 && kb < 600 * 1024)); then
+    warn "only $((kb / 1024)) MB of memory is free; building the web interface needs about 500 MB, so it may be slow or fail (adding swap helps)"
+  fi
 }
 
 current_release() { if [[ -L "$CURRENT" ]]; then readlink -f "$CURRENT"; fi; }
@@ -765,7 +795,6 @@ cmd_install() {
 
   Manage it with:  ${SUDO}mealplan status | restart | upgrade | backup | uninstall
 EOF
-  # shellcheck disable=SC2031
   if [[ "$MODE" == user && ":$PATH:" != *":$(dirname "$BIN_PATH"):"* ]]; then
     warn "$(dirname "$BIN_PATH") is not on your PATH; run $BIN_PATH directly or add it to PATH"
   fi
