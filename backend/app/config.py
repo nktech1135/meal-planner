@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     cookie_secure: bool = False  # set true behind HTTPS in production
     allow_registration: bool = True
     cors_origins: list[str] = []
+    static_dir: str | None = None  # built frontend (frontend/dist) to serve alongside the API
 
     # AI advisor (Claude)
     anthropic_api_key: str | None = None
