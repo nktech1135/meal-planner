@@ -6,6 +6,7 @@ import { basisLabel } from "../lib";
 import { BarcodeScanner } from "./BarcodeScanner";
 import { MacroLine } from "./common";
 import { TrustBadge } from "./TrustBadge";
+import { useAnnounceWhen, useReturnFocus } from "./a11y";
 
 function useDebounced<T>(value: T, ms = 250): T {
   const [v, setV] = useState(value);
@@ -46,11 +47,17 @@ export function FoodPicker({
     enabled: dq.trim().length >= 1,
   });
   const items = (results.data ?? []).filter((f) => f.id !== excludeId);
+  const scanButton = useReturnFocus<HTMLButtonElement>(scanning);
+  // Say how many results there are once a search settles (typing alone gives no feedback otherwise).
+  const settled = dq.trim() && results.data && !results.isFetching && dq === q;
+  useAnnounceWhen(
+    settled ? (items.length ? `${items.length === 25 ? "25 or more" : items.length} food${items.length === 1 ? "" : "s"} found for “${dq.trim()}”.` : `No foods found for “${dq.trim()}”.`) : null,
+  );
   return (
     <div className="picker">
       <div className="picker-search">
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label="Search foods" />
-        <button type="button" className="btn btn-sm" aria-expanded={scanning} onClick={() => setScanning((s) => !s)}>
+        <button ref={scanButton} type="button" className="btn btn-sm" aria-expanded={scanning} onClick={() => setScanning((s) => !s)}>
           Scan barcode
         </button>
       </div>

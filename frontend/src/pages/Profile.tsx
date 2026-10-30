@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { ErrorBox, Field, Loading } from "../components/common";
 import { browserTimezone, fmtNum, fromLength, fromWeight, lengthUnit, nutrientName, parseNum, toLength, toWeight, useNutrients, weightUnit } from "../lib";
 import type { NutrientDef, Profile, TargetBound, UnitSystem } from "../types";
+import { Button, rescueFocus, ScrollRegion, useAnnounce, VisuallyHidden } from "../components/a11y";
 
 const CATEGORY_LABELS: Record<string, string> = {
   energy: "Energy",
@@ -161,9 +162,11 @@ export default function ProfilePage() {
     if (formReady && hash.length > 1) document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" });
   }, [formReady, hash]);
 
+  const announce = useAnnounce();
   const save = useMutation({
     mutationFn: api.saveProfile,
     onSuccess: (p) => {
+      announce("Profile saved. Your targets are updated.");
       qc.setQueryData(["profile"], p);
       qc.invalidateQueries({ queryKey: ["targets"] });
       qc.invalidateQueries({ queryKey: ["day"] });
@@ -172,7 +175,13 @@ export default function ProfilePage() {
     },
   });
 
-  if (profile.isLoading || !form) return profile.error ? <ErrorBox error={profile.error} /> : <Loading />;
+  if (profile.isLoading || !form)
+    return (
+      <div className="stack">
+        <h1>Profile</h1>
+        {profile.error ? <ErrorBox error={profile.error} /> : <Loading />}
+      </div>
+    );
 
   const set = <K extends keyof Profile>(k: K, v: Profile[K]) => setForm({ ...form, [k]: v });
   const units: UnitSystem = form.unit_system ?? "metric";
@@ -278,40 +287,60 @@ export default function ProfilePage() {
         <section className="card stack">
           <h2>Target overrides</h2>
           <p className="muted small">Replace a computed target with your own (e.g. from your dietitian). Leave a field blank to clear it.</p>
-          {overrides.map((r, i) => (
-            <div key={i} className="row wrap">
-              <select
-                value={r.code}
-                onChange={(e) => setOverrides(overrides.map((x, j) => (j === i ? { ...x, code: e.target.value } : x)))}
-                aria-label="Nutrient"
-              >
-                <option value="">Nutrient…</option>
-                {nutrientDefs.map((n) => (
-                  <option key={n.code} value={n.code}>
-                    {n.name} ({n.unit})
-                  </option>
-                ))}
-              </select>
-              {(["min", "target", "max"] as const).map((k) => (
-                <input
-                  key={k}
-                  type="number"
-                  step="any"
-                  min="0"
-                  className="w-sm"
-                  placeholder={k}
-                  aria-label={k}
-                  value={r[k]}
-                  onChange={(e) => setOverrides(overrides.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)))}
-                />
-              ))}
-              <button type="button" className="btn-link danger" onClick={() => setOverrides(overrides.filter((_, j) => j !== i))}>
-                Remove
-              </button>
+          {overrides.length > 0 && (
+            <div className="row row-head muted small" aria-hidden="true">
+              <span className="grow">Nutrient</span>
+              <span className="w-sm">Min</span>
+              <span className="w-sm">Target</span>
+              <span className="w-sm">Max</span>
+              <span className="btn-link row-head-spacer">Remove</span>
             </div>
-          ))}
-          <button type="button" className="btn" onClick={() => setOverrides([...overrides, { code: "", min: "", target: "", max: "" }])}>
-            + Add override
+          )}
+          {overrides.map((r, i) => {
+            const what = r.code ? nutrientName(byCode, r.code) : `override ${i + 1}`;
+            return (
+              <div key={i} className="row wrap">
+                <select
+                  className="grow"
+                  value={r.code}
+                  onChange={(e) => setOverrides(overrides.map((x, j) => (j === i ? { ...x, code: e.target.value } : x)))}
+                  aria-label={`Override ${i + 1}: nutrient`}
+                >
+                  <option value="">Nutrient…</option>
+                  {nutrientDefs.map((n) => (
+                    <option key={n.code} value={n.code}>
+                      {n.name} ({n.unit})
+                    </option>
+                  ))}
+                </select>
+                {(["min", "target", "max"] as const).map((k) => (
+                  <input
+                    key={k}
+                    type="number"
+                    step="any"
+                    min="0"
+                    className="w-sm"
+                    placeholder={k}
+                    aria-label={`${k === "min" ? "Minimum" : k === "target" ? "Target" : "Maximum"} for ${what}`}
+                    value={r[k]}
+                    onChange={(e) => setOverrides(overrides.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)))}
+                  />
+                ))}
+                <button
+                  type="button"
+                  className="btn-link danger"
+                  onClick={() => {
+                    setOverrides(overrides.filter((_, j) => j !== i));
+                    rescueFocus(() => document.getElementById("add-override"));
+                  }}
+                >
+                  Remove<VisuallyHidden> {what}</VisuallyHidden>
+                </button>
+              </div>
+            );
+          })}
+          <button id="add-override" type="button" className="btn" onClick={() => setOverrides([...overrides, { code: "", min: "", target: "", max: "" }])}>
+            <span aria-hidden="true">+</span> Add override
           </button>
         </section>
 
@@ -325,9 +354,9 @@ export default function ProfilePage() {
 
         <ErrorBox error={save.error} />
         <div className="row">
-          <button type="submit" className="btn btn-primary" disabled={save.isPending}>
+          <Button type="submit" className="btn btn-primary" disabled={save.isPending}>
             {save.isPending ? "Saving…" : "Save profile"}
-          </button>
+          </Button>
           {save.isSuccess && <span className="muted small">Saved.</span>}
         </div>
       </form>
@@ -341,15 +370,21 @@ export default function ProfilePage() {
           </div>
         ))}
         {targets.data && Object.keys(targets.data.targets).length > 0 && (
-          <div className="table-wrap">
+          <ScrollRegion label="Your daily targets">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Nutrient</th>
-                  <th className="num">Min</th>
-                  <th className="num">Target</th>
-                  <th className="num">Upper limit</th>
-                  <th>Basis</th>
+                  <th scope="col">Nutrient</th>
+                  <th scope="col" className="num">
+                    Min
+                  </th>
+                  <th scope="col" className="num">
+                    Target
+                  </th>
+                  <th scope="col" className="num">
+                    Upper limit
+                  </th>
+                  <th scope="col">Basis</th>
                 </tr>
               </thead>
               <tbody>
@@ -357,9 +392,9 @@ export default function ProfilePage() {
                   .sort(([a], [b]) => nutrientDefs.findIndex((n) => n.code === a) - nutrientDefs.findIndex((n) => n.code === b))
                   .map(([code, t]) => (
                     <tr key={code}>
-                      <td>
+                      <th scope="row" className="th-plain">
                         {nutrientName(byCode, code)} <span className="muted small">{byCode[code]?.unit}</span>
-                      </td>
+                      </th>
                       <td className="num">{fmtNum(t.min)}</td>
                       <td className="num">{fmtNum(t.target)}</td>
                       <td className="num">
@@ -374,7 +409,7 @@ export default function ProfilePage() {
                   ))}
               </tbody>
             </table>
-          </div>
+          </ScrollRegion>
         )}
         <p className="muted small">
           Reference intakes are the National Academies DRIs for adults (via NIH ODS tables). Energy is an estimate (Mifflin-St Jeor × activity);

@@ -7,6 +7,7 @@ import { ErrorBox, Loading, MacroLine } from "../components/common";
 import { TrustBadge, TrustLegend, TRUST_INFO } from "../components/TrustBadge";
 import { basisLabel, SOURCE_NAMES, useAppInfo } from "../lib";
 import type { SearchHit, Source } from "../types";
+import { Button, tabPanelProps, TabList, useAnnounceWhen, VisuallyHidden } from "../components/a11y";
 
 function LocalSearch() {
   const [q, setQ] = useState("");
@@ -17,16 +18,31 @@ function LocalSearch() {
     queryKey: ["foods", "browse", submitted, mine, kind],
     queryFn: () => api.foods(submitted, { mine, kind: kind || undefined, limit: 100 }),
   });
+  const n = foods.data?.length ?? 0;
+  useAnnounceWhen(
+    foods.data && !foods.isFetching && (submitted || mine || kind)
+      ? `${n === 0 ? "No" : n === 100 ? "100 or more" : n} food${n === 1 ? "" : "s"} found${submitted ? ` for “${submitted}”` : ""}${kind ? `, ${kind === "food" ? "foods" : "supplements"} only` : ""}${mine ? ", yours only" : ""}.`
+      : null,
+  );
   return (
     <div className="stack">
       <form
         className="row wrap"
+        role="search"
+        aria-label="Your food database"
         onSubmit={(e) => {
           e.preventDefault();
           setSubmitted(q);
         }}
       >
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search foods and supplements…" aria-label="Search" className="grow" />
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search foods and supplements…"
+          aria-label="Search foods and supplements"
+          className="grow"
+        />
         <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">
           <option value="">All kinds</option>
           <option value="food">Foods</option>
@@ -74,7 +90,7 @@ function LocalSearch() {
 
 function SourceCard({ s, selected, onSelect }: { s: Source; selected: boolean; onSelect: () => void }) {
   return (
-    <button
+    <Button
       type="button"
       className={`card source-card ${selected ? "selected" : ""} ${s.trust_level === "unverified" ? "card-unverified" : ""}`}
       onClick={onSelect}
@@ -91,7 +107,7 @@ function SourceCard({ s, selected, onSelect }: { s: Source; selected: boolean; o
         {s.enabled ? <span className="chip chip-ok">Enabled</span> : <span className="chip chip-off">Disabled</span>}
       </div>
       {!s.enabled && s.disabled_reason && <p className="muted small">{s.disabled_reason}</p>}
-    </button>
+    </Button>
   );
 }
 
@@ -128,6 +144,12 @@ function OnlineSearch() {
     enabled: !!search,
     retry: false,
   });
+  const hitCount = hits.data?.length ?? 0;
+  useAnnounceWhen(
+    search && hits.data && !hits.isFetching
+      ? `${hitCount === 0 ? "No" : hitCount} result${hitCount === 1 ? "" : "s"} from ${activeSource?.name ?? "the source"} for “${search.q}”.`
+      : null,
+  );
   const importer = useMutation({
     mutationFn: (h: SearchHit) => api.importFood(h.source, h.source_id, h.name),
     onSuccess: (food) => {
@@ -151,7 +173,7 @@ function OnlineSearch() {
       </div>
       {activeSource?.key === "usda_fdc" && info?.usda_demo_key && <UsdaDemoNotice />}
       {activeSource && (
-        <form className="row wrap" onSubmit={submit}>
+        <form className="row wrap" role="search" aria-label={activeSource.name} onSubmit={submit}>
           <input
             type="search"
             className="grow"
@@ -161,14 +183,16 @@ function OnlineSearch() {
             aria-label={`Search ${activeSource.name}`}
             minLength={2}
           />
-          <button className="btn btn-primary" type="submit" disabled={q.trim().length < 2}>
+          <Button className="btn btn-primary" type="submit" disabled={q.trim().length < 2}>
             Search
-          </button>
+          </Button>
         </form>
       )}
       {activeSource?.trust_level === "unverified" && (
         <div className="alert alert-warn">
-          <strong>⚠ Unverified source.</strong> {TRUST_INFO.unverified.description} Anything imported from here stays flagged as unverified.
+          <strong>
+            <span aria-hidden="true">⚠ </span>Unverified source.
+          </strong> {TRUST_INFO.unverified.description} Anything imported from here stays flagged as unverified.
         </div>
       )}
       <ErrorBox error={hits.error || importer.error} />
@@ -178,10 +202,10 @@ function OnlineSearch() {
         {hits.data?.map((h) => (
           <li key={`${h.source}-${h.source_id}`} className={`card ${h.trust_level === "unverified" ? "card-unverified" : ""}`}>
             <div className="row between">
-              <strong>
+              <h2 className="h-card">
                 {h.name}
                 {h.brand && <span className="muted"> · {h.brand}</span>}
-              </strong>
+              </h2>
               <TrustBadge level={h.trust_level} />
             </div>
             <div className="row small muted wrap">
@@ -195,16 +219,17 @@ function OnlineSearch() {
               {h.imported_food_id ? (
                 <>
                   <Link className="btn" to={`/foods/${h.imported_food_id}`}>
-                    Open
+                    Open<VisuallyHidden> {h.name}</VisuallyHidden>
                   </Link>
-                  <button type="button" className="btn-link" onClick={() => importer.mutate(h)} disabled={importer.isPending}>
-                    Re-import (refresh)
-                  </button>
+                  <Button type="button" className="btn-link" onClick={() => importer.mutate(h)} disabled={importer.isPending}>
+                    Re-import (refresh)<VisuallyHidden> {h.name}</VisuallyHidden>
+                  </Button>
                 </>
               ) : (
-                <button type="button" className="btn" onClick={() => importer.mutate(h)} disabled={importer.isPending}>
+                <Button type="button" className="btn" onClick={() => importer.mutate(h)} disabled={importer.isPending}>
                   {importer.isPending && importer.variables?.source_id === h.source_id ? "Importing…" : "Import"}
-                </button>
+                  <VisuallyHidden> {h.name}</VisuallyHidden>
+                </Button>
               )}
             </div>
           </li>
@@ -225,21 +250,17 @@ export default function FoodsPage() {
           + New food
         </Link>
       </div>
-      <div className="tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === "local"} className={tab === "local" ? "active" : ""} onClick={() => setParams({})}>
-          My database
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "online"}
-          className={tab === "online" ? "active" : ""}
-          onClick={() => setParams({ tab: "online" })}
-        >
-          Online sources
-        </button>
-      </div>
-      {tab === "local" ? <LocalSearch /> : <OnlineSearch />}
+      <TabList
+        id="foods"
+        label="Where to search"
+        value={tab}
+        onChange={(t) => setParams(t === "online" ? { tab: "online" } : {}, { replace: true })}
+        tabs={[
+          { value: "local", label: "My database" },
+          { value: "online", label: "Online sources" },
+        ]}
+      />
+      <div {...tabPanelProps("foods", tab)}>{tab === "local" ? <LocalSearch /> : <OnlineSearch />}</div>
       <TrustLegend />
     </div>
   );

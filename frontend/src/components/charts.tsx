@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { fmtShortDate, weekdayShort } from "../lib";
+import { ScrollRegion } from "./a11y";
 
 /*
  * Small hand-written SVG charts (no chart library). Conventions (see the dataviz method):
@@ -57,6 +58,36 @@ function labelIndexes(n: number, width: number): Set<number> {
 const anchorFor = (i: number, n: number) => (n <= 7 ? "middle" : i === 0 ? "start" : i === n - 1 ? "end" : "middle");
 
 const dayLabel = (d: string, n: number) => (n <= 7 ? weekdayShort(d) : fmtShortDate(d));
+
+const longDate = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+
+/** Screen-reader text for the plot: what it shows and how to read it. */
+const KEY_HELP = "Use the left and right arrow keys to read each day, Home and End for the first and last. The table after the chart lists every value.";
+
+/**
+ * Shared keyboard reading for a plot: arrow keys move the active point and its value is announced
+ * (only for keyboard moves; pointer hovering stays quiet).
+ */
+function useSpoken() {
+  const [spoken, setSpoken] = useState("");
+  return [spoken, setSpoken] as const;
+}
+
+/** Summary for daily values: logged days, average, lowest/highest, reference lines. */
+function dailySummary(label: string, unit: string, days: DayValue[], refs: RefLine[], format: (v: number) => string): string {
+  const logged = days.filter((d) => d.value !== null) as { date: string; value: number }[];
+  if (!days.length) return `${label}: no days.`;
+  const span = `${days.length} days, ${fmtShortDate(days[0].date)} to ${fmtShortDate(days[days.length - 1].date)}`;
+  if (!logged.length) return `${label} per day, ${span}. Nothing logged.`;
+  const avg = logged.reduce((s, d) => s + d.value, 0) / logged.length;
+  const lo = logged.reduce((a, b) => (b.value < a.value ? b : a));
+  const hi = logged.reduce((a, b) => (b.value > a.value ? b : a));
+  const refText = refs.length ? ` Reference lines: ${refs.map((r) => r.label).join(", ")} ${unit}.` : "";
+  return (
+    `${label} per day, ${span}. ${logged.length} logged, ${days.length - logged.length} not logged. ` +
+    `Average ${format(avg)} ${unit}; lowest ${format(lo.value)} on ${fmtShortDate(lo.date)}, highest ${format(hi.value)} on ${fmtShortDate(hi.date)}.${refText}`
+  );
+}
 
 /** Rounded top (data end) and square bottom (baseline). */
 function barPath(x: number, y: number, w: number, h: number): string {
@@ -130,9 +161,15 @@ export function DailyBars({
 }) {
   const [wrap, width] = useWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
+  const [spoken, setSpoken] = useSpoken();
   const tableId = useId();
+  const summaryId = useId();
   const n = days.length;
   const values = days.map((d) => d.value ?? 0);
+  const say = (i: number) => {
+    const d = days[i];
+    setSpoken(`${longDate(d.date)}: ${d.value === null ? "not logged" : `${format(d.value)} ${unit}`}.`);
+  };
   const top = Math.max(...values, ...refs.map((r) => r.value), 1) * 1.12;
   const ticks = niceTicks(0, top);
   const yMax = Math.max(top, ticks[ticks.length - 1]);
@@ -150,22 +187,33 @@ export function DailyBars({
     const next = e.key === "ArrowLeft" ? cur - 1 : e.key === "ArrowRight" ? cur + 1 : e.key === "Home" ? 0 : e.key === "End" ? n - 1 : null;
     if (next === null) return;
     e.preventDefault();
-    setActive(Math.max(0, Math.min(n - 1, next)));
+    const i = Math.max(0, Math.min(n - 1, next));
+    setActive(i);
+    say(i);
   }
 
   const a = active !== null ? days[active] : null;
   return (
     <div className="viz">
+      {/* The plot's description; hidden so browse mode doesn't read it twice. */}
+      <p id={summaryId} hidden>
+        {dailySummary(label, unit, days, refs, format)} {KEY_HELP}
+      </p>
       <div
         ref={wrap}
         className="viz-plot"
         style={{ height: H }}
         tabIndex={0}
-        role="group"
-        aria-label={`${label}. Use the left and right arrow keys to read each day; the table below lists every value.`}
+        role="application"
+        aria-roledescription="chart"
+        aria-label={`${label} per day`}
+        aria-describedby={summaryId}
         onKeyDown={onKey}
         onFocus={() => setActive((v) => v ?? n - 1)}
-        onBlur={() => setActive(null)}
+        onBlur={() => {
+          setActive(null);
+          setSpoken("");
+        }}
         onPointerLeave={() => setActive(null)}
       >
         {width > 0 && (
@@ -234,7 +282,10 @@ export function DailyBars({
           </Tooltip>
         )}
       </div>
-      <div className="viz-legend small">
+      <p className="sr-only" aria-live="polite" aria-atomic="true">
+        {spoken}
+      </p>
+      <div className="viz-legend small" aria-hidden="true">
         <span>
           <span className="key-swatch key-bar" aria-hidden="true" /> logged day
         </span>
@@ -248,13 +299,18 @@ export function DailyBars({
         ))}
       </div>
       <details className="viz-table">
-        <summary aria-controls={tableId}>Show as table</summary>
-        <div className="table-wrap" id={tableId}>
+        <summary>
+          Show as table<span className="sr-only">({label} per day)</span>
+        </summary>
+        <ScrollRegion label={`${label} per day, table`} id={tableId}>
           <table className="table">
+            <caption className="sr-only">
+              {label} per day ({unit})
+            </caption>
             <thead>
               <tr>
-                <th>Date</th>
-                <th className="num">
+                <th scope="col">Date</th>
+                <th scope="col" className="num">
                   {label} ({unit})
                 </th>
               </tr>
@@ -262,13 +318,15 @@ export function DailyBars({
             <tbody>
               {days.map((d) => (
                 <tr key={d.date}>
-                  <td>{fmtShortDate(d.date)}</td>
+                  <th scope="row" className="th-plain">
+                    {fmtShortDate(d.date)}
+                  </th>
                   <td className="num">{d.value === null ? <span className="muted">not logged</span> : format(d.value)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollRegion>
       </details>
     </div>
   );
@@ -280,7 +338,9 @@ export type WeightDatum = { date: string; reading: number; trend: number };
 export function WeightChart({ dates, points, unit, format }: { dates: string[]; points: WeightDatum[]; unit: string; format: (v: number) => string }) {
   const [wrap, width] = useWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null); // index into points
+  const [spoken, setSpoken] = useSpoken();
   const tableId = useId();
+  const summaryId = useId();
   const n = dates.length;
   const idx = new Map(dates.map((d, i) => [d, i]));
   const all = points.flatMap((p) => [p.reading, p.trend]);
@@ -315,22 +375,40 @@ export function WeightChart({ dates, points, unit, format }: { dates: string[]; 
     const next = e.key === "ArrowLeft" ? cur - 1 : e.key === "ArrowRight" ? cur + 1 : e.key === "Home" ? 0 : e.key === "End" ? points.length - 1 : null;
     if (next === null) return;
     e.preventDefault();
-    setActive(Math.max(0, Math.min(points.length - 1, next)));
+    const i = Math.max(0, Math.min(points.length - 1, next));
+    setActive(i);
+    const p = points[i];
+    setSpoken(`${longDate(p.date)}: trend ${format(p.trend)} ${unit}, scale ${format(p.reading)} ${unit}.`);
   }
   const a = active !== null ? points[active] : null;
+  const first = points[0];
+  const summary = last
+    ? `Weight, ${points.length} weigh-in${points.length === 1 ? "" : "s"} from ${fmtShortDate(first.date)} to ${fmtShortDate(last.date)}. ` +
+      `Latest trend ${format(last.trend)} ${unit} (scale ${format(last.reading)} ${unit}), ` +
+      `${last.trend - first.trend >= 0 ? "up" : "down"} ${format(Math.abs(last.trend - first.trend))} ${unit} since the first weigh-in. ` +
+      `Scale range ${format(Math.min(...points.map((p) => p.reading)))} to ${format(Math.max(...points.map((p) => p.reading)))} ${unit}.`
+    : "Weight: no weigh-ins.";
 
   return (
     <div className="viz">
+      <p id={summaryId} hidden>
+        {summary} {KEY_HELP.replace("each day", "each weigh-in")}
+      </p>
       <div
         ref={wrap}
         className="viz-plot"
         style={{ height: H }}
         tabIndex={0}
-        role="group"
-        aria-label="Weight: scale readings and trend. Use the left and right arrow keys to read each weigh-in; the table below lists every value."
+        role="application"
+        aria-roledescription="chart"
+        aria-label="Weight: scale readings and trend"
+        aria-describedby={summaryId}
         onKeyDown={onKey}
         onFocus={() => setActive((v) => v ?? points.length - 1)}
-        onBlur={() => setActive(null)}
+        onBlur={() => {
+          setActive(null);
+          setSpoken("");
+        }}
         onPointerLeave={() => setActive(null)}
         onPointerMove={(e) => nearest(e.clientX - e.currentTarget.getBoundingClientRect().left)}
         onPointerDown={(e) => nearest(e.clientX - e.currentTarget.getBoundingClientRect().left)}
@@ -379,7 +457,10 @@ export function WeightChart({ dates, points, unit, format }: { dates: string[]; 
           </Tooltip>
         )}
       </div>
-      <div className="viz-legend small">
+      <p className="sr-only" aria-live="polite" aria-atomic="true">
+        {spoken}
+      </p>
+      <div className="viz-legend small" aria-hidden="true">
         <span>
           <span className="key-line key-trend" aria-hidden="true" /> trend (smoothed)
         </span>
@@ -388,27 +469,36 @@ export function WeightChart({ dates, points, unit, format }: { dates: string[]; 
         </span>
       </div>
       <details className="viz-table">
-        <summary aria-controls={tableId}>Show as table</summary>
-        <div className="table-wrap" id={tableId}>
+        <summary>
+          Show as table<span className="sr-only">(weight)</span>
+        </summary>
+        <ScrollRegion label="Weight, table" id={tableId}>
           <table className="table">
+            <caption className="sr-only">Weight by weigh-in ({unit})</caption>
             <thead>
               <tr>
-                <th>Date</th>
-                <th className="num">Scale ({unit})</th>
-                <th className="num">Trend ({unit})</th>
+                <th scope="col">Date</th>
+                <th scope="col" className="num">
+                  Scale ({unit})
+                </th>
+                <th scope="col" className="num">
+                  Trend ({unit})
+                </th>
               </tr>
             </thead>
             <tbody>
               {points.map((p) => (
                 <tr key={p.date}>
-                  <td>{fmtShortDate(p.date)}</td>
+                  <th scope="row" className="th-plain">
+                    {fmtShortDate(p.date)}
+                  </th>
                   <td className="num">{format(p.reading)}</td>
                   <td className="num">{format(p.trend)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollRegion>
       </details>
     </div>
   );

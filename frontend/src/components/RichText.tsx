@@ -35,7 +35,9 @@ const cells = (l: string) =>
     .split("|")
     .map((c) => c.trim());
 
-export function RichText({ text }: { text: string }) {
+export function RichText({ text, headingLevel = 3 }: { text: string; headingLevel?: 3 | 4 }) {
+  const H1 = `h${headingLevel}` as "h3" | "h4";
+  const H2 = `h${headingLevel + 1}` as "h4" | "h5";
   const lines = text.replace(/\r\n/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
   let i = 0;
@@ -51,7 +53,7 @@ export function RichText({ text }: { text: string }) {
     if (heading) {
       const level = heading[1].length;
       const content = inline(heading[2], key);
-      blocks.push(level <= 2 ? <h3 key={key}>{content}</h3> : <h4 key={key}>{content}</h4>);
+      blocks.push(level <= 2 ? <H1 key={key}>{content}</H1> : <H2 key={key}>{content}</H2>);
       i++;
       continue;
     }
@@ -66,7 +68,9 @@ export function RichText({ text }: { text: string }) {
             <thead>
               <tr>
                 {head.map((h, j) => (
-                  <th key={j}>{inline(h, `${key}h${j}`)}</th>
+                  <th key={j} scope="col">
+                    {inline(h, `${key}h${j}`)}
+                  </th>
                 ))}
               </tr>
             </thead>

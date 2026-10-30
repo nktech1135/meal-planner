@@ -7,6 +7,7 @@ import { ErrorBox, Loading } from "../components/common";
 import { RichText } from "../components/RichText";
 import { fmtDay, fmtNum, mealLabel, unitText, useAppInfo } from "../lib";
 import type { ChatMessage, ChatSource, ConversationDetail, Proposal } from "../types";
+import { Button, rescueFocus, useAnnounce, useAnnounceText, VisuallyHidden } from "../components/a11y";
 
 const QUICK_PROMPTS = [
   "Review my last 7 days",
@@ -46,14 +47,17 @@ function Sources({ sources }: { sources: ChatSource[] }) {
   if (!sources.length) return null;
   return (
     <div className="sources small">
-      <h3 className="h-xs">Sources</h3>
+      <h4 className="h-xs">Sources</h4>
       <ol>
         {sources.map((s) => (
           <li key={s.url}>
             <a href={s.url} target="_blank" rel="noopener noreferrer">
               {s.title || hostname(s.url)}
+              <VisuallyHidden> (opens in a new tab)</VisuallyHidden>
             </a>{" "}
-            <span className="muted">({hostname(s.url)}) ↗</span>
+            <span className="muted">
+              ({hostname(s.url)}) <span aria-hidden="true">↗</span>
+            </span>
           </li>
         ))}
       </ol>
@@ -61,8 +65,21 @@ function Sources({ sources }: { sources: ChatSource[] }) {
   );
 }
 
+/** Plain text of a reply for the screen-reader announcement (markdown marks dropped, long replies cut). */
+function spokenReply(text: string): string {
+  const plain = text
+    .replace(/^\s*\|?\s*:?-{2,}.*$/gm, "")
+    .replace(/[#*`|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return plain.length > 600 ? `${plain.slice(0, 600).replace(/\s+\S*$/, "")}… The full reply is in the conversation.` : plain;
+}
+
 function ProposalCard({ p, conversationId }: { p: Proposal; conversationId: number }) {
   const qc = useQueryClient();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const announce = useAnnounce();
+  const statusRef = useAnnounceText<HTMLParagraphElement>();
   const [chosen, setChosen] = useState<boolean[]>(() => p.items.map(() => true));
   const update = (next: Proposal) => {
     qc.setQueryData<ConversationDetail>(["conversation", conversationId], (old) =>
@@ -78,11 +95,19 @@ function ProposalCard({ p, conversationId }: { p: Proposal; conversationId: numb
     onSuccess: (next) => {
       setAdded(chosen.filter(Boolean).length);
       update(next);
+      rescueFocus(() => heading.current);
       qc.invalidateQueries({ queryKey: ["plan"] });
       qc.invalidateQueries({ queryKey: ["shopping"] });
     },
   });
-  const dismiss = useMutation({ mutationFn: () => api.dismissProposal(p.id), onSuccess: update });
+  const dismiss = useMutation({
+    mutationFn: () => api.dismissProposal(p.id),
+    onSuccess: (next) => {
+      update(next);
+      announce("Proposal dismissed.");
+      rescueFocus(() => heading.current);
+    },
+  });
   const count = chosen.filter(Boolean).length;
   const firstDate = [...p.items].map((i) => i.date).sort()[0];
   const planLink = firstDate ? `/plan?date=${firstDate}` : "/plan";
@@ -90,8 +115,14 @@ function ProposalCard({ p, conversationId }: { p: Proposal; conversationId: numb
   return (
     <section className={`proposal card stack-sm proposal-${p.status}`} aria-label="Meal plan proposal">
       <div className="row between wrap">
-        <h3 className="h-card">Proposed for your meal plan</h3>
-        {p.status === "accepted" && <span className="chip chip-ok">✓ Accepted</span>}
+        <h3 className="h-card" ref={heading}>
+          Proposed for your meal plan
+        </h3>
+        {p.status === "accepted" && (
+          <span className="chip chip-ok">
+            <span aria-hidden="true">✓ </span>Accepted
+          </span>
+        )}
         {p.status === "dismissed" && <span className="chip chip-off">Dismissed</span>}
       </div>
       {p.rationale && <p className="small">{p.rationale}</p>}
@@ -115,9 +146,10 @@ function ProposalCard({ p, conversationId }: { p: Proposal; conversationId: numb
           {p.items.map((it, i) => (
             <li key={i}>
               {p.status === "accepted" && p.accepted_indexes && (
-                <span aria-label={p.accepted_indexes.includes(i) ? "added" : "not added"}>
-                  {p.accepted_indexes.includes(i) ? "✓ " : "– "}
-                </span>
+                <>
+                  <span aria-hidden="true">{p.accepted_indexes.includes(i) ? "✓ " : "– "}</span>
+                  <VisuallyHidden>{p.accepted_indexes.includes(i) ? "Added: " : "Not added: "}</VisuallyHidden>
+                </>
               )}
               {it.label}{" "}
               <span className="muted">
@@ -129,17 +161,17 @@ function ProposalCard({ p, conversationId }: { p: Proposal; conversationId: numb
       )}
       {p.status === "pending" && (
         <div className="row wrap">
-          <button type="button" className="btn btn-primary btn-sm" disabled={!count || accept.isPending} onClick={() => accept.mutate()}>
+          <Button type="button" className="btn btn-primary btn-sm" disabled={!count || accept.isPending} onClick={() => accept.mutate()}>
             {accept.isPending ? "Adding…" : `Add ${count === p.items.length ? "all" : count} to plan`}
-          </button>
-          <button type="button" className="btn btn-sm" disabled={dismiss.isPending} onClick={() => dismiss.mutate()}>
+          </Button>
+          <Button type="button" className="btn btn-sm" disabled={dismiss.isPending} onClick={() => dismiss.mutate()}>
             Dismiss
-          </button>
+          </Button>
         </div>
       )}
       {p.status === "accepted" && (
-        <p className="small" role="status">
-          {added !== null && <>Added {added} item{added === 1 ? "" : "s"}. </>}
+        <p className="small" ref={statusRef}>
+          {added !== null && <>Added {added} item{added === 1 ? "" : "s"} to your meal plan. </>}
           <Link to={planLink}>View plan →</Link>
         </p>
       )}
@@ -161,7 +193,9 @@ function Bubble({ m }: { m: ChatMessage }) {
   const tools = Array.from(new Set(m.tools_used));
   return (
     <div className={`bubble bubble-${m.role}`}>
-      {m.role === "assistant" ? <RichText text={m.text || "(no text)"} /> : <p className="pre">{m.text}</p>}
+      {/* A heading per message lets screen-reader users jump message to message. */}
+      <h3 className="sr-only">{m.role === "assistant" ? "Advisor" : "You"}</h3>
+      {m.role === "assistant" ? <RichText text={m.text || "(no text)"} headingLevel={4} /> : <p className="pre">{m.text}</p>}
       {m.role === "assistant" && <Sources sources={m.sources ?? []} />}
       {tools.length > 0 && (
         <div className="row wrap small">
@@ -180,7 +214,7 @@ function Bubble({ m }: { m: ChatMessage }) {
 function SetupNotice() {
   const { user } = useAuth();
   return (
-    <div className="alert alert-info stack-sm" role="status">
+    <div className="alert alert-info stack-sm">
       <strong>The advisor isn't set up yet.</strong>
       <span>
         It needs an Anthropic API key.{" "}
@@ -206,6 +240,8 @@ export default function AdvisorPage() {
   const [text, setText] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const composer = useRef<HTMLTextAreaElement>(null);
+  const announce = useAnnounce();
 
   const conversations = useQuery({ queryKey: ["conversations"], queryFn: api.conversations });
   const convo = useQuery({
@@ -216,12 +252,24 @@ export default function AdvisorPage() {
 
   const send = useMutation({
     mutationFn: (message: string) => api.chat(message, conversationId),
-    onMutate: (message) => setPending(message),
+    onMutate: (message) => {
+      setPending(message);
+      announce("Sent. The advisor is looking at your data and thinking…");
+    },
     onSuccess: (detail) => {
       setText("");
       qc.setQueryData(["conversation", detail.id], detail);
       qc.invalidateQueries({ queryKey: ["conversations"] });
-      if (detail.id !== conversationId) navigate(`/advisor/${detail.id}`);
+      const reply = [...detail.messages].reverse().find((m) => m.role === "assistant");
+      const proposals = detail.proposals.filter((p) => p.status === "pending").length;
+      if (reply) {
+        announce(
+          `The advisor replied: ${spokenReply(reply.text)}${proposals ? ` It proposed ${proposals === 1 ? "a meal plan change" : `${proposals} meal plan changes`}; they follow the reply.` : ""}`,
+        );
+      }
+      // The URL gains the conversation id; stay in the composer rather than jumping to the page heading.
+      if (detail.id !== conversationId) navigate(`/advisor/${detail.id}`, { state: { keepFocus: true } });
+      rescueFocus(() => composer.current);
     },
     onSettled: () => setPending(null),
   });
@@ -229,7 +277,10 @@ export default function AdvisorPage() {
     mutationFn: (cid: number) => api.deleteConversation(cid),
     onSuccess: (_, cid) => {
       qc.invalidateQueries({ queryKey: ["conversations"] });
+      const title = conversations.data?.find((c) => c.id === cid)?.title;
+      announce(`Deleted the conversation${title ? ` “${title}”` : ""}.`);
       if (cid === conversationId) navigate("/advisor");
+      else rescueFocus(() => document.getElementById("conversations-title"));
     },
   });
 
@@ -246,26 +297,29 @@ export default function AdvisorPage() {
 
   const friendly = friendlyError(send.error);
   const unavailable = info?.advisor_configured === false;
+  const current = conversations.data?.find((c) => c.id === conversationId);
 
   return (
     <div className="advisor">
-      <aside className="convo-list card">
+      <h1 className="sr-only">Advisor</h1>
+      <aside className="convo-list card" aria-labelledby="conversations-title">
         <div className="row between wrap">
-          <h2>Conversations</h2>
+          <h2 id="conversations-title">Conversations</h2>
           <Link to="/advisor" className="btn">
-            New
+            New<VisuallyHidden> conversation</VisuallyHidden>
           </Link>
         </div>
         <ErrorBox error={conversations.error} />
         <ul className="plain-list">
           {conversations.data?.map((c) => (
             <li key={c.id} className={`convo ${c.id === conversationId ? "active" : ""}`}>
-              <Link to={`/advisor/${c.id}`}>
+              <Link to={`/advisor/${c.id}`} aria-current={c.id === conversationId ? "page" : undefined}>
                 <span className="convo-title">{c.title}</span>
                 <span className="muted small">{new Date(c.updated_at).toLocaleDateString()}</span>
               </Link>
-              <button type="button" className="btn-link danger small" onClick={() => remove.mutate(c.id)} aria-label={`Delete ${c.title}`}>
-                ×
+              <button type="button" className="btn-link danger small convo-delete" onClick={() => remove.mutate(c.id)}>
+                <span aria-hidden="true">×</span>
+                <VisuallyHidden>Delete conversation: {c.title}</VisuallyHidden>
               </button>
             </li>
           ))}
@@ -273,13 +327,17 @@ export default function AdvisorPage() {
         </ul>
       </aside>
 
-      <section className="chat card">
+      <section className="chat card" aria-labelledby="chat-title">
+        <h2 id="chat-title" className="sr-only">
+          {current?.title ?? "New conversation"}
+        </h2>
         <p className="disclaimer small">
           The advisor reads your logged data to give general nutrition guidance. It is not medical advice — check with your doctor, pharmacist or a
           registered dietitian about medical conditions, medications or supplement interactions.
         </p>
         {unavailable && <SetupNotice />}
-        <div className="thread" aria-live="polite">
+        {/* Not a live region: replies are announced once, as they arrive (see `send`). */}
+        <div className="thread">
           {conversationId && convo.isLoading && <Loading />}
           <ErrorBox error={convo.error} />
           {messages.length === 0 && !pending && !unavailable && (
@@ -287,9 +345,17 @@ export default function AdvisorPage() {
               <p className="muted">Ask about your intake, targets, supplements or meal ideas. Some starting points:</p>
               <div className="quick">
                 {QUICK_PROMPTS.map((p) => (
-                  <button key={p} type="button" className="btn" disabled={send.isPending} onClick={() => send.mutate(p)}>
+                  <Button
+                    key={p}
+                    type="button"
+                    className="btn"
+                    disabled={send.isPending}
+                    onClick={() => {
+                      send.mutate(p);
+                    }}
+                  >
                     {p}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -309,19 +375,26 @@ export default function AdvisorPage() {
           )}
           <div ref={endRef} />
         </div>
-        {friendly ? <div className="alert alert-warn">{friendly}</div> : <ErrorBox error={send.error} />}
+        {friendly ? (
+          <div className="alert alert-warn" role="alert">
+            {friendly}
+          </div>
+        ) : (
+          <ErrorBox error={send.error} />
+        )}
         {messages.length > 0 && !unavailable && (
           <div className="quick small">
             {QUICK_PROMPTS.slice(0, 3).map((p) => (
-              <button key={p} type="button" className="btn btn-sm" disabled={send.isPending} onClick={() => send.mutate(p)}>
+              <Button key={p} type="button" className="btn btn-sm" disabled={send.isPending} onClick={() => send.mutate(p)}>
                 {p}
-              </button>
+              </Button>
             ))}
           </div>
         )}
         {!unavailable && (
           <form className="composer" onSubmit={submit}>
             <textarea
+              ref={composer}
               rows={2}
               maxLength={8000}
               value={text}
@@ -335,9 +408,9 @@ export default function AdvisorPage() {
                 }
               }}
             />
-            <button type="submit" className="btn btn-primary" disabled={send.isPending || !text.trim()}>
-              {send.isPending ? "…" : "Send"}
-            </button>
+            <Button type="submit" className="btn btn-primary" disabled={send.isPending || !text.trim()}>
+              {send.isPending ? "Sending…" : "Send"}
+            </Button>
           </form>
         )}
       </section>

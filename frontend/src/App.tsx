@@ -1,5 +1,7 @@
+import { useEffect, useRef } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth";
+import { RouteFocus, SkipLink } from "./components/a11y";
 import { Loading } from "./components/common";
 import { MeMenu } from "./components/MeMenu";
 import LoginPage from "./pages/Login";
@@ -34,25 +36,37 @@ const NAV = [
 
 export default function App() {
   const { user, loading, logout } = useAuth();
+  // Signing in or out swaps the whole page; move focus to the new page's heading then too.
+  const state = loading ? "none" : user ? "in" : "out";
+  const shown = useRef(state);
+  const prev = shown.current;
+  useEffect(() => {
+    shown.current = state;
+  });
 
   if (loading) {
     return (
-      <main className="container">
+      <main className="container" id="main">
         <Loading />
       </main>
     );
   }
   if (!user) {
     return (
-      <Routes>
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="*" element={<LoginPage />} />
-      </Routes>
+      <>
+        <RouteFocus focusOnMount={prev === "in"} />
+        <Routes>
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="*" element={<LoginPage />} />
+        </Routes>
+      </>
     );
   }
 
   return (
     <div className="app">
+      <SkipLink />
+      <RouteFocus focusOnMount={prev === "out"} />
       <header className="topbar">
         <div className="topbar-inner">
           <span className="brand">Mealplan</span>
@@ -66,7 +80,7 @@ export default function App() {
           <MeMenu user={user} onSignOut={() => void logout()} />
         </div>
       </header>
-      <main className="container">
+      <main className="container" id="main" tabIndex={-1}>
         <Routes>
           <Route path="/" element={<TodayPage />} />
           <Route path="/log" element={<AddEntryPage />} />

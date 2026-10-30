@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
+import { Button, rescueFocus, useAnnounce, useAnnounceText, useReturnFocus, VisuallyHidden } from "../components/a11y";
 import { ComponentList, ErrorBox, Field, Loading, MacroLine, Notes, StatusPill } from "../components/common";
 import { EntryEditor } from "../components/EntryEditor";
 import { TrustBadge, TrustLegend, TRUST_INFO } from "../components/TrustBadge";
@@ -33,7 +34,7 @@ function TargetRow({ row, def }: { row: Evaluation; def?: NutrientDef }) {
   const pct = (v: number) => `${Math.min(100, (v / scale) * 100)}%`;
   const supplementalUL = row.ul_scope === "supplemental" && row.max !== null;
   return (
-    <div className={`target-row status-${row.status}`}>
+    <li className={`target-row status-${row.status}`}>
       <div className="target-head">
         <span className="target-name">{def?.name ?? row.code}</span>
         <span className="target-amount">
@@ -66,13 +67,17 @@ function TargetRow({ row, def }: { row: Evaluation; def?: NutrientDef }) {
               <span className="uncounted-text">
                 {row.status === "partial" ? "Partly counted — " : "Not counted — "}+{fmtAmount(u.amount, u.unit ?? "")} from {u.item} not converted
               </span>{" "}
-              {u.resolvable && u.food_id !== null && <Link to={`/foods/${u.food_id}#forms`}>Choose form</Link>}
+              {u.resolvable && u.food_id !== null && (
+                <Link to={`/foods/${u.food_id}#forms`}>
+                  Choose form<VisuallyHidden>for {u.item}</VisuallyHidden>
+                </Link>
+              )}
             </li>
           ))}
         </ul>
       )}
       {row.note && <div className="muted small">{row.note}</div>}
-    </div>
+    </li>
   );
 }
 
@@ -116,6 +121,7 @@ function EntryItem({
   deleting: boolean;
 }) {
   const time = new Date(e.consumed_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const editButton = useReturnFocus<HTMLButtonElement>(editing);
   return (
     <li className={`entry ${e.trust_level === "unverified" ? "entry-unverified" : ""}`}>
       <div className="entry-main">
@@ -129,12 +135,19 @@ function EntryItem({
         </div>
         <div className="entry-actions">
           <TrustBadge level={e.trust_level} />
-          <button type="button" className="btn-link" onClick={editing ? onDone : onEdit} aria-expanded={editing} aria-label={`Edit ${e.label}`}>
+          <button
+            ref={editButton}
+            type="button"
+            className="btn-link"
+            onClick={editing ? onDone : onEdit}
+            aria-expanded={editing}
+            aria-label={`Edit ${e.label}`}
+          >
             Edit
           </button>
-          <button type="button" className="btn-link danger" onClick={onDelete} disabled={deleting} aria-label={`Delete ${e.label}`}>
+          <Button type="button" className="btn-link danger" onClick={onDelete} disabled={deleting} aria-label={`Delete ${e.label}`}>
             Delete
-          </button>
+          </Button>
         </div>
       </div>
       {editing ? (
@@ -151,6 +164,29 @@ function EntryItem({
 }
 
 type Notice = { ok: boolean; text: string; goTo?: string };
+
+/** A button that opens/closes one inline panel, and gets focus back when its panel closes. */
+function PanelToggle({
+  panel,
+  name,
+  setPanel,
+  className,
+  children,
+}: {
+  panel: string | null;
+  name: string;
+  setPanel: (p: string | null) => void;
+  className: string;
+  children: ReactNode;
+}) {
+  const open = panel === name;
+  const ref = useReturnFocus<HTMLButtonElement>(open);
+  return (
+    <button ref={ref} type="button" className={className} aria-expanded={open} onClick={() => setPanel(open ? null : name)}>
+      {children}
+    </button>
+  );
+}
 
 /** Inline "copy to another day" form. */
 function CopyForm({
@@ -201,9 +237,9 @@ function CopyForm({
           </Field>
         )}
         <div className="row">
-          <button type="submit" className="btn btn-primary btn-sm" disabled={copy.isPending || !to}>
+          <Button type="submit" className="btn btn-primary btn-sm" disabled={copy.isPending || !to}>
             {copy.isPending ? "Copying…" : "Copy"}
-          </button>
+          </Button>
           <button type="button" className="btn btn-sm" onClick={onCancel}>
             Cancel
           </button>
@@ -239,9 +275,9 @@ function SaveMealForm({ date, meal, onDone, onCancel }: { date: string; meal: Me
           <input value={name} maxLength={200} onChange={(e) => setName(e.target.value)} placeholder={`e.g. Usual ${meal}`} required autoFocus />
         </Field>
         <div className="row">
-          <button type="submit" className="btn btn-primary btn-sm" disabled={!name.trim() || save.isPending}>
+          <Button type="submit" className="btn btn-primary btn-sm" disabled={!name.trim() || save.isPending}>
             {save.isPending ? "Saving…" : "Save meal"}
-          </button>
+          </Button>
           <button type="button" className="btn btn-sm" onClick={onCancel}>
             Cancel
           </button>
@@ -301,9 +337,11 @@ function Targets({ s, pinned }: { s: DaySummary; pinned: string[] }) {
           return (
             <div key={g.title} className="target-group">
               <h3>{g.title}</h3>
-              {rows.map((r) => (
-                <TargetRow key={r.code} row={r} def={byCode[r.code]} />
-              ))}
+              <ul className="plain-list">
+                {rows.map((r) => (
+                  <TargetRow key={r.code} row={r} def={byCode[r.code]} />
+                ))}
+              </ul>
             </div>
           );
         })}
@@ -334,11 +372,16 @@ export default function TodayPage() {
   const [editing, setEditing] = useState<number | null>(null);
   const [panel, setPanel] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const announce = useAnnounce();
+  const logHeading = useRef<HTMLHeadingElement>(null);
+  const noticeRef = useAnnounceText<HTMLDivElement>();
   const del = useMutation({
-    mutationFn: api.deleteLog,
-    onSuccess: () => {
+    mutationFn: (e: LogEntry) => api.deleteLog(e.id),
+    onSuccess: (_, e) => {
       qc.invalidateQueries({ queryKey: ["day"] });
       qc.invalidateQueries({ queryKey: ["suggestions"] });
+      announce(`Deleted ${e.label} from ${mealLabel(e.meal).toLowerCase()}.`);
+      rescueFocus(() => logHeading.current);
     },
   });
   const copyPrev = useMutation({
@@ -347,6 +390,7 @@ export default function TodayPage() {
     onSuccess: (created, meal) => {
       qc.invalidateQueries({ queryKey: ["day"] });
       setNotice({ ok: true, text: `Copied ${created.length} ${meal} entr${created.length === 1 ? "y" : "ies"} from ${prevLabel}.` });
+      rescueFocus(() => logHeading.current);
     },
     onError: (err, meal) => {
       if (err instanceof ApiError && err.status === 404) setNotice({ ok: false, text: `Nothing was logged for ${meal} ${prevLabel}, so there was nothing to copy.` });
@@ -380,15 +424,15 @@ export default function TodayPage() {
         <div className="row wrap day-controls">
           <div className="row">
             <button type="button" className="btn" onClick={() => shownDay && go(addDays(shownDay, -1))} aria-label="Previous day">
-              ‹
+              <span aria-hidden="true">‹</span>
             </button>
             <input type="date" value={shownDay} onChange={(e) => go(e.target.value || null)} aria-label="Day" className="date-input" />
             <button type="button" className="btn" onClick={() => shownDay && go(addDays(shownDay, 1))} aria-label="Next day">
-              ›
+              <span aria-hidden="true">›</span>
             </button>
           </div>
           <Link to="/log" className="btn btn-primary">
-            + Add entry
+            <span aria-hidden="true">+</span> Add entry
           </Link>
         </div>
       </div>
@@ -400,7 +444,9 @@ export default function TodayPage() {
         <>
           {s.alerts.length > 0 && (
             <div className="alert alert-danger" role="alert">
-              <strong>⚠ Upper limit exceeded</strong>
+              <strong>
+                <span aria-hidden="true">⚠ </span>Upper limit exceeded
+              </strong>
               <ul>
                 {s.alerts.map((a, i) => (
                   <li key={i}>{a.replace(/^(\w+):/, (_, code: string) => `${nutrientName(byCode, code)}:`)}</li>
@@ -421,23 +467,18 @@ export default function TodayPage() {
 
           <section className="card">
             <div className="row between wrap">
-              <h2>Log</h2>
+              <h2 ref={logHeading}>Log</h2>
               {s.entries.length > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  aria-expanded={panel === "copy-day"}
-                  onClick={() => setPanel(panel === "copy-day" ? null : "copy-day")}
-                >
+                <PanelToggle panel={panel} name="copy-day" setPanel={setPanel} className="btn btn-sm">
                   Copy day to…
-                </button>
+                </PanelToggle>
               )}
             </div>
             {panel === "copy-day" && (
               <CopyForm fromDate={shownDay} defaultTo={copyDefault} onDone={finish} onCancel={() => setPanel(null)} />
             )}
             {notice && (
-              <div className={`result ${notice.ok ? "result-ok" : "result-info"}`} role="status">
+              <div ref={noticeRef} className={`result ${notice.ok ? "result-ok" : "result-info"}`}>
                 <span aria-hidden="true">{notice.ok ? "✓" : "ℹ"}</span> {notice.text}{" "}
                 {notice.goTo && notice.goTo !== shownDay && (
                   <button type="button" className="btn-link" onClick={() => go(notice.goTo!)}>
@@ -458,22 +499,12 @@ export default function TodayPage() {
                       {mealLabel(meal)} <span className="muted small">{Math.round(kcal)} kcal</span>
                     </h3>
                     <div className="row wrap meal-actions">
-                      <button
-                        type="button"
-                        className="btn-link small"
-                        aria-expanded={panel === `copy:${meal}`}
-                        onClick={() => setPanel(panel === `copy:${meal}` ? null : `copy:${meal}`)}
-                      >
-                        Copy to…
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-link small"
-                        aria-expanded={panel === `save:${meal}`}
-                        onClick={() => setPanel(panel === `save:${meal}` ? null : `save:${meal}`)}
-                      >
-                        Save as meal…
-                      </button>
+                      <PanelToggle panel={panel} name={`copy:${meal}`} setPanel={setPanel} className="btn-link small">
+                        Copy to…<VisuallyHidden> ({mealLabel(meal)})</VisuallyHidden>
+                      </PanelToggle>
+                      <PanelToggle panel={panel} name={`save:${meal}`} setPanel={setPanel} className="btn-link small">
+                        Save as meal…<VisuallyHidden> ({mealLabel(meal)})</VisuallyHidden>
+                      </PanelToggle>
                     </div>
                   </div>
                   {panel === `copy:${meal}` && (
@@ -488,7 +519,7 @@ export default function TodayPage() {
                         editing={editing === e.id}
                         onEdit={() => setEditing(e.id)}
                         onDone={() => setEditing(null)}
-                        onDelete={() => del.mutate(e.id)}
+                        onDelete={() => del.mutate(e)}
                         deleting={del.isPending}
                       />
                     ))}
@@ -501,9 +532,9 @@ export default function TodayPage() {
                 <span className="muted small">Same as {prevLabel}?</span>
                 <div className="row wrap">
                   {emptyMeals.map((m) => (
-                    <button key={m} type="button" className="btn btn-sm" disabled={copyPrev.isPending} onClick={() => copyPrev.mutate(m)}>
+                    <Button key={m} type="button" className="btn btn-sm" disabled={copyPrev.isPending} onClick={() => copyPrev.mutate(m)}>
                       Copy {isToday ? "yesterday's" : "previous day's"} {m}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>

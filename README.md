@@ -84,9 +84,14 @@ cd frontend && npm run build
 ```
 
 Browser tests (Playwright) drive the built app on a throwaway database. They
-cover logging, supplement forms, settings and keys, planning, invitations and
-password resets, plus a check that every page renders with no errors or
-sideways scrolling at desktop and phone sizes:
+cover:
+- logging, supplement forms, settings and keys, planning, invitations and
+  password resets;
+- every page rendering with no errors or sideways scrolling at desktop and phone
+  sizes;
+- accessibility: axe checks against WCAG 2.2 A/AA on every page and opened
+  state, in light and dark themes, plus screen-reader behaviour (focus on
+  navigation, live announcements, tabs, menus, charts, form errors).
 
 ```bash
 cd frontend && npm run build

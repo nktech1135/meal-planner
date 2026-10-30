@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
@@ -9,6 +9,7 @@ import { SavedMeals } from "../components/SavedMeals";
 import { TrustBadge } from "../components/TrustBadge";
 import { basisLabel, defaultMeal, fmtNum, mealLabel, nowLocalInput, parseNum, unitText } from "../lib";
 import { MEALS, type CalculateInput, type FoodSummary, type LogEntry, type Meal, type Suggestion, type WeighedState } from "../types";
+import { Button, focusSoon, rescueFocus, tabPanelProps, TabList, useAnnounceText, VisuallyHidden } from "../components/a11y";
 
 function useDebouncedValue<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value);
@@ -47,9 +48,9 @@ function SuggestionItem({
         </div>
       </div>
       <div className="suggestion-actions">
-        <button type="button" className="btn btn-primary btn-sm" onClick={onLog} disabled={busy} aria-label={`Log ${s.label} again, ${amount}`}>
-          Log again
-        </button>
+        <Button type="button" className="btn btn-primary btn-sm" onClick={onLog} disabled={busy}>
+          Log again<VisuallyHidden>{s.label}, {amount}</VisuallyHidden>
+        </Button>
         <button type="button" className="btn btn-sm" onClick={onAdjust} aria-label={`Adjust ${s.label} before logging`}>
           Adjust…
         </button>
@@ -74,6 +75,9 @@ export default function AddEntryPage() {
   const [note, setNote] = useState("");
   const [searchQ, setSearchQ] = useState("");
   const [logged, setLogged] = useState<LogEntry | null>(null);
+  const [undone, setUndone] = useState<string | null>(null);
+  const noticeRef = useAnnounceText<HTMLDivElement>();
+  const selectedRef = useRef<HTMLDivElement>(null);
   const onQueryChange = useCallback((q: string) => setSearchQ(q), []);
 
   const food = useQuery({ queryKey: ["food", picked?.id], queryFn: () => api.food(picked!.id), enabled: !!picked });
@@ -87,8 +91,10 @@ export default function AddEntryPage() {
     placeholderData: (prev) => prev,
   });
 
-  function pickFood(f: FoodSummary) {
+  function pickFood(f: FoodSummary, focus = true) {
     setPicked(f);
+    // The list that had focus is replaced by the chosen food; start reading there.
+    if (focus) focusSoon(() => selectedRef.current);
     setWeighed("as_is");
     setYieldId(null);
     if (f.basis === "serving") {
@@ -140,7 +146,10 @@ export default function AddEntryPage() {
         meal,
         consumed_at: new Date(when).toISOString(),
       }),
-    onMutate: () => setLogged(null),
+    onMutate: () => {
+      setLogged(null);
+      setUndone(null);
+    },
     onSuccess: (entry) => {
       setLogged(entry);
       qc.invalidateQueries({ queryKey: ["day"] });
@@ -148,9 +157,11 @@ export default function AddEntryPage() {
     },
   });
   const undo = useMutation({
-    mutationFn: (id: number) => api.deleteLog(id),
-    onSuccess: () => {
+    mutationFn: (e: LogEntry) => api.deleteLog(e.id),
+    onSuccess: (_, e) => {
       setLogged(null);
+      setUndone(`Undone: removed ${e.label} from the log.`);
+      rescueFocus(() => noticeRef.current);
       qc.invalidateQueries({ queryKey: ["day"] });
       qc.invalidateQueries({ queryKey: ["suggestions"] });
     },
@@ -171,6 +182,8 @@ export default function AddEntryPage() {
       setWeighed(s.weighed_state);
       setYieldId(s.yield_id);
       setLogged(null);
+      setUndone(null);
+      focusSoon(() => selectedRef.current ?? document.getElementById("entry-recipe"));
     },
   });
 
@@ -187,7 +200,7 @@ export default function AddEntryPage() {
       setWeighed("as_is");
       setYieldId(null);
     } else if (m === "food" && picked) {
-      pickFood(picked);
+      pickFood(picked, false);
     }
   }
 
@@ -209,22 +222,22 @@ export default function AddEntryPage() {
       </section>
     ) : null;
 
-  const tab = (m: Mode, label: string) => (
-    <button type="button" role="tab" aria-selected={mode === m} className={mode === m ? "active" : ""} onClick={() => switchMode(m)}>
-      {label}
-    </button>
-  );
-
   return (
     <div className="stack">
       <h1>Add entry</h1>
-      <div className="tabs" role="tablist">
-        {tab("food", "Food or supplement")}
-        {tab("recipe", "Recipe")}
-        {tab("saved", "Saved meals")}
-      </div>
+      <TabList
+        id="add-entry"
+        label="What to add"
+        value={mode}
+        onChange={switchMode}
+        tabs={[
+          { value: "food", label: "Food or supplement" },
+          { value: "recipe", label: "Recipe" },
+          { value: "saved", label: "Saved meals" },
+        ]}
+      />
 
-      <div className="card stack">
+      <div className="card stack" {...tabPanelProps("add-entry", mode)}>
         <div className="grid-2">
           <Field label="Meal">
             {mode === "saved" ? (
@@ -252,12 +265,17 @@ export default function AddEntryPage() {
         </div>
 
         {logged && (
-          <div className="result result-ok" role="status">
+          <div ref={noticeRef} className="result result-ok">
             <span aria-hidden="true">✓</span> Logged {logged.label} ({fmtNum(logged.quantity)} {unitText(logged.unit)}) to {logged.meal}.{" "}
-            <button type="button" className="btn-link" onClick={() => undo.mutate(logged.id)} disabled={undo.isPending}>
-              Undo
-            </button>{" "}
+            <Button type="button" className="btn-link" onClick={() => undo.mutate(logged)} disabled={undo.isPending}>
+              Undo<VisuallyHidden> logging {logged.label}</VisuallyHidden>
+            </Button>{" "}
             <Link to="/">View day</Link>
+          </div>
+        )}
+        {undone && !logged && (
+          <div ref={noticeRef} className="result result-info">
+            {undone}
           </div>
         )}
         <ErrorBox error={again.error || adjust.error || undo.error} />
@@ -268,7 +286,7 @@ export default function AddEntryPage() {
           <form className="stack" onSubmit={submit}>
             {mode === "food" &&
               (picked ? (
-                <div className="selected">
+                <div className="selected" ref={selectedRef} tabIndex={-1} aria-label={`Chosen: ${picked.name}`} role="group">
                   <div className="min-0">
                     <strong>{picked.name}</strong> {picked.brand && <span className="muted">· {picked.brand}</span>}
                     <div className="row wrap small">
@@ -278,7 +296,7 @@ export default function AddEntryPage() {
                     </div>
                   </div>
                   <button type="button" className="btn-link" onClick={() => setPicked(null)}>
-                    Change
+                    Change<VisuallyHidden> food</VisuallyHidden>
                   </button>
                 </div>
               ) : (
@@ -297,6 +315,7 @@ export default function AddEntryPage() {
             {mode === "recipe" && (
               <Field label="Recipe">
                 <select
+                  id="entry-recipe"
                   value={recipeId ?? ""}
                   onChange={(e) => {
                     setRecipeId(e.target.value ? Number(e.target.value) : null);
@@ -344,8 +363,10 @@ export default function AddEntryPage() {
                   <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
                 </Field>
 
-                <section className="preview">
-                  <h3>Preview</h3>
+                <section className="preview" aria-labelledby="preview-title">
+                  <h2 id="preview-title" className="h3">
+                    Preview
+                  </h2>
                   {!calcInput && <p className="muted">Enter an amount{weighed === "cooked" ? " and choose a cooking yield" : ""}.</p>}
                   <ErrorBox error={preview.error} />
                   {preview.data && (
@@ -358,16 +379,16 @@ export default function AddEntryPage() {
                       <Notes notes={preview.data.notes} />
                       <details>
                         <summary>All nutrients</summary>
-                        <NutrientTable values={preview.data.nutrients} />
+                        <NutrientTable values={preview.data.nutrients} caption="All nutrients for this amount" />
                       </details>
                       <ComponentList items={preview.data.other_components} />
                     </>
                   )}
                 </section>
                 <ErrorBox error={save.error} />
-                <button type="submit" className="btn btn-primary" disabled={!calcInput || save.isPending}>
+                <Button type="submit" className="btn btn-primary" disabled={!calcInput || save.isPending}>
                   {save.isPending ? "Saving…" : "Log it"}
-                </button>
+                </Button>
               </>
             )}
           </form>

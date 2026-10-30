@@ -11,10 +11,10 @@ test("a label amount in IU is 'partly counted' until the form is chosen", async 
 
   await page.goto("/");
   await expect(page.getByText(/Partly counted — \+5,000 IU from/).first()).toBeVisible();
-  await page.locator(".status-partial a", { hasText: "Choose form" }).first().click();
+  await page.getByRole("link", { name: `Choose form for ${supp.name}` }).first().click();
   await expect(page).toHaveURL(new RegExp(`/foods/${supp.id}#forms`));
   await page.getByRole("radio", { name: /Retinol/ }).click();
-  await expect(page.getByText(/Recalculated \d+ entr/)).toBeVisible();
+  await expect(page.getByText(/Recalculated \d+ entr/).first()).toBeVisible();
 
   const day = await api(page.request, "GET", "/api/summary/day");
   const vitA = day.evaluation.find((r: any) => r.code === "vitamin_a_ug");

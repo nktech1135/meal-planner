@@ -6,7 +6,7 @@ test("API keys are entered in Settings, masked, and never shown again", async ({
   const usda = page.getByLabel("USDA FoodData Central API key");
   await usda.fill("bad key with spaces");
   await usda.locator("xpath=..").getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText(/must not contain spaces/)).toBeVisible();
+  await expect(page.getByText(/must not contain spaces/).first()).toBeVisible();
 
   await usda.fill("abcdefgh1234WXYZ");
   await usda.locator("xpath=..").getByRole("button", { name: "Save" }).click();

@@ -87,6 +87,10 @@ searches in **Profile**.
 | Canadian Nutrient File 2026 (Health Canada); foods copied unchanged from USDA are skipped | Canada | Open Government Licence – Canada |
 | Ciqual 2025 (ANSES) | France | Etalab Open Licence 2.0 |
 | Matvaretabellen (Mattilsynet) | Norway | CC BY 4.0 |
+| Danish Food Composition Database 6.1 (DTU Food Institute, 2026) | Denmark | CC BY 4.0 |
+| Swiss Food Composition Database V 7.1 (FSVO, 2026); 30 branded items as label data | Switzerland | Free use incl. commercial, with acknowledgement |
+| Livsmedelsdatabasen (Swedish Food Agency), assembled from its API in about 10 minutes, since no fetchable bulk file exists | Sweden | CC BY 4.0 |
+| Fineli Release 20 (THL), the latest open-data release, shipped with the app because fineli.fi blocks automated downloads | Finland | CC BY 4.0 |
 
 Not included, because their terms don't fit an app:
 - **NEVO (Netherlands):** forbids modifying the data or charging users.
@@ -94,9 +98,9 @@ Not included, because their terms don't fit an app:
 - **Japan's Standard Tables:** Japanese names only, and paid distribution needs notice.
 - **India's IFCT:** no open licence.
 
-Other candidates that would fit: Fineli (Finland, CC BY 4.0), the Danish Food
-Composition Database (CC BY 4.0), the Swiss Food Composition Database, and
-Sweden's Livsmedelsdatabasen (CC BY 4.0).
+FSVO prescribes no exact acknowledgement wording; the app credits the database,
+version, publisher and website. Fineli's live website has newer analyses than its
+2019 open-data package; only the open release is licensed for reuse.
 
 **Matching definitions.** National databases define some nutrients differently
 from USDA. A value is only mapped when the definitions match, or when ours can be

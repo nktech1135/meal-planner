@@ -166,6 +166,10 @@ export const SOURCE_NAMES: Record<string, string> = {
   cnf: "Canadian Nutrient File (Health Canada)",
   ciqual: "French Food Composition Table (Ciqual, ANSES)",
   matvaretabellen: "Norwegian Food Composition Table (Mattilsynet)",
+  dk_fcdb: "Danish Food Composition Database (DTU Food Institute)",
+  swiss: "Swiss Food Composition Database (FSVO)",
+  se_livsmedel: "Swedish Food Composition Database (Livsmedelsverket)",
+  fineli: "Finnish Food Composition Database (Fineli, THL)",
 };
 
 export const parseNum = (s: string): number | null => {

@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { Children, cloneElement, isValidElement, useId, useState, type ReactElement, type ReactNode } from "react";
 import { errorMessage } from "../api";
+import { ScrollRegion, useAnnounceText } from "./a11y";
 import { fmtAmount, nutrientName, useNutrients } from "../lib";
 import type { Component, EvaluationStatus, NutrientMap } from "../types";
 
@@ -16,34 +17,99 @@ export function Loading({ what = "Loading" }: { what?: string }) {
   return <p className="muted">{what}…</p>;
 }
 
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
+const CONTROLS = ["input", "select", "textarea"];
+
+/**
+ * A labelled form field. The first input/select/textarea child gets an id the <label> points at, and
+ * the hint and error are linked with aria-describedby (an error also sets aria-invalid). Without a
+ * form control (e.g. a notice in place of a select) it's a group named by the label.
+ */
+export function Field({ label, children, hint, error }: { label: ReactNode; children: ReactNode; hint?: ReactNode; error?: ReactNode }) {
+  const id = useId();
+  const hintId = `${id}-hint`;
+  const errorId = `${id}-error`;
+  const kids = Children.toArray(children);
+  const at = kids.findIndex((k) => isValidElement(k) && typeof k.type === "string" && CONTROLS.includes(k.type));
+  const hintEl = hint ? (
+    <span id={hintId} className="field-hint">
+      {hint}
+    </span>
+  ) : null;
+  const errorEl = error ? (
+    <span id={errorId} className="field-error">
+      {error}
+    </span>
+  ) : null;
+  if (at === -1) {
+    return (
+      <div className="field" role="group" aria-labelledby={`${id}-label`} aria-describedby={[hint && hintId, error && errorId].filter(Boolean).join(" ") || undefined}>
+        <span id={`${id}-label`} className="field-label">
+          {label}
+        </span>
+        {children}
+        {hintEl}
+        {errorEl}
+      </div>
+    );
+  }
+  const control = kids[at] as ReactElement<Record<string, unknown>>;
+  const controlId = (control.props.id as string | undefined) ?? id;
+  const describedBy = [control.props["aria-describedby"], hint && hintId, error && errorId].filter(Boolean).join(" ") || undefined;
+  kids[at] = cloneElement(control, {
+    id: controlId,
+    "aria-describedby": describedBy,
+    "aria-invalid": error ? true : control.props["aria-invalid"],
+  });
   return (
-    <label className="field">
-      <span className="field-label">{label}</span>
-      {children}
-      {hint && <span className="field-hint">{hint}</span>}
-    </label>
+    <div className="field">
+      <label className="field-label" htmlFor={controlId}>
+        {label}
+      </label>
+      {kids}
+      {hintEl}
+      {errorEl}
+    </div>
   );
 }
 
 const MACRO_ORDER = ["energy_kcal", "protein_g", "fat_g", "carbs_g", "fiber_g", "sugars_g"];
+const MACRO_SHORT: Record<string, [string, string]> = {
+  protein_g: ["P", "protein"],
+  fat_g: ["F", "fat"],
+  carbs_g: ["C", "carbs"],
+  fiber_g: ["fiber", "fiber"],
+  sugars_g: ["sugar", "sugar"],
+};
 
+/** "380 kcal · P 13 g · F 7 g …" on screen; "380 kcal, protein 13 g, fat 7 g …" for screen readers. */
 export function MacroLine({ values }: { values: NutrientMap }) {
   const { byCode } = useNutrients();
-  const parts = MACRO_ORDER.filter((c) => values[c] !== undefined).map((c) => {
-    const short: Record<string, string> = {
-      energy_kcal: "kcal",
-      protein_g: "P",
-      fat_g: "F",
-      carbs_g: "C",
-      fiber_g: "fiber",
-      sugars_g: "sugar",
-    };
-    const unit = byCode[c]?.unit ?? "";
-    return c === "energy_kcal" ? `${Math.round(values[c])} kcal` : `${short[c]} ${fmtAmount(values[c], unit)}`;
-  });
-  if (!parts.length) return <span className="muted">no macro data</span>;
-  return <span className="macros">{parts.join(" · ")}</span>;
+  const codes = MACRO_ORDER.filter((c) => values[c] !== undefined);
+  if (!codes.length) return <span className="muted">no macro data</span>;
+  return (
+    <span className="macros">
+      {codes.map((c, i) => {
+        const sep = i > 0 ? <span aria-hidden="true"> · </span> : null;
+        if (c === "energy_kcal") {
+          return (
+            <span key={c}>
+              {sep}
+              {Math.round(values[c])} kcal
+            </span>
+          );
+        }
+        const [short, long] = MACRO_SHORT[c];
+        return (
+          <span key={c}>
+            {sep}
+            <span className="sr-only">, </span>
+            {short === long ? short : <><span aria-hidden="true">{short}</span><span className="sr-only">{long}</span></>}{" "}
+            {fmtAmount(values[c], byCode[c]?.unit ?? "")}
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 /** Full nutrient table in catalog order. Unknown codes go last. */
@@ -51,10 +117,13 @@ export function NutrientTable({
   values,
   derivations,
   emptyText = "No nutrient values.",
+  caption,
 }: {
   values: NutrientMap;
   derivations?: Record<string, string | null>;
   emptyText?: string;
+  /** Read by screen readers before the table, e.g. "Nutrients per 100 g". */
+  caption?: string;
 }) {
   const { list, byCode } = useNutrients();
   const order = list.map((n) => n.code);
@@ -65,34 +134,48 @@ export function NutrientTable({
   });
   if (!codes.length) return <p className="muted">{emptyText}</p>;
   return (
-    <div className="table-wrap">
+    <ScrollRegion label={caption ?? "Nutrients"}>
       <table className="table">
+        {caption && <caption className="sr-only">{caption}</caption>}
         <thead>
           <tr>
-            <th>Nutrient</th>
-            <th className="num">Amount</th>
-            {derivations && <th>Derivation</th>}
+            <th scope="col">Nutrient</th>
+            <th scope="col" className="num">
+              Amount
+            </th>
+            {derivations && <th scope="col">Derivation</th>}
           </tr>
         </thead>
         <tbody>
           {codes.map((c) => (
             <tr key={c}>
-              <td>{nutrientName(byCode, c)}</td>
+              <th scope="row" className="th-plain">
+                {nutrientName(byCode, c)}
+              </th>
               <td className="num">{fmtAmount(values[c], byCode[c]?.unit)}</td>
               {derivations && <td className="muted">{derivations[c] ?? ""}</td>}
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+    </ScrollRegion>
   );
 }
 
-export function ComponentList({ items, title = "Other label components" }: { items: Component[]; title?: string | null }) {
+export function ComponentList({
+  items,
+  title = "Other label components",
+  level = 3,
+}: {
+  items: Component[];
+  title?: string | null;
+  level?: 2 | 3 | 4;
+}) {
   if (!items?.length) return null;
+  const H = `h${level}` as "h2" | "h3" | "h4";
   return (
     <section>
-      {title && <h3>{title}</h3>}
+      {title && <H>{title}</H>}
       <ul className="plain-list">
         {items.map((c, i) => (
           <li key={`${c.name}-${i}`}>
@@ -117,10 +200,14 @@ export function Notes({ notes }: { notes: string[] }) {
   );
 }
 
-/** Inline success/failure message; the icon and wording carry the status, not just colour. */
-export function ResultNote({ ok, children }: { ok: boolean; children: ReactNode }) {
+/**
+ * Inline success/failure message; the icon and wording carry the status, not just colour. Its text is
+ * announced when it appears or changes (politely for success, assertively for failure).
+ */
+export function ResultNote({ ok, children, id }: { ok: boolean; children: ReactNode; id?: string }) {
+  const ref = useAnnounceText<HTMLDivElement>({ assertive: !ok });
   return (
-    <div className={`result ${ok ? "result-ok" : "result-fail"}`} role="status">
+    <div ref={ref} id={id} className={`result ${ok ? "result-ok" : "result-fail"}`}>
       <span aria-hidden="true">{ok ? "✓" : "✗"}</span> <span className="sr-only">{ok ? "Success:" : "Failed:"}</span> {children}
     </div>
   );
@@ -140,7 +227,7 @@ export function StatusPill({ status }: { status: EvaluationStatus }) {
   const s = STATUS[status] ?? STATUS.ok;
   return (
     <span className={`status-pill status-${status}`}>
-      {s.icon}
+      {s.icon && <span aria-hidden="true">{s.icon}</span>}
       {s.text}
     </span>
   );

@@ -3,12 +3,14 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Field, ResultNote } from "../components/common";
 import { useAppInfo } from "../lib";
+import { Button, focusSoon, tabPanelProps, TabList, useAnnounceText, usePageTitle } from "../components/a11y";
 
 function ForgotPassword({ initialEmail, onBack }: { initialEmail: string; onBack: () => void }) {
   const [email, setEmail] = useState(initialEmail);
   const [result, setResult] = useState<{ email_enabled: boolean } | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const noteRef = useAnnounceText<HTMLDivElement>();
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -28,7 +30,7 @@ function ForgotPassword({ initialEmail, onBack }: { initialEmail: string; onBack
         result.email_enabled ? (
           <ResultNote ok>If an account exists for {email.trim()}, we've emailed a link to choose a new password. It's valid for 24 hours.</ResultNote>
         ) : (
-          <div className="alert alert-info" role="status">
+          <div className="alert alert-info" ref={noteRef}>
             Email isn't set up on this server, so no link could be sent. Ask an admin for a reset link (Settings → Users → Reset link).
           </div>
         )
@@ -38,14 +40,14 @@ function ForgotPassword({ initialEmail, onBack }: { initialEmail: string; onBack
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" autoFocus />
           </Field>
           <ErrorBox error={error} />
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <Button type="submit" className="btn btn-primary" disabled={busy}>
             {busy ? "Please wait…" : "Send reset link"}
-          </button>
+          </Button>
         </form>
       )}
       <div>
         <button type="button" className="btn-link" onClick={onBack}>
-          ← Back to sign in
+          <span aria-hidden="true">← </span>Back to sign in
         </button>
       </div>
     </div>
@@ -65,6 +67,7 @@ export default function LoginPage() {
   const [firstAccount, setFirstAccount] = useState(false);
   // The very first account can always be created (it becomes the admin); the server says so if it can't.
   const closed = mode === "register" && info?.allow_registration === false && !firstAccount;
+  usePageTitle(forgot ? "Reset your password" : mode === "login" ? "Sign in" : "Create account");
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -81,22 +84,31 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="container narrow">
+    <main className="container narrow" id="main">
       <div className="card auth-card">
         <h1>Mealplan</h1>
         <p className="muted">Track meals and supplements, with every number traced to its source.</p>
         {forgot ? (
-          <ForgotPassword initialEmail={email} onBack={() => setForgot(false)} />
+          <ForgotPassword
+            initialEmail={email}
+            onBack={() => {
+              setForgot(false);
+              focusSoon(() => document.getElementById("login-email"));
+            }}
+          />
         ) : (
           <>
-            <div className="tabs" role="tablist">
-              <button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
-                Sign in
-              </button>
-              <button type="button" role="tab" aria-selected={mode === "register"} className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
-                Create account
-              </button>
-            </div>
+            <TabList
+              id="auth"
+              label="Sign in or create an account"
+              value={mode}
+              onChange={setMode}
+              tabs={[
+                { value: "login", label: "Sign in" },
+                { value: "register", label: "Create account" },
+              ]}
+            />
+            <div {...tabPanelProps("auth", mode)}>
             {closed ? (
               <div className="stack">
                 <div className="alert alert-info" role="status">
@@ -117,7 +129,7 @@ export default function LoginPage() {
                   </Field>
                 )}
                 <Field label="Email">
-                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+                  <input id="login-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
                 </Field>
                 <Field label="Password" hint={mode === "register" ? "At least 10 characters." : undefined}>
                   <input
@@ -130,9 +142,9 @@ export default function LoginPage() {
                   />
                 </Field>
                 <ErrorBox error={error} />
-                <button type="submit" className="btn btn-primary" disabled={busy}>
+                <Button type="submit" className="btn btn-primary" disabled={busy}>
                   {busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
-                </button>
+                </Button>
                 {mode === "login" && (
                   <div>
                     <button type="button" className="btn-link small" onClick={() => setForgot(true)}>
@@ -142,6 +154,7 @@ export default function LoginPage() {
                 )}
               </form>
             )}
+            </div>
           </>
         )}
       </div>

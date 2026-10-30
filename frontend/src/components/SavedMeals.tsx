@@ -7,6 +7,7 @@ import { MEALS, type FoodSummary, type Meal, type SavedMeal, type WeighedState }
 import { QuantityFields, unitChoices } from "./AmountFields";
 import { ErrorBox, Field, Loading } from "./common";
 import { FoodPicker } from "./FoodPicker";
+import { Button, rescueFocus, tabId, useAnnounce, useAnnounceText, useReturnFocus, VisuallyHidden } from "./a11y";
 
 type DraftItem = {
   key: string;
@@ -23,20 +24,30 @@ let draftSeq = 0;
 const draftKey = () => `d${++draftSeq}`;
 
 function ItemEditor({ item, onChange, onRemove }: { item: DraftItem; onChange: (i: DraftItem) => void; onRemove: () => void }) {
+  const announce = useAnnounce();
   const food = useQuery({ queryKey: ["food", item.food_id], queryFn: () => api.food(item.food_id!), enabled: !!item.food_id });
   const recipe = useQuery({ queryKey: ["recipe", item.recipe_id], queryFn: () => api.recipe(item.recipe_id!), enabled: !!item.recipe_id });
   return (
     <li className="saved-item-edit">
       <div className="row between">
         <strong className="grow">{item.label}</strong>
-        <button type="button" className="btn-link danger small" onClick={onRemove} aria-label={`Remove ${item.label}`}>
-          Remove
+        <button
+          type="button"
+          className="btn-link danger small"
+          onClick={() => {
+            onRemove();
+            announce(`Removed ${item.label}.`);
+            rescueFocus(() => document.getElementById("saved-meal-add-item"));
+          }}
+        >
+          Remove<VisuallyHidden> {item.label}</VisuallyHidden>
         </button>
       </div>
       {item.weighed_state === "cooked" && <span className="muted small">Weighed after cooking</span>}
       <QuantityFields
         quantity={item.quantity}
         unit={item.unit}
+        context={item.label}
         options={unitChoices(food.data, recipe.data, item.weighed_state, item.unit)}
         onQuantity={(quantity) => onChange({ ...item, quantity })}
         onUnit={(unit) => onChange({ ...item, unit })}
@@ -135,16 +146,16 @@ function SavedMealEditor({ meal, onDone }: { meal: SavedMeal; onDone: () => void
         </div>
       ) : (
         <div>
-          <button type="button" className="btn btn-sm" onClick={() => setAdding(true)}>
-            + Add item
+          <button id="saved-meal-add-item" type="button" className="btn btn-sm" onClick={() => setAdding(true)}>
+            <span aria-hidden="true">+</span> Add item
           </button>
         </div>
       )}
       <ErrorBox error={save.error} />
       <div className="row wrap">
-        <button type="submit" className="btn btn-primary" disabled={!valid || save.isPending}>
+        <Button type="submit" className="btn btn-primary" disabled={!valid || save.isPending}>
           {save.isPending ? "Saving…" : "Save changes"}
-        </button>
+        </Button>
         <button type="button" className="btn" onClick={onDone}>
           Cancel
         </button>
@@ -155,8 +166,11 @@ function SavedMealEditor({ meal, onDone }: { meal: SavedMeal; onDone: () => void
 
 function SavedMealCard({ meal, logMeal, when }: { meal: SavedMeal; logMeal: Meal | ""; when: string }) {
   const qc = useQueryClient();
+  const announce = useAnnounce();
   const [editing, setEditing] = useState(false);
   const [logged, setLogged] = useState<string | null>(null);
+  const loggedRef = useAnnounceText<HTMLParagraphElement>();
+  const editButton = useReturnFocus<HTMLButtonElement>(editing);
   const log = useMutation({
     mutationFn: () => api.logSavedMeal(meal.id, { meal: logMeal || null, consumed_at: new Date(when).toISOString() }),
     onMutate: () => setLogged(null),
@@ -168,25 +182,33 @@ function SavedMealCard({ meal, logMeal, when }: { meal: SavedMeal; logMeal: Meal
   });
   const del = useMutation({
     mutationFn: () => api.deleteSavedMeal(meal.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["saved-meals"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["saved-meals"] });
+      announce(`Deleted the saved meal ${meal.name}.`);
+      rescueFocus(() => document.getElementById(tabId("add-entry", "saved")));
+    },
   });
 
   return (
     <li className="card stack-sm">
       <div className="row between wrap">
         <div className="row wrap">
-          <strong>{meal.name}</strong>
-          <span className="chip">{meal.default_meal}</span>
+          <h2 className="h-card">{meal.name}</h2>
+          <span className="chip">
+            <VisuallyHidden>usually </VisuallyHidden>
+            {meal.default_meal}
+          </span>
         </div>
         {!editing && (
           <div className="row wrap">
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => log.mutate()} disabled={log.isPending}>
+            <Button type="button" className="btn btn-primary btn-sm" onClick={() => log.mutate()} disabled={log.isPending}>
               {log.isPending ? "Logging…" : "Log"}
+              <VisuallyHidden> {meal.name}</VisuallyHidden>
+            </Button>
+            <button ref={editButton} type="button" className="btn btn-sm" onClick={() => setEditing(true)}>
+              Edit<VisuallyHidden> {meal.name}</VisuallyHidden>
             </button>
-            <button type="button" className="btn btn-sm" onClick={() => setEditing(true)}>
-              Edit
-            </button>
-            <button
+            <Button
               type="button"
               className="btn btn-sm danger"
               disabled={del.isPending}
@@ -194,8 +216,8 @@ function SavedMealCard({ meal, logMeal, when }: { meal: SavedMeal; logMeal: Meal
                 if (confirm(`Delete the saved meal "${meal.name}"? Logged entries stay.`)) del.mutate();
               }}
             >
-              Delete
-            </button>
+              Delete<VisuallyHidden> {meal.name}</VisuallyHidden>
+            </Button>
           </div>
         )}
       </div>
@@ -211,8 +233,8 @@ function SavedMealCard({ meal, logMeal, when }: { meal: SavedMeal; logMeal: Meal
         </ul>
       )}
       {logged && (
-        <p className="ok-text small" role="status">
-          ✓ {logged} <Link to="/">View day</Link>
+        <p ref={loggedRef} className="ok-text small">
+          <span aria-hidden="true">✓</span> {logged} <Link to="/">View day</Link>
         </p>
       )}
       <ErrorBox error={log.error || del.error} />

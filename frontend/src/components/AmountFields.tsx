@@ -5,6 +5,7 @@ import { api } from "../api";
 import { canWeighCooked, fmtNum, recipeUnitOptions, unitOptions, type UnitOption } from "../lib";
 import type { Food, Recipe, WeighedState } from "../types";
 import { Field } from "./common";
+import { VisuallyHidden } from "./a11y";
 
 /** Keep a value that isn't (or is no longer) offered visible in the select instead of silently switching. */
 export function withCurrent(opts: UnitOption[], unit: string): UnitOption[] {
@@ -78,19 +79,24 @@ export function QuantityFields({
   options,
   onQuantity,
   onUnit,
+  context,
 }: {
   quantity: string;
   unit: string;
   options: UnitOption[];
   onQuantity: (v: string) => void;
   onUnit: (v: string) => void;
+  /** Item name, for screen readers when several of these are on one form. */
+  context?: string;
 }) {
+  const of = context ? <VisuallyHidden> of {context}</VisuallyHidden> : null;
+  const forItem = context ? <VisuallyHidden> for {context}</VisuallyHidden> : null;
   return (
     <div className="grid-2">
-      <Field label="Amount">
+      <Field label={<>Amount{of}</>}>
         <input type="number" inputMode="decimal" min="0" step="any" value={quantity} onChange={(e) => onQuantity(e.target.value)} required />
       </Field>
-      <Field label="Unit">
+      <Field label={<>Unit{forItem}</>}>
         <select value={unit} onChange={(e) => onUnit(e.target.value)}>
           {options.map((o) => (
             <option key={o.value} value={o.value}>

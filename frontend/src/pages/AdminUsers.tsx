@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { AdminFrame } from "../components/AdminTabs";
 import { CopyField, ErrorBox, Field, Loading, ResultNote } from "../components/common";
 import type { AdminUser, InviteResult } from "../types";
+import { Button, rescueFocus, useAnnounce, VisuallyHidden } from "../components/a11y";
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" }) : "never");
 
@@ -41,9 +42,9 @@ function InviteForm() {
           </Field>
         </div>
         <div>
-          <button type="submit" className="btn btn-primary" disabled={invite.isPending || !email.trim()}>
+          <Button type="submit" className="btn btn-primary" disabled={invite.isPending || !email.trim()}>
             {invite.isPending ? "Inviting…" : "Invite"}
-          </button>
+          </Button>
         </div>
       </form>
       {invite.error && <ResultNote ok={false}>{errorMessage(invite.error)}</ResultNote>}
@@ -76,7 +77,9 @@ function UserRow({ u, me }: { u: AdminUser; me: boolean }) {
       await refresh(); // keep the pending toggle until the list has the new value
     },
   });
+  // The checkboxes stay enabled while saving (disabling the focused one would drop focus); changes wait.
   const toggle = (changes: { is_admin?: boolean; is_active?: boolean }) => {
+    if (busy) return;
     setPending(changes);
     update.mutate(changes);
   };
@@ -90,7 +93,15 @@ function UserRow({ u, me }: { u: AdminUser; me: boolean }) {
     onMutate: () => setNote(null),
     onSuccess: () => setNote(`${u.email} was signed out on every device.`),
   });
-  const remove = useMutation({ mutationFn: () => api.deleteUser(u.id), onSuccess: refresh });
+  const announce = useAnnounce();
+  const remove = useMutation({
+    mutationFn: () => api.deleteUser(u.id),
+    onSuccess: () => {
+      refresh();
+      announce(`Deleted ${u.email}.`);
+      rescueFocus(() => document.getElementById("users-title"));
+    },
+  });
   const error = update.error || reset.error || signOut.error || remove.error;
   const busy = update.isPending || remove.isPending;
 
@@ -98,7 +109,7 @@ function UserRow({ u, me }: { u: AdminUser; me: boolean }) {
     <li className={`card stack-sm user-row ${u.is_active ? "" : "user-inactive"}`}>
       <div className="row between wrap">
         <div className="min-0">
-          <strong className="break">{u.display_name || u.email}</strong>
+          <h3 className="h-card break">{u.display_name || u.email}</h3>
           {u.display_name && <div className="muted small break">{u.email}</div>}
         </div>
         <div className="row wrap">
@@ -113,33 +124,34 @@ function UserRow({ u, me }: { u: AdminUser; me: boolean }) {
       </p>
       <div className="row wrap">
         <label className="checkbox">
-          <input type="checkbox" checked={pending.is_admin ?? u.is_admin} disabled={busy} onChange={(e) => toggle({ is_admin: e.target.checked })} />
-          Admin
+          <input type="checkbox" checked={pending.is_admin ?? u.is_admin} onChange={(e) => toggle({ is_admin: e.target.checked })} />
+          Admin<VisuallyHidden> ({u.email})</VisuallyHidden>
         </label>
         <label className="checkbox">
           <input
             type="checkbox"
             checked={pending.is_active ?? u.is_active}
-            disabled={busy || me}
+            disabled={me}
             onChange={(e) => {
               if (!e.target.checked && !confirm(`Deactivate ${u.email}? They are signed out and can't sign in until reactivated.`)) return;
               toggle({ is_active: e.target.checked });
             }}
           />
-          Active
+          Active<VisuallyHidden> ({u.email})</VisuallyHidden>
         </label>
       </div>
       <div className="row wrap">
-        <button type="button" className="btn btn-sm" onClick={() => reset.mutate()} disabled={reset.isPending}>
+        <Button type="button" className="btn btn-sm" onClick={() => reset.mutate()} disabled={reset.isPending}>
           {reset.isPending ? "Creating…" : "Reset link"}
-        </button>
+          <VisuallyHidden> for {u.email}</VisuallyHidden>
+        </Button>
         {!me && (
-          <button type="button" className="btn btn-sm" onClick={() => signOut.mutate()} disabled={signOut.isPending}>
-            Sign out everywhere
-          </button>
+          <Button type="button" className="btn btn-sm" onClick={() => signOut.mutate()} disabled={signOut.isPending}>
+            Sign out everywhere<VisuallyHidden>({u.email})</VisuallyHidden>
+          </Button>
         )}
         {!me && (
-          <button
+          <Button
             type="button"
             className="btn btn-sm danger"
             disabled={busy}
@@ -147,8 +159,8 @@ function UserRow({ u, me }: { u: AdminUser; me: boolean }) {
               if (confirm(`Delete ${u.email} and all their data (log, recipes, own foods)? This can't be undone.`)) remove.mutate();
             }}
           >
-            Delete
-          </button>
+            Delete<VisuallyHidden> {u.email}</VisuallyHidden>
+          </Button>
         )}
       </div>
       {link && <CopyField label={`Password reset link for ${u.email}`} value={link} hint="Valid 24 h, one use. Creating another link cancels this one." />}

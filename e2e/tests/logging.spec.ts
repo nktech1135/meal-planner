@@ -9,8 +9,8 @@ test("log again from suggestions, edit an entry, copy the day", async ({ page })
 
   await page.goto("/log");
   await page.getByLabel("Meal").selectOption("breakfast");
-  await page.getByRole("button", { name: new RegExp(`^Log ${oats.name} again`) }).click();
-  await expect(page.getByRole("status").filter({ hasText: `Logged ${oats.name}` })).toBeVisible();
+  await page.getByRole("button", { name: new RegExp(`^Log again ${oats.name}`) }).click();
+  await expect(page.getByText(`Logged ${oats.name}`).first()).toBeVisible();
   expect(await count(today())).toHaveLength(2);
 
   await page.goto("/");
@@ -36,6 +36,6 @@ test("saved meal: create from a logged meal and log it again", async ({ page }) 
   await page.goto("/log");
   await page.getByRole("tab", { name: "Saved meals" }).click();
   const card = page.locator("li, article, section").filter({ hasText: meal.name }).last();
-  await card.getByRole("button", { name: "Log", exact: true }).click();
-  await expect(page.getByText(/Logged 1 item/)).toBeVisible();
+  await card.getByRole("button", { name: `Log ${meal.name}`, exact: true }).click();
+  await expect(page.getByText(/Logged 1 item/).first()).toBeVisible();
 });

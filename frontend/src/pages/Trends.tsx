@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
@@ -21,6 +21,7 @@ import {
   weightUnit,
 } from "../lib";
 import type { BodyMeasurement, NutrientDef, Profile, TrendEvaluation, Trends, UnitSystem } from "../types";
+import { Button, focusSoon, rescueFocus, useAnnounce } from "../components/a11y";
 
 const PERIODS = [7, 30, 90];
 const GROUPS: { title: string; categories: string[] }[] = [
@@ -66,10 +67,13 @@ function NutrientChart({ t, code, def }: { t: Trends; code: string; def?: Nutrie
 }
 
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+  const id = useId();
   return (
-    <section className="card stack-sm chart-card" aria-label={title}>
+    <section className="card stack-sm chart-card" aria-labelledby={id}>
       <div>
-        <h2 className="h-card">{title}</h2>
+        <h2 className="h-card" id={id}>
+          {title}
+        </h2>
         {subtitle && <p className="muted small chart-sub">{subtitle}</p>}
       </div>
       {children}
@@ -228,9 +232,9 @@ function EnergyEstimateCard({ t, units }: { t: Trends; units: UnitSystem }) {
                 {current !== null && <> Your current override is {fmtNum(current)} kcal.</>}
               </p>
               <div>
-                <button type="button" className="btn btn-primary" disabled={!profile.data || save.isPending || current === suggested} onClick={() => save.mutate()}>
+                <Button type="button" className="btn btn-primary" disabled={!profile.data || save.isPending || current === suggested} onClick={() => save.mutate()}>
                   {save.isPending ? "Saving…" : current === suggested ? "This is your energy target" : "Use as my energy target"}
-                </button>
+                </Button>
               </div>
               {save.isSuccess && (
                 <ResultNote ok>
@@ -250,6 +254,7 @@ const numOrEmpty = (v: number | null, convert: (v: number) => number) => (v === 
 
 function BodyForm({ units, editing, onDone }: { units: UnitSystem; editing: BodyMeasurement | null; onDone: () => void }) {
   const qc = useQueryClient();
+  const announce = useAnnounce();
   const [date, setDate] = useState(todayISO());
   const [weight, setWeight] = useState("");
   const [fat, setFat] = useState("");
@@ -279,6 +284,7 @@ function BodyForm({ units, editing, onDone }: { units: UnitSystem; editing: Body
       qc.invalidateQueries({ queryKey: ["trends"] });
       qc.invalidateQueries({ queryKey: ["profile"] });
       qc.invalidateQueries({ queryKey: ["targets"] });
+      announce(`Saved measurements for ${fmtShortDate(date)}.`);
       setWeight("");
       setFat("");
       setWaist("");
@@ -295,7 +301,7 @@ function BodyForm({ units, editing, onDone }: { units: UnitSystem; editing: Body
     <form className="stack-sm" onSubmit={submit} aria-label={editing ? `Edit measurements for ${fmtShortDate(editing.date)}` : "Add measurements"}>
       <div className="grid-4">
         <Field label="Date">
-          <input type="date" required value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
+          <input id="body-date" type="date" required value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />
         </Field>
         <Field label={`Weight (${weightUnit(units)})`}>
           <input type="number" inputMode="decimal" step="any" min="0" value={weight} onChange={(e) => setWeight(e.target.value)} />
@@ -312,11 +318,18 @@ function BodyForm({ units, editing, onDone }: { units: UnitSystem; editing: Body
       </Field>
       <ErrorBox error={save.error} />
       <div className="row wrap">
-        <button type="submit" className="btn btn-primary" disabled={save.isPending || (w === null && f === null && wa === null)}>
+        <Button type="submit" className="btn btn-primary" disabled={save.isPending || (w === null && f === null && wa === null)}>
           {save.isPending ? "Saving…" : editing ? "Save changes" : "Save measurements"}
-        </button>
+        </Button>
         {editing && (
-          <button type="button" className="btn" onClick={onDone}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              onDone();
+              rescueFocus(() => document.getElementById("body-date"));
+            }}
+          >
             Cancel
           </button>
         )}
@@ -331,16 +344,20 @@ function BodySection({ units }: { units: UnitSystem }) {
   const body = useQuery({ queryKey: ["body"], queryFn: () => api.body() });
   const [editing, setEditing] = useState<BodyMeasurement | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const announce = useAnnounce();
   const del = useMutation({
     mutationFn: api.deleteBody,
-    onSuccess: () => {
+    onSuccess: (_, date) => {
       qc.invalidateQueries({ queryKey: ["body"] });
       qc.invalidateQueries({ queryKey: ["trends"] });
       qc.invalidateQueries({ queryKey: ["profile"] });
+      announce(`Deleted the measurements for ${fmtShortDate(date)}.`);
+      rescueFocus(() => listHeading.current);
     },
   });
   const rows = [...(body.data ?? [])].reverse();
   const shown = showAll ? rows : rows.slice(0, 10);
+  const listHeading = useRef<HTMLHeadingElement>(null);
   return (
     <section className="card stack" aria-labelledby="body-title">
       <h2 id="body-title">Body measurements</h2>
@@ -349,7 +366,9 @@ function BodySection({ units }: { units: UnitSystem }) {
       {body.isLoading && <Loading />}
       {rows.length > 0 && (
         <div className="stack-sm">
-          <h3 className="h-sm">Last 90 days</h3>
+          <h3 className="h-sm" ref={listHeading}>
+            Last 90 days
+          </h3>
           <ul className="plain-list body-list">
             {shown.map((m) => (
               <li key={m.date} className="entry">
@@ -368,10 +387,19 @@ function BodySection({ units }: { units: UnitSystem }) {
                     {m.note && <div className="muted small">{m.note}</div>}
                   </div>
                   <div className="entry-actions">
-                    <button type="button" className="btn-link" onClick={() => setEditing(m)} aria-label={`Edit measurements for ${fmtShortDate(m.date)}`}>
+                    <button
+                      type="button"
+                      className="btn-link"
+                      onClick={() => {
+                        setEditing(m);
+                        // The form is above the list: take focus there, ready to change the values.
+                        focusSoon(() => document.getElementById("body-date"));
+                      }}
+                      aria-label={`Edit measurements for ${fmtShortDate(m.date)}`}
+                    >
                       Edit
                     </button>
-                    <button
+                    <Button
                       type="button"
                       className="btn-link danger"
                       disabled={del.isPending}
@@ -381,7 +409,7 @@ function BodySection({ units }: { units: UnitSystem }) {
                       aria-label={`Delete measurements for ${fmtShortDate(m.date)}`}
                     >
                       Delete
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </li>

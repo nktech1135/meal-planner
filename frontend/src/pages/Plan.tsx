@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
@@ -8,6 +8,7 @@ import { FoodPicker } from "../components/FoodPicker";
 import { TrustBadge } from "../components/TrustBadge";
 import { addDays, basisLabel, fmtDay, fmtNum, fmtShortDate, mealLabel, mondayOf, nutrientName, parseNum, todayISO, unitText, useMedia, useNutrients } from "../lib";
 import { MEALS, type FoodSummary, type Meal, type PlanDay, type PlanItem, type PlanItemUpdate, type WeighedState } from "../types";
+import { Button, focusSoon, rescueFocus, tabPanelProps, TabList, useAnnounce, useAnnounceText, useReturnFocus, VisuallyHidden } from "../components/a11y";
 
 const ORIGIN: Record<string, string | null> = { manual: null, advisor: "from advisor", copy: "copied", saved_meal: "saved meal" };
 
@@ -38,6 +39,7 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
   const saved = useQuery({ queryKey: ["saved-meals"], queryFn: api.savedMeals, enabled: mode === "saved" });
   const recipe = recipes.data?.find((r) => r.id === recipeId) ?? null;
   const qty = parseNum(quantity);
+  const selectedRef = useRef<HTMLDivElement>(null);
 
   const add = useMutation({
     mutationFn: async () => {
@@ -65,8 +67,9 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
     },
   });
 
-  function pickFood(f: FoodSummary) {
+  function pickFood(f: FoodSummary, focus = true) {
     setPicked(f);
+    if (focus) focusSoon(() => selectedRef.current);
     setWeighed("as_is");
     setYieldId(null);
     setUnit(f.basis === "serving" ? "serving" : "g");
@@ -78,7 +81,7 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
     if (m === "recipe") {
       setUnit("serving");
       setQuantity("1");
-    } else if (m === "food" && picked) pickFood(picked);
+    } else if (m === "food" && picked) pickFood(picked, false);
   }
 
   const valid =
@@ -91,19 +94,23 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
     if (valid) add.mutate();
   }
 
-  const tab = (m: AddMode, label: string) => (
-    <button type="button" role="tab" aria-selected={mode === m} className={mode === m ? "active" : ""} onClick={() => switchMode(m)}>
-      {label}
-    </button>
-  );
+  const tabsId = `plan-add-${date}`;
 
   return (
     <form className="inline-panel stack-sm plan-add" onSubmit={submit} aria-label={`Add to ${longDay(date)}`}>
-      <div className="tabs small" role="tablist">
-        {tab("food", "Food")}
-        {tab("recipe", "Recipe")}
-        {tab("saved", "Saved meal")}
-      </div>
+      <TabList
+        id={tabsId}
+        className="small"
+        label="What to add"
+        value={mode}
+        onChange={switchMode}
+        tabs={[
+          { value: "food", label: "Food" },
+          { value: "recipe", label: "Recipe" },
+          { value: "saved", label: "Saved meal" },
+        ]}
+      />
+      <div className="stack-sm" {...tabPanelProps(tabsId, mode)}>
       <Field label="Meal">
         {mode === "saved" ? (
           <select value={savedMeal} onChange={(e) => setSavedMeal(e.target.value as Meal | "")}>
@@ -127,7 +134,7 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
 
       {mode === "food" &&
         (picked ? (
-          <div className="selected">
+          <div className="selected" ref={selectedRef} tabIndex={-1} role="group" aria-label={`Chosen: ${picked.name}`}>
             <div className="min-0">
               <strong>{picked.name}</strong> {picked.brand && <span className="muted">· {picked.brand}</span>}
               <div className="row wrap small">
@@ -136,7 +143,7 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
               </div>
             </div>
             <button type="button" className="btn-link" onClick={() => setPicked(null)}>
-              Change
+              Change<VisuallyHidden> food</VisuallyHidden>
             </button>
           </div>
         ) : (
@@ -208,11 +215,12 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
           </Field>
         </>
       )}
+      </div>
       <ErrorBox error={add.error || food.error} />
       <div className="row wrap">
-        <button type="submit" className="btn btn-primary btn-sm" disabled={!valid || add.isPending}>
+        <Button type="submit" className="btn btn-primary btn-sm" disabled={!valid || add.isPending}>
           {add.isPending ? "Adding…" : "Add to plan"}
-        </button>
+        </Button>
         <button type="button" className="btn btn-sm" onClick={() => onDone("")}>
           Cancel
         </button>
@@ -293,9 +301,9 @@ function ItemEditor({ item, onDone }: { item: PlanItem; onDone: () => void }) {
       </Field>
       <ErrorBox error={save.error || food.error || recipe.error} />
       <div className="row wrap">
-        <button type="submit" className="btn btn-primary btn-sm" disabled={invalid || save.isPending}>
+        <Button type="submit" className="btn btn-primary btn-sm" disabled={invalid || save.isPending}>
           {save.isPending ? "Saving…" : "Save"}
-        </button>
+        </Button>
         <button type="button" className="btn btn-sm" onClick={onDone}>
           Cancel
         </button>
@@ -304,14 +312,38 @@ function ItemEditor({ item, onDone }: { item: PlanItem; onDone: () => void }) {
   );
 }
 
-function PlanItemRow({ item, editing, onEdit, onDone }: { item: PlanItem; editing: boolean; onEdit: () => void; onDone: () => void }) {
+function PlanItemRow({
+  item,
+  editing,
+  onEdit,
+  onDone,
+  dayHeading,
+}: {
+  item: PlanItem;
+  editing: boolean;
+  onEdit: () => void;
+  onDone: () => void;
+  dayHeading: () => HTMLElement | null;
+}) {
   const qc = useQueryClient();
-  const log = useMutation({ mutationFn: () => api.logPlanItem(item.id), onSuccess: () => invalidateAfterLog(qc), onError: () => invalidateAfterLog(qc) });
+  const announce = useAnnounce();
+  const editButton = useReturnFocus<HTMLButtonElement>(editing);
+  const log = useMutation({
+    mutationFn: () => api.logPlanItem(item.id),
+    onSuccess: () => {
+      invalidateAfterLog(qc);
+      announce(`Logged ${item.label}.`);
+      rescueFocus(() => editButton.current);
+    },
+    onError: () => invalidateAfterLog(qc),
+  });
   const del = useMutation({
     mutationFn: () => api.deletePlanItem(item.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["plan"] });
       qc.invalidateQueries({ queryKey: ["shopping"] });
+      announce(`Removed ${item.label} from the plan.`);
+      rescueFocus(dayHeading);
     },
   });
   const logged = item.logged_entry_id !== null;
@@ -330,7 +362,11 @@ function PlanItemRow({ item, editing, onEdit, onDone }: { item: PlanItem; editin
           </span>
           {(logged || origin || item.trust_level === "unverified") && (
             <div className="row wrap small plan-badges">
-              {logged && <span className="chip chip-ok">✓ logged</span>}
+              {logged && (
+                <span className="chip chip-ok">
+                  <span aria-hidden="true">✓ </span>logged
+                </span>
+              )}
               {origin && <span className="chip">{origin}</span>}
               {item.trust_level === "unverified" && <TrustBadge level={item.trust_level} />}
             </div>
@@ -338,21 +374,23 @@ function PlanItemRow({ item, editing, onEdit, onDone }: { item: PlanItem; editin
         </div>
         <div className="entry-actions">
           {!logged && (
-            <button type="button" className="btn btn-sm" onClick={() => log.mutate()} disabled={log.isPending || !!item.error} aria-label={`Log ${item.label}`}>
+            <Button type="button" className="btn btn-sm" onClick={() => log.mutate()} disabled={log.isPending || !!item.error}>
               {log.isPending ? "Logging…" : "Log"}
-            </button>
+              <VisuallyHidden> {item.label}</VisuallyHidden>
+            </Button>
           )}
-          <button type="button" className="btn-link" onClick={editing ? onDone : onEdit} aria-expanded={editing} aria-label={`Edit ${item.label}`}>
-            Edit
+          <button ref={editButton} type="button" className="btn-link" onClick={editing ? onDone : onEdit} aria-expanded={editing}>
+            Edit<VisuallyHidden> {item.label}</VisuallyHidden>
           </button>
-          <button type="button" className="btn-link danger" onClick={() => del.mutate()} disabled={del.isPending} aria-label={`Remove ${item.label} from the plan`}>
-            Remove
-          </button>
+          <Button type="button" className="btn-link danger" onClick={() => del.mutate()} disabled={del.isPending}>
+            Remove<VisuallyHidden> {item.label} from the plan</VisuallyHidden>
+          </Button>
         </div>
       </div>
       {item.error && (
         <p className="warn-text small" role="note">
-          ⚠ {item.error}
+          <span aria-hidden="true">⚠ </span>
+          {item.error}
         </p>
       )}
       {item.note && !editing && <div className="muted small">Note: {item.note}</div>}
@@ -368,14 +406,22 @@ function DayTotals({ day }: { day: PlanDay }) {
   const energy = row("energy_kcal");
   const kcal = day.totals.energy_kcal ?? 0;
   const over = day.evaluation.filter((r) => r.status === "above_max");
-  const macro = (c: string, short: string) => {
+  const macro = (c: string, short: string, long: string) => {
     const r = row(c);
     const v = day.totals[c] ?? 0;
     const goal = r?.target ?? r?.min ?? null;
     return (
       <span key={c} className="nowrap">
-        {short} {fmtNum(v)}
-        {goal !== null && <span className="muted">/{fmtNum(goal)}</span>} g
+        <span aria-hidden="true">{short}</span>
+        <VisuallyHidden>{long}</VisuallyHidden> {fmtNum(v)}
+        {goal !== null && (
+          <span className="muted">
+            <span aria-hidden="true">/</span>
+            <VisuallyHidden> of </VisuallyHidden>
+            {fmtNum(goal)}
+          </span>
+        )}{" "}
+        g
       </span>
     );
   };
@@ -385,15 +431,23 @@ function DayTotals({ day }: { day: PlanDay }) {
       <div className="row wrap">
         <strong className="nowrap">
           {Math.round(kcal).toLocaleString()}
-          {energy?.target ? <span className="muted"> / {fmtNum(energy.target)}</span> : null} kcal
+          {energy?.target ? (
+            <span className="muted">
+              {" "}
+              <span aria-hidden="true">/</span>
+              <VisuallyHidden>of</VisuallyHidden> {fmtNum(energy.target)}
+            </span>
+          ) : null}{" "}
+          kcal
         </strong>
-        {macro("protein_g", "P")}
-        {macro("fat_g", "F")}
-        {macro("carbs_g", "C")}
+        <VisuallyHidden>planned.</VisuallyHidden>
+        {macro("protein_g", "P", "protein")}
+        {macro("fat_g", "F", "fat")}
+        {macro("carbs_g", "C", "carbs")}
       </div>
       {over.length > 0 && (
         <p className="danger-text" role="note">
-          ⚠ Above limit: {over.map((r) => `${nutrientName(byCode, r.code)} (${fmtNum(r.limit_amount)} / ${fmtNum(r.max)} ${byCode[r.code]?.unit ?? ""})`).join(", ")}
+          <span aria-hidden="true">⚠ </span>Above limit: {over.map((r) => `${nutrientName(byCode, r.code)} (${fmtNum(r.limit_amount)} / ${fmtNum(r.max)} ${byCode[r.code]?.unit ?? ""})`).join(", ")}
         </p>
       )}
     </div>
@@ -425,9 +479,9 @@ function CopyDay({ from, onDone }: { from: string; onDone: (msg: string, goTo?: 
           <input type="date" required value={to} onChange={(e) => setTo(e.target.value)} />
         </Field>
         <div className="row">
-          <button type="submit" className="btn btn-primary btn-sm" disabled={copy.isPending}>
+          <Button type="submit" className="btn btn-primary btn-sm" disabled={copy.isPending}>
             {copy.isPending ? "Copying…" : "Copy"}
-          </button>
+          </Button>
           <button type="button" className="btn btn-sm" onClick={() => onDone("")}>
             Cancel
           </button>
@@ -438,17 +492,23 @@ function CopyDay({ from, onDone }: { from: string; onDone: (msg: string, goTo?: 
   );
 }
 
-function DayCard({ day, onGo }: { day: PlanDay; onGo: (d: string) => void }) {
+function DayCard({ day, onGo, panelProps }: { day: PlanDay; onGo: (d: string) => void; panelProps?: Record<string, string> }) {
   const qc = useQueryClient();
   const [panel, setPanel] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ text: string; goTo?: string } | null>(null);
+  const noticeRef = useAnnounceText<HTMLDivElement>();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const copyButton = useReturnFocus<HTMLButtonElement>(panel === "copy");
+  const addButton = useReturnFocus<HTMLButtonElement>(panel === "add");
+  const dayName = longDay(day.date);
   const logAll = useMutation({
     mutationFn: (meal: Meal | null) => api.logPlanDay(day.date, meal),
     onMutate: () => setNotice(null),
     onSuccess: (entries) => {
       invalidateAfterLog(qc);
       setNotice({ text: `Logged ${entries.length} item${entries.length === 1 ? "" : "s"}.` });
+      rescueFocus(() => heading.current);
     },
   });
   const isToday = day.date === todayISO();
@@ -459,20 +519,27 @@ function DayCard({ day, onGo }: { day: PlanDay; onGo: (d: string) => void }) {
   };
 
   return (
-    <section className={`card stack-sm plan-day ${isToday ? "is-today" : ""}`} aria-labelledby={`day-${day.date}`}>
+    <section className={`card stack-sm plan-day ${isToday ? "is-today" : ""}`} aria-labelledby={`day-${day.date}`} {...panelProps}>
       <div className="row between wrap">
-        <h2 id={`day-${day.date}`} className="h-card">
-          {longDay(day.date)} {isToday && <span className="chip chip-ok">today</span>}
+        <h2 id={`day-${day.date}`} className="h-card" ref={heading}>
+          {dayName} {isToday && <span className="chip chip-ok">today</span>}
         </h2>
         <div className="row wrap meal-actions">
           {unlogged > 0 && (
-            <button type="button" className="btn btn-sm" disabled={logAll.isPending} onClick={() => logAll.mutate(null)}>
+            <Button type="button" className="btn btn-sm" disabled={logAll.isPending} onClick={() => logAll.mutate(null)}>
               {logAll.isPending && logAll.variables === null ? "Logging…" : `Log all (${unlogged})`}
-            </button>
+              <VisuallyHidden> for {dayName}</VisuallyHidden>
+            </Button>
           )}
           {day.items.length > 0 && (
-            <button type="button" className="btn-link small" aria-expanded={panel === "copy"} onClick={() => setPanel(panel === "copy" ? null : "copy")}>
-              Copy day to…
+            <button
+              ref={copyButton}
+              type="button"
+              className="btn-link small"
+              aria-expanded={panel === "copy"}
+              onClick={() => setPanel(panel === "copy" ? null : "copy")}
+            >
+              Copy day to…<VisuallyHidden> ({dayName})</VisuallyHidden>
             </button>
           )}
         </div>
@@ -480,7 +547,7 @@ function DayCard({ day, onGo }: { day: PlanDay; onGo: (d: string) => void }) {
       <DayTotals day={day} />
       {panel === "copy" && <CopyDay from={day.date} onDone={finish} />}
       {notice && (
-        <div className="result result-ok" role="status">
+        <div ref={noticeRef} className="result result-ok">
           <span aria-hidden="true">✓</span> {notice.text}{" "}
           {notice.goTo && (
             <button type="button" className="btn-link" onClick={() => onGo(notice.goTo!)}>
@@ -503,14 +570,22 @@ function DayCard({ day, onGo }: { day: PlanDay; onGo: (d: string) => void }) {
                 {mealLabel(meal)} <span className="muted small">{Math.round(kcal)} kcal</span>
               </h3>
               {open > 0 && open < unlogged && (
-                <button type="button" className="btn-link small" disabled={logAll.isPending} onClick={() => logAll.mutate(meal)}>
+                <Button type="button" className="btn-link small" disabled={logAll.isPending} onClick={() => logAll.mutate(meal)}>
                   Log {meal}
-                </button>
+                  <VisuallyHidden> for {dayName}</VisuallyHidden>
+                </Button>
               )}
             </div>
             <ul className="plain-list">
               {items.map((i) => (
-                <PlanItemRow key={i.id} item={i} editing={editing === i.id} onEdit={() => setEditing(i.id)} onDone={() => setEditing(null)} />
+                <PlanItemRow
+                  key={i.id}
+                  item={i}
+                  editing={editing === i.id}
+                  onEdit={() => setEditing(i.id)}
+                  onDone={() => setEditing(null)}
+                  dayHeading={() => heading.current}
+                />
               ))}
             </ul>
           </div>
@@ -520,7 +595,7 @@ function DayCard({ day, onGo }: { day: PlanDay; onGo: (d: string) => void }) {
         <AddItem date={day.date} defaultMeal={day.items.length ? "dinner" : "breakfast"} onDone={(msg) => finish(msg)} />
       ) : (
         <div>
-          <button type="button" className="btn btn-sm" onClick={() => setPanel("add")}>
+          <button ref={addButton} type="button" className="btn btn-sm" onClick={() => setPanel("add")}>
             + Add to {fmtDay(day.date) === "today" ? "today" : new Date(`${day.date}T12:00:00`).toLocaleDateString([], { weekday: "long" })}
           </button>
         </div>
@@ -539,6 +614,7 @@ export default function PlanPage() {
   const end = addDays(start, 6);
   const plan = useQuery({ queryKey: ["plan", start, end], queryFn: () => api.plan(start, end), placeholderData: (prev) => prev });
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const noticeRef = useAnnounceText<HTMLDivElement>();
   const go = (d: string) => {
     setNotice(null);
     setParams(d === today ? {} : { date: d }, { replace: true });
@@ -574,13 +650,14 @@ export default function PlanPage() {
       <div className="row wrap between plan-controls">
         <div className="row">
           <button type="button" className="btn" onClick={() => go(addDays(start, -7))} aria-label="Previous week">
-            ‹
+            <span aria-hidden="true">‹</span>
           </button>
           <strong className="nowrap week-label" aria-live="polite">
+            <VisuallyHidden>Week of </VisuallyHidden>
             {fmtShortDate(start)} – {fmtShortDate(end)}
           </strong>
           <button type="button" className="btn" onClick={() => go(addDays(start, 7))} aria-label="Next week">
-            ›
+            <span aria-hidden="true">›</span>
           </button>
         </div>
         <div className="row wrap">
@@ -589,13 +666,13 @@ export default function PlanPage() {
               Jump to today
             </button>
           )}
-          <button type="button" className="btn btn-sm" disabled={copyWeek.isPending || !anything} onClick={() => copyWeek.mutate()}>
+          <Button type="button" className="btn btn-sm" disabled={copyWeek.isPending || !anything} onClick={() => copyWeek.mutate()}>
             {copyWeek.isPending ? "Copying…" : "Copy this week to next week"}
-          </button>
+          </Button>
         </div>
       </div>
       {notice && (
-        <div className={`result ${notice.ok ? "result-ok" : "result-info"}`} role="status">
+        <div ref={noticeRef} className={`result ${notice.ok ? "result-ok" : "result-info"}`}>
           <span aria-hidden="true">{notice.ok ? "✓" : "ℹ"}</span> {notice.text}{" "}
           {notice.ok && (
             <button type="button" className="btn-link" onClick={() => go(addDays(start, 7))}>
@@ -614,29 +691,37 @@ export default function PlanPage() {
         </p>
       )}
       {phone && days.length > 0 && (
-        <div className="tabs day-tabs" role="tablist" aria-label="Day">
-          {days.map((d) => {
-            const sel = d.date === shownDay?.date;
-            return (
-              <button
-                key={d.date}
-                type="button"
-                role="tab"
-                aria-selected={sel}
-                className={sel ? "active" : ""}
-                onClick={() => go(d.date)}
-                aria-label={`${longDay(d.date)}${d.items.length ? `, ${d.items.length} planned` : ""}`}
-              >
-                <span className="day-tab-name">{new Date(`${d.date}T12:00:00`).toLocaleDateString([], { weekday: "narrow" })}</span>
-                <span className="day-tab-num">{new Date(`${d.date}T12:00:00`).getDate()}</span>
+        <TabList
+          id="plan-days"
+          className="day-tabs"
+          label="Day"
+          value={shownDay?.date ?? ""}
+          onChange={go}
+          tabs={days.map((d) => ({
+            value: d.date,
+            label: (
+              <>
+                {/* Compact on screen ("M 26"); the full day for screen readers. */}
+                <span className="day-tab-name" aria-hidden="true">
+                  {new Date(`${d.date}T12:00:00`).toLocaleDateString([], { weekday: "narrow" })}
+                </span>
+                <span className="day-tab-num" aria-hidden="true">
+                  {new Date(`${d.date}T12:00:00`).getDate()}
+                </span>
                 <span className={`day-tab-dot ${d.items.length ? "has" : ""}`} aria-hidden="true" />
-              </button>
-            );
-          })}
-        </div>
+                <VisuallyHidden>
+                  {longDay(d.date)}
+                  {d.items.length ? `, ${d.items.length} planned` : ""}
+                </VisuallyHidden>
+              </>
+            ),
+          }))}
+        />
       )}
       <div className={`plan-week ${plan.isPlaceholderData && plan.isFetching ? "is-stale" : ""}`}>
-        {phone ? shownDay && <DayCard key={shownDay.date} day={shownDay} onGo={go} /> : days.map((d) => <DayCard key={d.date} day={d} onGo={go} />)}
+        {phone
+          ? shownDay && <DayCard key={shownDay.date} day={shownDay} onGo={go} panelProps={tabPanelProps("plan-days", shownDay.date)} />
+          : days.map((d) => <DayCard key={d.date} day={d} onGo={go} />)}
       </div>
       {days.length > 0 && anything && (
         <details className="card">

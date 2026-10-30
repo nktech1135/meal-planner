@@ -34,7 +34,8 @@ export function TrustBadge({ level, compact = false }: { level: Trust | string |
   return (
     <span className={`trust trust-${key}`} title={`${info.label}: ${info.description}`}>
       <span aria-hidden="true">{info.icon}</span>
-      {compact ? <span className="sr-only">{info.label}</span> : <span>{info.label}</span>}
+      {compact ? <span className="sr-only">{info.label} data</span> : <span>{info.label}</span>}
+      {!compact && <span className="sr-only"> data</span>}
     </span>
   );
 }

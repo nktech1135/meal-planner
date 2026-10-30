@@ -5,16 +5,16 @@
   --border: #d7ddd6;
   --text: #1c2420;
   --muted: #5d6b63;
-  --primary: #2f7d5b;
+  --primary: #2c7756; /* >= 4.5:1 on every light surface, incl. --surface-2 and --info-bg */
   --primary-strong: #246548;
   --primary-contrast: #ffffff;
-  --focus: #3a8ee6;
+  --focus: #2f7fd6; /* >= 3:1 against every light surface */
   --danger: #b3261e;
   --danger-bg: #fdecea;
   --warn: #8a5a00;
   --warn-bg: #fff4d6;
   --warn-border: #e5b443;
-  --ok: #2f7d5b;
+  --ok: #2c7756;
   --info-bg: #e8f1fb;
 
   --t-analytical: #1f6f4a;
@@ -51,6 +51,7 @@
     --primary: #5fbf8f;
     --primary-strong: #7fd3a8;
     --primary-contrast: #0d1a13;
+    --focus: #6aaef5;
     --danger: #ff8a80;
     --danger-bg: #3a1c1a;
     --warn: #ffcf70;
@@ -110,7 +111,8 @@ h1 {
 h2 {
   font-size: 1.2rem;
 }
-h3 {
+h3,
+.h3 {
   font-size: 1.02rem;
 }
 p {
@@ -136,9 +138,37 @@ code {
   position: absolute;
   width: 1px;
   height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
   overflow: hidden;
   clip: rect(0 0 0 0);
+  clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* First Tab stop on every page; visible only while focused. */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 100;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--primary);
+  border: 2px solid var(--focus);
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: none;
+}
+/* Headings and <main> get focus only so screen readers start reading there after a route change or skip link. */
+[data-route-focus]:focus,
+main:focus,
+[tabindex="-1"]:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* layout */
@@ -321,6 +351,14 @@ textarea {
   font-size: 0.8rem;
   color: var(--muted);
 }
+.field-error {
+  font-size: 0.85rem;
+  color: var(--danger);
+  font-weight: 600;
+}
+[aria-invalid="true"] {
+  border-color: var(--danger);
+}
 .fieldset {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -362,7 +400,8 @@ textarea {
 .btn:hover {
   border-color: var(--primary);
 }
-.btn:disabled {
+.btn:disabled,
+.btn[aria-disabled="true"] {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -579,6 +618,11 @@ textarea {
   font-size: 0.82rem;
   color: var(--muted);
   font-weight: 600;
+}
+.table th.th-plain {
+  font-size: inherit;
+  color: inherit;
+  font-weight: inherit;
 }
 .num {
   text-align: right !important;
@@ -868,6 +912,12 @@ textarea {
 }
 .convo.active {
   background: var(--surface-2);
+}
+.convo-delete {
+  min-width: 28px;
+  min-height: 28px;
+  text-decoration: none;
+  font-size: 1.1rem;
 }
 .chat {
   display: flex;
@@ -1493,6 +1543,7 @@ textarea {
 }
 .seg button.active::before {
   content: "✓ ";
+  content: "✓ " / ""; /* decorative: aria-pressed already says it's selected */
 }
 .summary-big {
   font-size: 1.15rem;
@@ -1990,4 +2041,28 @@ textarea {
 }
 .barcode-video.hidden {
   display: none;
+}
+
+/* Visible column headings for repeated input rows (placeholders alone vanish once you type). */
+.row-head {
+  font-weight: 600;
+  margin-bottom: -4px;
+}
+.row-head > span {
+  padding-left: 2px;
+}
+.row-head-spacer {
+  visibility: hidden;
+  text-decoration: none;
+}
+
+/* Inside horizontally scrolling strips (nav, tabs) an outside ring is clipped: draw it inside. */
+.nav a:focus-visible,
+.tabs button:focus-visible,
+.tabs a:focus-visible,
+.pick-item:focus-visible,
+.convo a:focus-visible,
+.convo-delete:focus-visible,
+.seg button:focus-visible {
+  outline-offset: -2px;
 }

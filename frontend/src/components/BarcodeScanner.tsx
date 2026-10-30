@@ -4,6 +4,7 @@ import { api } from "../api";
 import type { BarcodeResult, FoodSummary } from "../types";
 import { MacroLine } from "./common";
 import { TrustBadge } from "./TrustBadge";
+import { focusElement, useAnnounceWhen } from "./a11y";
 
 // The Barcode Detection API isn't in TypeScript's DOM types yet.
 interface DetectedBarcode {
@@ -76,6 +77,12 @@ export function BarcodeScanner({ onPick, onClose }: { onPick: (f: FoodSummary) =
   const [cameraNote, setCameraNote] = useState("");
   const [typed, setTyped] = useState("");
   const [lookup, setLookup] = useState<{ code: string; result?: BarcodeResult; error?: string } | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+
+  // Opening the scanner moves focus to it, so screen readers start at its heading.
+  useEffect(() => {
+    focusElement(heading.current);
+  }, []);
 
   async function find(code: string) {
     const clean = code.replace(/\D/g, "");
@@ -127,18 +134,40 @@ export function BarcodeScanner({ onPick, onClose }: { onPick: (f: FoodSummary) =
   }, []);
 
   const result = lookup?.result;
+  const cameraStatus =
+    cameraState === "on"
+      ? "Camera on. Point the camera at the barcode."
+      : cameraState === "starting"
+        ? "Starting the camera…"
+        : cameraNote;
+  useAnnounceWhen(
+    result
+      ? result.foods.length > 0
+        ? `Found ${result.foods.length} product${result.foods.length === 1 ? "" : "s"} for ${result.barcode} in ${SOURCE_NAMES[result.found_in ?? "local"]}: ${result.foods.map((f) => f.name).join(", ")}.`
+        : `${result.barcode} wasn't found. You can add it from the label.`
+      : null,
+  );
   return (
     <section className="card stack-sm barcode-scanner" aria-label="Scan a barcode">
       <div className="row between wrap">
-        <h3 className="h-card">Scan a barcode</h3>
+        <h2 className="h-card" ref={heading}>
+          Scan a barcode
+        </h2>
         <button type="button" className="btn btn-sm" onClick={onClose}>
-          Close
+          Close<span className="sr-only"> scanner</span>
         </button>
       </div>
-      <video ref={video} className={`barcode-video ${cameraState === "on" ? "" : "hidden"}`} muted playsInline aria-label="Camera preview" />
-      {cameraState === "on" && <p className="muted small">Point the camera at the barcode.</p>}
-      {cameraState === "starting" && <p className="muted small">Starting the camera…</p>}
-      {cameraNote && <p className="muted small">{cameraNote}</p>}
+      <video
+        ref={video}
+        className={`barcode-video ${cameraState === "on" ? "" : "hidden"}`}
+        muted
+        playsInline
+        aria-label="Camera view for scanning a barcode"
+      />
+      {/* Always present, so camera and lookup changes are announced. */}
+      <p className="muted small scanner-status" role="status">
+        {lookup && !result && !lookup.error ? `Looking up ${lookup.code}…` : cameraStatus}
+      </p>
       {/* Not a <form>: the picker is often inside the page's own form, and a nested submit would reach it. */}
       <div className="row wrap" role="group" aria-label="Type a barcode">
         <label className="sr-only" htmlFor="barcode-digits">
@@ -162,10 +191,13 @@ export function BarcodeScanner({ onPick, onClose }: { onPick: (f: FoodSummary) =
         </button>
       </div>
 
-      {lookup && !result && !lookup.error && <p className="muted small" role="status">Looking up {lookup.code}…</p>}
-      {lookup?.error && <div className="alert alert-error" role="alert">{lookup.error}</div>}
+      {lookup?.error && (
+        <div className="alert alert-error" role="alert">
+          {lookup.error}
+        </div>
+      )}
       {result && (
-        <div className="stack-sm" role="status">
+        <div className="stack-sm">
           {result.foods.length > 0 ? (
             <>
               <p className="small">

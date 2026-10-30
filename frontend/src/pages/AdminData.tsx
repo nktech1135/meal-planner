@@ -6,15 +6,20 @@ import { useAuth } from "../auth";
 import { AdminFrame } from "../components/AdminTabs";
 import { ErrorBox, Loading, ResultNote } from "../components/common";
 import type { Dataset, ImportJob } from "../types";
+import { Button, NewTab, useAnnounceWhen, VisuallyHidden } from "../components/a11y";
 
 const ORDER = [
   "fdc_sr_legacy", "fdc_foundation", "fdc_survey", "usda_retention", "fdc_branded",
-  "intl_cofid", "intl_cnf", "intl_afcd", "intl_bls", "intl_ciqual", "intl_matvaretabellen",
+  "intl_cofid", "intl_cnf", "intl_afcd", "intl_bls", "intl_ciqual", "intl_dk_fcdb", "intl_fineli",
+  "intl_matvaretabellen", "intl_se_livsmedel", "intl_swiss",
 ];
 const active = (j: ImportJob | null | undefined) => !!j && (j.status === "queued" || j.status === "running");
 
-/** Polls a queued/running job every 1.5 s until it finishes. */
-function JobProgress({ job: initial }: { job: ImportJob }) {
+/**
+ * Polls a queued/running job every 1.5 s until it finishes. Screen readers hear the state changes
+ * (queued, importing, done/failed), not every progress tick; the progress bar can be read any time.
+ */
+function JobProgress({ job: initial, label }: { job: ImportJob; label: string }) {
   const qc = useQueryClient();
   const job = useQuery({
     queryKey: ["job", initial.id],
@@ -31,11 +36,23 @@ function JobProgress({ job: initial }: { job: ImportJob }) {
     }
   }, [finished, qc]);
 
-  if (j.status === "failed") return <ResultNote ok={false}>{j.message || "The import failed."}</ResultNote>;
-  if (j.status === "done") return <ResultNote ok>{j.message || "Import finished."}</ResultNote>;
+  useAnnounceWhen(j.status === "queued" ? `${label}: import queued.` : j.status === "running" ? `${label}: importing.` : null);
+
+  if (j.status === "failed")
+    return (
+      <ResultNote ok={false}>
+        {label}: {j.message || "The import failed."}
+      </ResultNote>
+    );
+  if (j.status === "done")
+    return (
+      <ResultNote ok>
+        {label}: {j.message || "Import finished."}
+      </ResultNote>
+    );
   const pct = j.total ? Math.min(100, Math.round((j.progress / j.total) * 100)) : null;
   return (
-    <div className="job" role="status" aria-live="polite">
+    <div className="job">
       <div className="row between wrap small">
         <span>
           <span className="spinner" aria-hidden="true" /> {j.status === "queued" ? "Queued" : "Importing"}: {j.message || "working…"}
@@ -47,7 +64,15 @@ function JobProgress({ job: initial }: { job: ImportJob }) {
         ) : null}
       </div>
       {pct !== null && (
-        <div className="bar job-bar" aria-hidden="true">
+        <div
+          className="bar job-bar"
+          role="progressbar"
+          aria-label={`${label} import progress`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={pct}
+          aria-valuetext={`${pct}%, ${j.progress.toLocaleString()} of ${j.total!.toLocaleString()}`}
+        >
           <div className="bar-fill" style={{ width: `${pct}%` }} />
         </div>
       )}
@@ -73,12 +98,14 @@ function DatasetCard({ ds, busy }: { ds: Dataset; busy: boolean }) {
   return (
     <li className="card stack-sm dataset">
       <div className="row between wrap">
-        <h2 className="h-card">{ds.label}</h2>
+        <h3 className="h-card">{ds.label}</h3>
         {ds.imported_release ? (
           ds.update_available ? (
             <span className="chip chip-warn">Update available</span>
           ) : (
-            <span className="chip chip-ok">✓ Up to date</span>
+            <span className="chip chip-ok">
+              <span aria-hidden="true">✓ </span>Up to date
+            </span>
           )
         ) : (
           <span className="chip chip-off">Not imported</span>
@@ -98,7 +125,8 @@ function DatasetCard({ ds, busy }: { ds: Dataset; busy: boolean }) {
         <dd>
           {ds.licence_url ? (
             <a href={ds.licence_url} target="_blank" rel="noopener noreferrer">
-              {ds.licence} ↗
+              {ds.licence}
+              <NewTab />
             </a>
           ) : (
             ds.licence
@@ -106,8 +134,8 @@ function DatasetCard({ ds, busy }: { ds: Dataset; busy: boolean }) {
         </dd>
       </dl>
       {ds.attribution && <p className="muted small">{ds.attribution}</p>}
-      {running && ds.last_job && <JobProgress job={ds.last_job} />}
-      {start.data && !running && start.data.id !== ds.last_job?.id && <JobProgress job={start.data} />}
+      {running && ds.last_job && <JobProgress job={ds.last_job} label={ds.label} />}
+      {start.data && !running && start.data.id !== ds.last_job?.id && <JobProgress job={start.data} label={ds.label} />}
       {lastFinished?.status === "failed" && <ResultNote ok={false}>Last import failed: {lastFinished.message}</ResultNote>}
       {lastFinished?.status === "done" && lastFinished.finished_at && (
         <p className="muted small">
@@ -117,7 +145,7 @@ function DatasetCard({ ds, busy }: { ds: Dataset; busy: boolean }) {
       )}
       {start.error && <ResultNote ok={false}>{errorMessage(start.error)}</ResultNote>}
       <div>
-        <button
+        <Button
           type="button"
           className={`btn ${ds.imported_release && !ds.update_available ? "" : "btn-primary"}`}
           disabled={running || busy || start.isPending}
@@ -127,7 +155,8 @@ function DatasetCard({ ds, busy }: { ds: Dataset; busy: boolean }) {
           }}
         >
           {start.isPending ? "Starting…" : running ? "Importing…" : action}
-        </button>
+          <VisuallyHidden> {ds.label}</VisuallyHidden>
+        </Button>
       </div>
     </li>
   );
@@ -189,9 +218,9 @@ export default function AdminDataPage() {
           if yields were deleted or after changing data by hand.
         </p>
         <div>
-          <button type="button" className="btn" onClick={() => derive.mutate()} disabled={derive.isPending || anyRunning}>
+          <Button type="button" className="btn" onClick={() => derive.mutate()} disabled={derive.isPending || anyRunning}>
             {derive.isPending ? "Deriving…" : "Re-derive cooking yields"}
-          </button>
+          </Button>
         </div>
         {derive.data && <ResultNote ok>{derive.data.yields.toLocaleString()} cooking yields derived.</ResultNote>}
         {derive.error && <ResultNote ok={false}>{errorMessage(derive.error)}</ResultNote>}

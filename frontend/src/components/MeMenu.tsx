@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import type { User } from "../types";
+import { VisuallyHidden } from "./a11y";
 
 /** Compact account menu: Profile, Account, Settings (admins), Sign out. A disclosure, not an ARIA menu. */
 export function MeMenu({ user, onSignOut }: { user: User; onSignOut: () => void }) {
@@ -55,10 +56,10 @@ export function MeMenu({ user, onSignOut }: { user: User; onSignOut: () => void 
         <span className="me-avatar" aria-hidden="true">
           {name.trim().charAt(0).toUpperCase() || "?"}
         </span>
-        Me <span aria-hidden="true">▾</span>
+        Me<VisuallyHidden>(account menu)</VisuallyHidden> <span aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className="me-panel" id={id}>
+        <nav className="me-panel" id={id} aria-label="Account">
           <p className="me-who small">
             <strong>{user.display_name || "Signed in"}</strong>
             <span className="muted">{user.email}</span>
@@ -80,7 +81,7 @@ export function MeMenu({ user, onSignOut }: { user: User; onSignOut: () => void 
           <button type="button" className="me-signout" onClick={onSignOut}>
             Sign out
           </button>
-        </div>
+        </nav>
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "../api";
 import { useAuth } from "../auth";
 import { Field, ResultNote } from "../components/common";
+import { Button, focusSoon, useReturnFocus } from "../components/a11y";
 
 function DetailsForm() {
   const { user } = useAuth();
@@ -43,9 +44,9 @@ function DetailsForm() {
           </Field>
         )}
         <div className="row wrap">
-          <button type="submit" className="btn btn-primary" disabled={save.isPending}>
+          <Button type="submit" className="btn btn-primary" disabled={save.isPending}>
             {save.isPending ? "Saving…" : "Save details"}
-          </button>
+          </Button>
         </div>
         {save.isSuccess && <ResultNote ok>Saved.</ResultNote>}
         {save.error && <ResultNote ok={false}>{errorMessage(save.error)}</ResultNote>}
@@ -58,18 +59,23 @@ function PasswordForm() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
-  const mismatch = confirmPw !== "" && next !== confirmPw;
+  const [submitted, setSubmitted] = useState(false);
+  const mismatch = (confirmPw !== "" || submitted) && next !== confirmPw;
   const change = useMutation({
     mutationFn: () => api.changePassword(current, next),
     onSuccess: () => {
       setCurrent("");
       setNext("");
       setConfirmPw("");
+      setSubmitted(false);
     },
   });
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (next.length >= 10 && next === confirmPw) change.mutate();
+    setSubmitted(true);
+    // Required/length checks are the browser's; the match check is ours: say so and go to the field.
+    if (next !== confirmPw) focusSoon(() => document.getElementById("confirm-new-password"));
+    else if (next.length >= 10) change.mutate();
   }
   return (
     <section className="card stack" aria-labelledby="password-title">
@@ -82,22 +88,22 @@ function PasswordForm() {
           <Field label="New password" hint="At least 10 characters.">
             <input type="password" required minLength={10} value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
           </Field>
-          <Field label="Confirm new password" hint={mismatch ? <span className="warn-text">The passwords don't match.</span> : undefined}>
+          <Field label="Confirm new password" error={mismatch ? "The passwords don't match." : undefined}>
             <input
+              id="confirm-new-password"
               type="password"
               required
               minLength={10}
               value={confirmPw}
               onChange={(e) => setConfirmPw(e.target.value)}
               autoComplete="new-password"
-              aria-invalid={mismatch}
             />
           </Field>
         </div>
         <div>
-          <button type="submit" className="btn btn-primary" disabled={change.isPending || next.length < 10 || next !== confirmPw || !current}>
+          <Button type="submit" className="btn btn-primary" disabled={change.isPending}>
             {change.isPending ? "Changing…" : "Change password"}
-          </button>
+          </Button>
         </div>
         {change.isSuccess && <ResultNote ok>Password changed. You've been signed out on your other devices.</ResultNote>}
         {change.error && <ResultNote ok={false}>{errorMessage(change.error)}</ResultNote>}
@@ -115,9 +121,9 @@ function ExportData() {
         One JSON file with your profile, log, recipes, your own foods, saved meals, meal plan, body measurements and advisor conversations.
       </p>
       <div>
-        <button type="button" className="btn" onClick={() => exp.mutate()} disabled={exp.isPending}>
+        <Button type="button" className="btn" onClick={() => exp.mutate()} disabled={exp.isPending}>
           {exp.isPending ? "Preparing…" : "Download my data"}
-        </button>
+        </Button>
       </div>
       {exp.isSuccess && <ResultNote ok>Download started.</ResultNote>}
       {exp.error && <ResultNote ok={false}>{errorMessage(exp.error)}</ResultNote>}
@@ -129,6 +135,7 @@ function DeleteAccount() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const openButton = useReturnFocus<HTMLButtonElement>(open);
   const [password, setPassword] = useState("");
   const remove = useMutation({
     mutationFn: () => api.deleteAccount(password),
@@ -154,9 +161,9 @@ function DeleteAccount() {
             <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus />
           </Field>
           <div className="row wrap">
-            <button type="submit" className="btn btn-danger" disabled={!password || remove.isPending}>
+            <Button type="submit" className="btn btn-danger" disabled={!password || remove.isPending}>
               {remove.isPending ? "Deleting…" : "Delete my account"}
-            </button>
+            </Button>
             <button type="button" className="btn" onClick={() => setOpen(false)}>
               Cancel
             </button>
@@ -165,7 +172,7 @@ function DeleteAccount() {
         </form>
       ) : (
         <div>
-          <button type="button" className="btn danger" onClick={() => setOpen(true)}>
+          <button ref={openButton} type="button" className="btn danger" onClick={() => setOpen(true)}>
             Delete my account…
           </button>
         </div>

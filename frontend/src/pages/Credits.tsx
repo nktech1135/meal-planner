@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import { ErrorBox, Loading } from "../components/common";
+import { NewTab } from "../components/a11y";
 
 /** Every reference database the server can hold, with the credit its licence requires. */
 export default function CreditsPage() {
@@ -26,7 +27,8 @@ export default function CreditsPage() {
               Licence:{" "}
               {d.licence_url ? (
                 <a href={d.licence_url} target="_blank" rel="noopener noreferrer">
-                  {d.licence} ↗
+                  {d.licence}
+                  <NewTab />
                 </a>
               ) : (
                 d.licence

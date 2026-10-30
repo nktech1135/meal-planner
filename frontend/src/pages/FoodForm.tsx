@@ -5,6 +5,7 @@ import { api } from "../api";
 import { ErrorBox, Field, Loading } from "../components/common";
 import { parseNum, useNutrients } from "../lib";
 import type { Basis, Component, Food, FoodInput, FoodState, Kind } from "../types";
+import { Button, rescueFocus, VisuallyHidden } from "../components/a11y";
 
 const CATEGORY_TITLES: Record<string, string> = {
   energy: "Energy",
@@ -133,9 +134,20 @@ export default function FoodFormPage() {
     save.mutate(toInput(form));
   }
 
-  if (editing && existing.isLoading) return <Loading />;
+  if (editing && existing.isLoading)
+    return (
+      <div className="stack">
+        <h1>Edit food</h1>
+        <Loading />
+      </div>
+    );
   if (editing && existing.data && existing.data.owner_id === null) {
-    return <div className="alert alert-warn">Imported foods are read-only. Use "Copy to edit" on the food page.</div>;
+    return (
+      <div className="stack">
+        <h1>Edit food</h1>
+        <div className="alert alert-warn">Imported foods are read-only. Use "Copy to edit" on the food page.</div>
+      </div>
+    );
   }
 
   const categories = Array.from(new Set(nutrientDefs.map((n) => n.category)));
@@ -236,14 +248,21 @@ export default function FoodFormPage() {
       <section className="card stack">
         <h2>Portions</h2>
         <p className="muted small">Household measures with their weight, e.g. "1 cup, chopped" = 128 g.</p>
+        {form.portions.length > 0 && (
+          <div className="row row-head muted small" aria-hidden="true">
+            <span className="grow">Label</span>
+            <span className="w-sm">Grams</span>
+            <span className="btn-link row-head-spacer">Remove</span>
+          </div>
+        )}
         {form.portions.map((p, i) => (
           <div key={i} className="row">
             <input
               className="grow"
-              placeholder="Label"
+              placeholder="e.g. 1 cup, chopped"
               value={p.label}
               onChange={(e) => set("portions", form.portions.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-              aria-label="Portion label"
+              aria-label={`Portion ${i + 1}: label`}
             />
             <input
               type="number"
@@ -252,16 +271,23 @@ export default function FoodFormPage() {
               placeholder="grams"
               value={p.gram_weight}
               onChange={(e) => set("portions", form.portions.map((x, j) => (j === i ? { ...x, gram_weight: e.target.value } : x)))}
-              aria-label="Portion grams"
+              aria-label={`Portion ${i + 1}: grams`}
               className="w-sm"
             />
-            <button type="button" className="btn-link danger" onClick={() => set("portions", form.portions.filter((_, j) => j !== i))}>
-              Remove
+            <button
+              type="button"
+              className="btn-link danger"
+              onClick={() => {
+                set("portions", form.portions.filter((_, j) => j !== i));
+                rescueFocus(() => document.getElementById("add-portion"));
+              }}
+            >
+              Remove<VisuallyHidden> portion {i + 1}{p.label ? ` (${p.label})` : ""}</VisuallyHidden>
             </button>
           </div>
         ))}
-        <button type="button" className="btn" onClick={() => set("portions", [...form.portions, { label: "", gram_weight: "" }])}>
-          + Add portion
+        <button id="add-portion" type="button" className="btn" onClick={() => set("portions", [...form.portions, { label: "", gram_weight: "" }])}>
+          <span aria-hidden="true">+</span> Add portion
         </button>
       </section>
 
@@ -269,14 +295,22 @@ export default function FoodFormPage() {
         <section className="card stack">
           <h2>Other label components</h2>
           <p className="muted small">Ingredients that aren't in the nutrient list (e.g. botanicals, creatine), {basisText}.</p>
+          {form.other_components.length > 0 && (
+            <div className="row row-head muted small" aria-hidden="true">
+              <span className="grow">Name</span>
+              <span className="w-sm">Amount</span>
+              <span className="w-sm">Unit</span>
+              <span className="btn-link row-head-spacer">Remove</span>
+            </div>
+          )}
           {form.other_components.map((c, i) => (
-            <div key={i} className="row wrap">
+            <div key={i} className="row">
               <input
                 className="grow"
-                placeholder="Name"
+                placeholder="e.g. Ashwagandha root extract"
                 value={c.name}
                 onChange={(e) => set("other_components", form.other_components.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
-                aria-label="Component name"
+                aria-label={`Component ${i + 1}: name`}
               />
               <input
                 type="number"
@@ -285,31 +319,43 @@ export default function FoodFormPage() {
                 placeholder="Amount"
                 value={c.amount}
                 onChange={(e) => set("other_components", form.other_components.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
-                aria-label="Component amount"
+                aria-label={`Component ${i + 1}: amount`}
               />
               <input
                 className="w-sm"
                 placeholder="Unit"
                 value={c.unit}
                 onChange={(e) => set("other_components", form.other_components.map((x, j) => (j === i ? { ...x, unit: e.target.value } : x)))}
-                aria-label="Component unit"
+                aria-label={`Component ${i + 1}: unit`}
               />
-              <button type="button" className="btn-link danger" onClick={() => set("other_components", form.other_components.filter((_, j) => j !== i))}>
-                Remove
+              <button
+                type="button"
+                className="btn-link danger"
+                onClick={() => {
+                  set("other_components", form.other_components.filter((_, j) => j !== i));
+                  rescueFocus(() => document.getElementById("add-component"));
+                }}
+              >
+                Remove<VisuallyHidden> component {i + 1}{c.name ? ` (${c.name})` : ""}</VisuallyHidden>
               </button>
             </div>
           ))}
-          <button type="button" className="btn" onClick={() => set("other_components", [...form.other_components, { name: "", amount: "", unit: "mg" }])}>
-            + Add component
+          <button
+            id="add-component"
+            type="button"
+            className="btn"
+            onClick={() => set("other_components", [...form.other_components, { name: "", amount: "", unit: "mg" }])}
+          >
+            <span aria-hidden="true">+</span> Add component
           </button>
         </section>
       )}
 
       <ErrorBox error={save.error} />
       <div className="row">
-        <button type="submit" className="btn btn-primary" disabled={save.isPending}>
+        <Button type="submit" className="btn btn-primary" disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save food"}
-        </button>
+        </Button>
         <button type="button" className="btn" onClick={() => navigate(-1)}>
           Cancel
         </button>

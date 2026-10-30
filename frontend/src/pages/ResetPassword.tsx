@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Field } from "../components/common";
+import { Button, focusSoon, usePageTitle } from "../components/a11y";
 
 /** Landing page for emailed / admin-made reset and invite links. Works signed out. */
 export default function ResetPasswordPage() {
@@ -10,16 +11,23 @@ export default function ResetPasswordPage() {
   const token = params.get("token") ?? "";
   const { user: signedIn, setUser } = useAuth();
   const Wrap = signedIn ? "div" : "main"; // the signed-in app already provides <main>
+  usePageTitle("Choose a password");
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const mismatch = confirmPw !== "" && password !== confirmPw;
+  const [submitted, setSubmitted] = useState(false);
+  const mismatch = (confirmPw !== "" || submitted) && password !== confirmPw;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (password.length < 10 || password !== confirmPw) return;
+    setSubmitted(true);
+    if (password !== confirmPw) {
+      focusSoon(() => document.getElementById("confirm-password"));
+      return;
+    }
+    if (password.length < 10) return;
     setBusy(true);
     setError(null);
     try {
@@ -33,7 +41,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <Wrap className={signedIn ? "narrow-box" : "container narrow"}>
+    <Wrap className={signedIn ? "narrow-box" : "container narrow"} id={signedIn ? undefined : "main"}>
       <div className="card auth-card">
         <h1>Choose a password</h1>
         {!token ? (
@@ -49,21 +57,21 @@ export default function ResetPasswordPage() {
             <Field label="New password" hint="At least 10 characters.">
               <input type="password" required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" autoFocus />
             </Field>
-            <Field label="Confirm password" hint={mismatch ? <span className="warn-text">The passwords don't match.</span> : undefined}>
+            <Field label="Confirm password" error={mismatch ? "The passwords don't match." : undefined}>
               <input
+                id="confirm-password"
                 type="password"
                 required
                 minLength={10}
                 value={confirmPw}
                 onChange={(e) => setConfirmPw(e.target.value)}
                 autoComplete="new-password"
-                aria-invalid={mismatch}
               />
             </Field>
             <ErrorBox error={error} />
-            <button type="submit" className="btn btn-primary" disabled={busy || password.length < 10 || password !== confirmPw}>
+            <Button type="submit" className="btn btn-primary" disabled={busy}>
               {busy ? "Saving…" : "Set password and sign in"}
-            </button>
+            </Button>
             <p className="small">
               <Link to="/">Back to sign in</Link>
             </p>

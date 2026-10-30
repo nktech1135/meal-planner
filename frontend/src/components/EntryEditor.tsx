@@ -5,6 +5,7 @@ import { mealLabel, parseNum, toLocalInput } from "../lib";
 import { MEALS, type LogEntry, type LogUpdate, type Meal, type WeighedState } from "../types";
 import { QuantityFields, unitChoices, WeighedFields } from "./AmountFields";
 import { ErrorBox, Field, Loading } from "./common";
+import { Button } from "./a11y";
 
 /** Inline editor for a log entry; sends only the fields that changed. */
 export function EntryEditor({ entry, onDone }: { entry: LogEntry; onDone: () => void }) {
@@ -104,9 +105,9 @@ export function EntryEditor({ entry, onDone }: { entry: LogEntry; onDone: () => 
       </Field>
       <ErrorBox error={save.error} />
       <div className="row wrap">
-        <button type="submit" className="btn btn-primary btn-sm" disabled={invalid || save.isPending}>
+        <Button type="submit" className="btn btn-primary btn-sm" disabled={invalid || save.isPending}>
           {save.isPending ? "Saving…" : "Save"}
-        </button>
+        </Button>
         <button type="button" className="btn btn-sm" onClick={onDone}>
           Cancel
         </button>

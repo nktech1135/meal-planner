@@ -5,6 +5,7 @@ import { api } from "../api";
 import { ErrorBox, Field, Loading } from "../components/common";
 import { addDays, fmt1, fmtGrams, fmtShortDate, mondayOf, todayISO, useUnitSystem } from "../lib";
 import type { ShoppingItem, ShoppingList, UnitSystem } from "../types";
+import { Button } from "../components/a11y";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -55,18 +56,21 @@ export default function ShoppingPage() {
       <div className="page-head">
         <div>
           <p className="no-print small">
-            <Link to={`/plan?date=${start}`}>← Plan</Link>
+            <Link to={`/plan?date=${start}`}>
+              <span aria-hidden="true">← </span>
+              <span className="sr-only">Back to </span>Plan
+            </Link>
           </p>
           <h1>Shopping list</h1>
           <p className="muted small print-only">
             {fmtShortDate(start)} – {fmtShortDate(end)}
           </p>
         </div>
-        <button type="button" className="btn no-print" onClick={() => window.print()} disabled={!items.length}>
+        <Button type="button" className="btn no-print" onClick={() => window.print()} disabled={!items.length}>
           Print
-        </button>
+        </Button>
       </div>
-      <form className="card row wrap align-end no-print" onSubmit={(e) => e.preventDefault()} aria-label="Date range">
+      <form className="card row wrap align-end no-print" onSubmit={(e) => e.preventDefault()} aria-label="Dates to shop for">
         <Field label="From">
           <input type="date" value={start} onChange={(e) => set("start", e.target.value)} required />
         </Field>
@@ -91,9 +95,9 @@ export default function ShoppingPage() {
           {done} of {items.length} ticked off.
         </p>
       )}
-      {groups.map((g) => (
-        <section key={g} className="card shop-group" aria-labelledby={`cat-${g}`}>
-          <h2 id={`cat-${g}`} className="h-card">
+      {groups.map((g, gi) => (
+        <section key={g} className="card shop-group" aria-labelledby={`shop-cat-${gi}`}>
+          <h2 id={`shop-cat-${gi}`} className="h-card">
             {g}
           </h2>
           <ul className="plain-list">

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
@@ -8,6 +8,19 @@ import { FoodPicker } from "../components/FoodPicker";
 import { TrustBadge, TRUST_INFO } from "../components/TrustBadge";
 import { basisLabel, fmtNum, nutrientName, parseNum, SOURCE_NAMES, useDebounced, useNutrients } from "../lib";
 import type { DerivedYield, Food, FoodSummary, FormRow, RetentionProfile, YieldInput } from "../types";
+import {
+  Button,
+  focusSoon,
+  NewTab,
+  rescueFocus,
+  tabPanelProps,
+  TabList,
+  useAnnounce,
+  useAnnounceWhen,
+  usePageTitle,
+  useReturnFocus,
+  VisuallyHidden,
+} from "../components/a11y";
 
 /** "Vitamin C 75% · Thiamin 80% …" for a retention profile, in catalog order. */
 function RetentionFactors({ factors }: { factors: Record<string, number> }) {
@@ -41,6 +54,13 @@ function RetentionPicker({ food, value, onChange }: { food: Food; value: Retenti
   });
   const data = profiles.data;
   const noneImported = !!data && data.profiles.length === 0 && dq === "";
+  const chosenRef = useRef<HTMLDivElement>(null);
+  const count = data?.profiles.length ?? 0;
+  useAnnounceWhen(dq && data && !profiles.isFetching ? `${count === 0 ? "No" : count} retention profile${count === 1 ? "" : "s"} match “${dq}”.` : null);
+  const choose = (p: RetentionProfile | null) => {
+    onChange(p);
+    focusSoon(() => (p ? chosenRef.current : document.getElementById("retention-search")));
+  };
 
   return (
     <fieldset className="fieldset stack-sm">
@@ -61,11 +81,11 @@ function RetentionPicker({ food, value, onChange }: { food: Food; value: Retenti
           )}
         </p>
       ) : value ? (
-        <div className="selected stack-sm">
+        <div className="selected stack-sm" ref={chosenRef} tabIndex={-1} role="group" aria-label={`Chosen retention profile: ${value.description}`}>
           <div className="row between wrap">
             <strong className="min-0">{value.description}</strong>
-            <button type="button" className="btn-link" onClick={() => onChange(null)}>
-              Change
+            <button type="button" className="btn-link" onClick={() => choose(null)}>
+              Change<VisuallyHidden> retention profile</VisuallyHidden>
             </button>
           </div>
           <span className="muted small">
@@ -76,11 +96,12 @@ function RetentionPicker({ food, value, onChange }: { food: Food; value: Retenti
       ) : (
         <div className="picker">
           <input
+            id="retention-search"
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search cooking methods, e.g. boiled, roasted…"
-            aria-label="Search retention profiles"
+            aria-label="Search retention profiles by cooking method"
           />
           {data?.food_group && <span className="muted small">Showing profiles for {data.food_group}.</span>}
           <ErrorBox error={profiles.error} />
@@ -89,7 +110,7 @@ function RetentionPicker({ food, value, onChange }: { food: Food; value: Retenti
             {data && data.profiles.length === 0 && <li className="muted">No profiles match “{dq}”.</li>}
             {data?.profiles.map((p) => (
               <li key={p.code}>
-                <button type="button" className="pick-item" onClick={() => onChange(p)}>
+                <button type="button" className="pick-item" onClick={() => choose(p)}>
                   <span className="pick-name">{p.description}</span>
                   <span className="muted small">
                     {p.food_group ?? "Other"} · {Object.keys(p.factors).length} nutrients
@@ -166,13 +187,18 @@ function AddYield({ food, onDone }: { food: Food; onDone: () => void }) {
   return (
     <form className="card stack" onSubmit={submit}>
       <h3>Add a cooking yield</h3>
-      <div className="tabs small" role="tablist">
-        {(["measured", "published", "derived"] as YieldMode[]).map((m) => (
-          <button key={m} type="button" role="tab" aria-selected={mode === m} className={mode === m ? "active" : ""} onClick={() => setMode(m)}>
-            {m === "measured" ? "I weighed it" : m === "published" ? "Published value" : "Derive from cooked entry"}
-          </button>
-        ))}
-      </div>
+      <TabList
+        id="yield-mode"
+        className="small"
+        label="Where the yield comes from"
+        value={mode}
+        onChange={setMode}
+        tabs={(["measured", "published", "derived"] as YieldMode[]).map((m) => ({
+          value: m,
+          label: m === "measured" ? "I weighed it" : m === "published" ? "Published value" : "Derive from cooked entry",
+        }))}
+      />
+      <div className="stack" {...tabPanelProps("yield-mode", mode)}>
       <Field label="Cooking method">
         <input required maxLength={80} value={method} onChange={(e) => setMethod(e.target.value)} placeholder="e.g. roasted, boiled, pan-fried" />
       </Field>
@@ -215,7 +241,7 @@ function AddYield({ food, onDone }: { food: Food; onDone: () => void }) {
                   setDerived(null);
                 }}
               >
-                Change
+                Change<VisuallyHidden> cooked entry</VisuallyHidden>
               </button>
             </div>
           ) : (
@@ -239,6 +265,7 @@ function AddYield({ food, onDone }: { food: Food; onDone: () => void }) {
           )}
         </div>
       )}
+      </div>
       <RetentionPicker food={food} value={profile} onChange={setProfile} />
       {!profile && (
         <details>
@@ -247,12 +274,20 @@ function AddYield({ food, onDone }: { food: Food; onDone: () => void }) {
             Fraction of each nutrient left after cooking (e.g. from the USDA Table of Nutrient Retention Factors). Unlisted nutrients are assumed fully
             retained.
           </p>
+          {retention.length > 0 && (
+            <div className="row row-head muted small" aria-hidden="true">
+              <span className="grow">Nutrient</span>
+              <span className="w-sm">Factor (0–1.5)</span>
+              <span className="btn-link row-head-spacer">Remove</span>
+            </div>
+          )}
           {retention.map((r, i) => (
             <div key={i} className="row">
               <select
+                className="grow"
                 value={r.code}
                 onChange={(e) => setRetention(retention.map((x, j) => (j === i ? { ...x, code: e.target.value } : x)))}
-                aria-label="Nutrient"
+                aria-label={`Factor ${i + 1}: nutrient`}
               >
                 <option value="">Nutrient…</option>
                 {nutrientDefs.map((n) => (
@@ -270,15 +305,22 @@ function AddYield({ food, onDone }: { food: Food; onDone: () => void }) {
                 placeholder="0.85"
                 value={r.value}
                 onChange={(e) => setRetention(retention.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
-                aria-label="Retention factor"
+                aria-label={`Factor ${i + 1}: share retained, 0 to 1.5`}
               />
-              <button type="button" className="btn-link danger" onClick={() => setRetention(retention.filter((_, j) => j !== i))}>
-                Remove
+              <button
+                type="button"
+                className="btn-link danger"
+                onClick={() => {
+                  setRetention(retention.filter((_, j) => j !== i));
+                  rescueFocus(() => document.getElementById("add-factor"));
+                }}
+              >
+                Remove<VisuallyHidden> factor {i + 1}</VisuallyHidden>
               </button>
             </div>
           ))}
-          <button type="button" className="btn" onClick={() => setRetention([...retention, { code: "", value: "" }])}>
-            + Add factor
+          <button id="add-factor" type="button" className="btn" onClick={() => setRetention([...retention, { code: "", value: "" }])}>
+            <span aria-hidden="true">+</span> Add factor
           </button>
         </details>
       )}
@@ -286,9 +328,9 @@ function AddYield({ food, onDone }: { food: Food; onDone: () => void }) {
         <input maxLength={1000} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
       <ErrorBox error={save.error} />
-      <button type="submit" className="btn btn-primary" disabled={save.isPending || (mode === "derived" && !derived)}>
+      <Button type="submit" className="btn btn-primary" disabled={save.isPending || (mode === "derived" && !derived)}>
         Save yield
-      </button>
+      </Button>
     </form>
   );
 }
@@ -297,15 +339,24 @@ function Yields({ food }: { food: Food }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const announce = useAnnounce();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const addButton = useReturnFocus<HTMLButtonElement>(adding);
   const yields = useQuery({ queryKey: ["yields", food.id], queryFn: () => api.yields(food.id) });
   const del = useMutation({
-    mutationFn: api.deleteYield,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["yields", food.id] }),
+    mutationFn: (y: { id: number; method: string }) => api.deleteYield(y.id),
+    onSuccess: (_, y) => {
+      qc.invalidateQueries({ queryKey: ["yields", food.id] });
+      announce(`Deleted the ${y.method} yield.`);
+      rescueFocus(() => heading.current);
+    },
   });
 
   return (
-    <section className="card stack">
-      <h2>Cooking yields</h2>
+    <section className="card stack" aria-labelledby="yields-title">
+      <h2 id="yields-title" ref={heading}>
+        Cooking yields
+      </h2>
       <p className="muted small">
         A yield converts raw weight to cooked weight (cooked = raw × factor), so you can weigh food after cooking and still use this raw entry's
         nutrients. Weighing your own batch raw and cooked is the most accurate.
@@ -322,9 +373,9 @@ function Yields({ food }: { food: Food }) {
               <div className="entry-actions">
                 <TrustBadge level={y.trust_level} />
                 {(y.owner_id === user?.id || user?.is_admin) && (
-                  <button type="button" className="btn-link danger" onClick={() => del.mutate(y.id)}>
-                    Delete
-                  </button>
+                  <Button type="button" className="btn-link danger" onClick={() => del.mutate(y)} disabled={del.isPending}>
+                    Delete<VisuallyHidden> {y.method} yield</VisuallyHidden>
+                  </Button>
                 )}
               </div>
             </div>
@@ -364,11 +415,12 @@ function Yields({ food }: { food: Food }) {
           food={food}
           onDone={() => {
             setAdding(false);
+            announce("Yield saved.");
             qc.invalidateQueries({ queryKey: ["yields", food.id] });
           }}
         />
       ) : (
-        <button type="button" className="btn" onClick={() => setAdding(true)}>
+        <button ref={addButton} type="button" className="btn" onClick={() => setAdding(true)}>
           + Add yield
         </button>
       )}
@@ -394,14 +446,14 @@ function FormChoice({ food, row }: { food: Food; row: FormRow }) {
   const name = `form-${food.id}-${row.component_name}`;
   const fromUnit = row.unit ?? "";
   return (
-    <fieldset className="fieldset form-choice" disabled={choose.isPending}>
+    <fieldset className="fieldset form-choice" aria-busy={choose.isPending}>
       <legend>
         {row.component_name}: {fmtNum(row.amount)} {fromUnit} → {row.nutrient_name}
       </legend>
       <div className="stack-sm">
         {row.options.map((o) => (
           <label key={o.key} className="option">
-            <input type="radio" name={name} checked={row.chosen === o.key} onChange={() => choose.mutate(o.key)} />
+            <input type="radio" name={name} checked={row.chosen === o.key} onChange={() => !choose.isPending && choose.mutate(o.key)} />
             <span className="option-body">
               <span>
                 {o.label}{" "}
@@ -413,21 +465,24 @@ function FormChoice({ food, row }: { food: Food; row: FormRow }) {
                 ×{fmtNum(o.factor, 3)} per {fromUnit}
                 {o.note ? ` · ${o.note}` : ""} ·{" "}
                 <a href={o.source} target="_blank" rel="noopener noreferrer">
-                  NIH ODS fact sheet ↗
+                  NIH ODS fact sheet<VisuallyHidden> on {row.nutrient_name}</VisuallyHidden>
+                  <NewTab />
                 </a>
               </span>
             </span>
           </label>
         ))}
         <label className="option">
-          <input type="radio" name={name} checked={row.chosen === null} onChange={() => choose.mutate(null)} />
+          <input type="radio" name={name} checked={row.chosen === null} onChange={() => !choose.isPending && choose.mutate(null)} />
           <span className="option-body">
             <span>Not sure (don't count)</span>
             <span className="muted small">The amount stays listed as uncounted; your totals for {row.nutrient_name} will read low.</span>
           </span>
         </label>
       </div>
-      {choose.isPending && <p className="muted small">Saving…</p>}
+      <div className="muted small" role="status">
+        {choose.isPending ? "Saving…" : ""}
+      </div>
       {done !== null && (
         <ResultNote ok>
           Recalculated {done} entr{done === 1 ? "y" : "ies"}.
@@ -482,8 +537,21 @@ export default function FoodDetailPage() {
     },
   });
 
-  if (food.isLoading) return <Loading />;
-  if (!food.data) return <ErrorBox error={food.error} />;
+  usePageTitle(food.data?.name);
+  if (food.isLoading)
+    return (
+      <div className="stack">
+        <h1 className="sr-only">Food</h1>
+        <Loading />
+      </div>
+    );
+  if (!food.data)
+    return (
+      <div className="stack">
+        <h1>Food not found</h1>
+        <ErrorBox error={food.error} />
+      </div>
+    );
   const f = food.data;
   const mine = f.owner_id === user?.id;
   const canDelete = mine || (f.owner_id === null && user?.is_admin);
@@ -512,9 +580,9 @@ export default function FoodDetailPage() {
               Edit
             </Link>
           ) : (
-            <button type="button" className="btn" onClick={() => copy.mutate()} disabled={copy.isPending}>
+            <Button type="button" className="btn" onClick={() => copy.mutate()} disabled={copy.isPending}>
               Copy to edit
-            </button>
+            </Button>
           )}
           {canDelete && (
             <button
@@ -524,7 +592,7 @@ export default function FoodDetailPage() {
                 if (confirm(`Delete "${f.name}"? Log entries keep their recorded nutrients.`)) del.mutate();
               }}
             >
-              Delete
+              Delete<VisuallyHidden> {f.name}</VisuallyHidden>
             </button>
           )}
         </div>
@@ -533,7 +601,9 @@ export default function FoodDetailPage() {
 
       {f.trust_level === "unverified" && (
         <div className="alert alert-warn">
-          <strong>⚠ Unverified data.</strong> {TRUST_INFO.unverified.description}
+          <strong>
+            <span aria-hidden="true">⚠ </span>Unverified data.
+          </strong> {TRUST_INFO.unverified.description}
         </div>
       )}
 
@@ -561,7 +631,8 @@ export default function FoodDetailPage() {
               <dt>Record</dt>
               <dd>
                 <a href={f.source_url} target="_blank" rel="noopener noreferrer">
-                  View at source ↗
+                  View at source
+                  <NewTab />
                 </a>
               </dd>
             </>
@@ -589,7 +660,7 @@ export default function FoodDetailPage() {
 
       <section className="card">
         <h2>Nutrients ({basisLabel(f)})</h2>
-        <NutrientTable values={f.nutrients} derivations={f.derivations} />
+        <NutrientTable values={f.nutrients} derivations={f.derivations} caption={`Nutrients, ${basisLabel(f)}`} />
       </section>
 
       {f.portions.length > 0 && (
@@ -609,7 +680,7 @@ export default function FoodDetailPage() {
 
       {f.other_components.length > 0 && (
         <section className="card">
-          <ComponentList items={f.other_components} />
+          <ComponentList items={f.other_components} level={2} />
         </section>
       )}
 
