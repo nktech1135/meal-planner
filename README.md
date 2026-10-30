@@ -73,9 +73,39 @@ Schema changes: edit `backend/app/models.py`, then
 `uv run alembic revision --autogenerate -m "describe change"` and review the
 generated file.
 
-## Installing on a server
+## Installing
 
-Supported: Debian 12+/Ubuntu 22.04+ with systemd, on x86_64 or arm64. No Docker.
+Two ways, chosen by who runs the installer. Both work on x86_64 and arm64 Linux;
+no Docker.
+
+| | System-wide (`sudo`) | Per-user (no root) |
+|---|---|---|
+| Runs as | `mealplan` system user | you |
+| Database | PostgreSQL (or `--db sqlite`) | SQLite |
+| Service | systemd system unit | systemd user unit (`systemctl --user`) |
+| HTTPS | `--domain` sets up Caddy | not built in; use localhost or an existing reverse proxy |
+| Listens on | `0.0.0.0:8080` | `127.0.0.1:8080` |
+| Distros | Debian 12+/Ubuntu 22.04+ | any systemd distro with git, curl, tar, xz |
+| Files | `/opt/mealplan`, `/etc/mealplan`, `/var/lib/mealplan` | `~/.local/share/mealplan`, `~/.config/mealplan` |
+| Command | `sudo mealplan …` | `mealplan …` (`~/.local/bin`) |
+
+### Per-user install (no root)
+
+```bash
+curl -fsSL https://<your-host>/mealplan/raw/main/install.sh | bash
+# or from a checkout:
+./install.sh install
+```
+
+A user service normally stops when you log out and doesn't start at boot. The
+installer turns on *lingering* (`loginctl enable-linger`) to keep it running.
+Some systems only let an administrator do that. If so, the installer says so,
+and `sudo loginctl enable-linger <you>` fixes it once. Pass `--no-linger` to
+skip it. On machines without a systemd user manager (some containers), or with
+`MEALPLAN_SERVICE=process`, the app runs as a background process instead and
+won't come back after a reboot.
+
+### System-wide install
 
 ```bash
 # One line (once install.sh is published; see "Publishing" below):
@@ -99,25 +129,26 @@ The installer:
 - builds the app into `/opt/mealplan/releases/<commit>`, runs migrations, and
   starts the `mealplan` systemd service with a hardened unit (read-only system,
   no capabilities);
-- writes `/etc/mealplan/mealplan.env` with a generated `SECRET_KEY`. Add
-  `ANTHROPIC_API_KEY` and a free `USDA_FDC_API_KEY` there, then run
-  `sudo systemctl restart mealplan`.
+- writes `/etc/mealplan/mealplan.env` (per-user: `~/.config/mealplan/mealplan.env`)
+  with a generated `SECRET_KEY`. Add `ANTHROPIC_API_KEY` and a free
+  `USDA_FDC_API_KEY` there, then run `sudo mealplan restart`.
 
 Without `--domain` the app listens on port 8080 over plain HTTP; use that only
 on a trusted network. Options: `--port`, `--listen`, `--db postgres|sqlite`,
 `--repo`, `--branch`. Open the URL it prints and register. The first account is
 the admin.
 
-Day-to-day:
+Day-to-day (drop `sudo` for a per-user install):
 
 ```bash
 sudo mealplan status              # version, service state, URL, health
+sudo mealplan restart             # after editing the configuration
 sudo mealplan upgrade             # latest commit on the tracked branch
 sudo mealplan upgrade --ref v1.2  # a specific tag, branch or commit
 sudo mealplan backup              # database backup into /var/lib/mealplan/backups
 sudo mealplan uninstall           # remove the app; keep config, data and database
 sudo mealplan uninstall --purge   # remove everything, including the database
-journalctl -u mealplan -f         # logs
+journalctl -u mealplan -f         # logs (per-user: journalctl --user -u mealplan -f)
 ```
 
 Upgrades build the new release while the current one keeps serving. They then
@@ -143,5 +174,5 @@ credentials (e.g. a deploy token).
 | Web UI | Builds with no type errors; smoke-tested against the API through the dev proxy |
 | Nutritionix and Edamam adapters | Written to the vendors' published API docs; need a live check with real keys |
 | AI advisor | Tool loop tested with a fake client; needs a live check with an API key |
-| Installer (`install.sh`) | Tested in unprivileged test mode (SQLite, no root): install (from a file and piped), upgrade, rollback after a failed migration and after a failed start (schema downgraded), uninstall, reinstall reusing data, purge. The generated systemd unit passes `systemd-analyze verify`. Not yet run as root: apt packages, the system user, PostgreSQL setup, starting under systemd, Caddy |
+| Installer (`install.sh`) | Tested in unprivileged test mode (SQLite, no root): install (from a file and piped), upgrade, rollback after a failed migration and after a failed start (schema downgraded), uninstall, reinstall reusing data, purge. The generated systemd unit passes `systemd-analyze verify`. Per-user mode run for real without root (in a scratch home, as a background process): install, restart, upgrade, uninstall, purge; its systemd user unit passes `systemd-analyze --user verify` but hasn't been started. Not yet run as root: apt packages, the system user, PostgreSQL setup, starting under systemd, Caddy |
 | Upper limits & reference intakes | Hand-transcribed from the DRI tables; verify before relying on them |
