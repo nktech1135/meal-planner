@@ -361,33 +361,22 @@ write_config() {
   fi
   log "Writing configuration $ENV_FILE"
   cat >"$ENV_FILE" <<EOF
-# Mealplan configuration. After editing, apply with: ${SUDO}mealplan restart
-# Values must not contain spaces or quotes.
+# Mealplan bootstrap configuration, written by the installer.
+#
+# Everything else (API keys, the AI advisor, data sources, sign-ups, email) is set
+# in the app: sign in as an admin and open Settings.
+#
+# SECRET_KEY signs sessions and encrypts the keys stored in Settings: keep it secret,
+# and don't change it, or stored keys can no longer be read and must be entered again.
+# After editing this file: ${SUDO}mealplan restart
 
 MEALPLAN_HOST=$host
 MEALPLAN_PORT=$PORT
 DATABASE_URL=$db_url
 SECRET_KEY=$(random_secret)
 COOKIE_SECURE=$secure
-# The first account to register becomes admin. Set false afterwards to close sign-ups.
-ALLOW_REGISTRATION=true
 STATIC_DIR=$CURRENT/frontend/dist
-
-# AI advisor (Claude): https://console.anthropic.com/
-ANTHROPIC_API_KEY=
-ADVISOR_MODEL=claude-opus-5-5
-ADVISOR_EFFORT=medium
-ADVISOR_DAILY_MESSAGE_LIMIT=50
-
-# Data sources. Free USDA key: https://fdc.nal.usda.gov/api-key-signup
-USDA_FDC_API_KEY=DEMO_KEY
-NIH_DSLD_ENABLED=true
-NUTRITIONIX_APP_ID=
-NUTRITIONIX_APP_KEY=
-EDAMAM_APP_ID=
-EDAMAM_APP_KEY=
-# Crowdsourced (unverifiable) data; records are always flagged "unverified".
-ENABLE_UNVERIFIED_SOURCES=false
+${DOMAIN:+PUBLIC_URL=https://$DOMAIN}
 EOF
   if is_system; then chown root:"$SERVICE_USER" "$ENV_FILE" && chmod 0640 "$ENV_FILE"
   else chmod 0600 "$ENV_FILE"; fi
@@ -719,11 +708,12 @@ cmd_install() {
   log "Mealplan ${rev:0:12} is running at $(public_url)"
   cat >&2 <<EOF
 
-  Next steps:
+  Next steps, all in the app:
     1. Open $(public_url) and register. The first account becomes the admin.
-    2. Add your keys to $ENV_FILE (ANTHROPIC_API_KEY for the advisor, a free
-       USDA_FDC_API_KEY), then run: ${SUDO}mealplan restart
-    3. Optionally set ALLOW_REGISTRATION=false once everyone has an account.
+    2. Settings: add an Anthropic API key (AI advisor) and a free USDA key.
+    3. Settings → Data: import the USDA food databases (about a minute).
+    4. Settings: turn off "Allow new sign-ups" once everyone has an account,
+       or invite people from Settings → Users.
 
   Manage it with:  ${SUDO}mealplan status | restart | upgrade | backup | uninstall
 EOF
