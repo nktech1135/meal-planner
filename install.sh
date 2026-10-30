@@ -687,9 +687,12 @@ cmd_install() {
   fi
 
   take_lock
+  local why
   SERVICE_KIND="$(default_service_kind)"
-  [[ "$MODE" == user && "$SERVICE_KIND" == process ]] \
-    && warn "no systemd user manager found; Mealplan will run as a background process and won't restart after a reboot"
+  if [[ "$MODE" == user && "$SERVICE_KIND" == process ]]; then
+    if [[ -n "${MEALPLAN_SERVICE:-}" ]]; then why="MEALPLAN_SERVICE=process"; else why="no systemd user manager found"; fi
+    warn "$why: Mealplan will run as a background process and won't restart after a reboot"
+  fi
   install_packages
   ensure_user
   make_dirs
