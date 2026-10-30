@@ -270,7 +270,7 @@ build_release() {  # build_release REV -> path of the built release
   echo "$rel"
 }
 
-current_release() { readlink -f "$CURRENT" 2>/dev/null || true; }
+current_release() { if [[ -L "$CURRENT" ]]; then readlink -f "$CURRENT"; fi; }
 
 switch_to() {  # switch_to RELEASE_DIR
   local old
@@ -282,7 +282,8 @@ switch_to() {  # switch_to RELEASE_DIR
 prune_releases() {
   local keep_cur keep_prev dir
   keep_cur="$(current_release)"
-  keep_prev="$(readlink -f "$PREVIOUS" 2>/dev/null || true)"
+  keep_prev=""
+  if [[ -L "$PREVIOUS" ]]; then keep_prev="$(readlink -f "$PREVIOUS")"; fi
   for dir in "$RELEASES"/*; do
     [[ -d "$dir" && "$dir" != "$keep_cur" && "$dir" != "$keep_prev" ]] && rm -rf "$dir"
   done
