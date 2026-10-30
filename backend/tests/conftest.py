@@ -20,9 +20,18 @@ def load_fixture(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text())
 
 
+# Tests run on in-memory SQLite by default; set TEST_DATABASE_URL (e.g. a scratch PostgreSQL
+# database) to run them against another engine. That database is wiped for every test.
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
+
+
 @pytest.fixture
 def db_session():
-    engine = make_engine("sqlite://", poolclass=StaticPool)  # one shared in-memory connection per test
+    if TEST_DATABASE_URL:
+        engine = make_engine(TEST_DATABASE_URL)
+        Base.metadata.drop_all(engine)
+    else:
+        engine = make_engine("sqlite://", poolclass=StaticPool)  # one shared in-memory connection per test
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = Session()

@@ -83,6 +83,10 @@ cd backend && uv run pytest && uv run ruff check .
 cd frontend && npm run build
 ```
 
+The backend tests use in-memory SQLite. To run them against PostgreSQL, point
+`TEST_DATABASE_URL` at a scratch database, which is wiped for each test:
+`TEST_DATABASE_URL=postgresql+psycopg://user@localhost/mealplan_test uv run pytest`.
+
 Schema changes: edit `backend/app/models.py`, then
 `uv run alembic revision --autogenerate -m "describe change"` and review the
 generated file.
