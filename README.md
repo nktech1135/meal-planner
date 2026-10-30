@@ -143,5 +143,5 @@ credentials (e.g. a deploy token).
 | Web UI | Builds with no type errors; smoke-tested against the API through the dev proxy |
 | Nutritionix and Edamam adapters | Written to the vendors' published API docs; need a live check with real keys |
 | AI advisor | Tool loop tested with a fake client; needs a live check with an API key |
-| Installer (`install.sh`) | Full install → upgrade → rollback → uninstall cycle tested in unprivileged test mode (SQLite, no systemd); the root-only steps (apt, PostgreSQL, systemd, Caddy) have not been run yet |
+| Installer (`install.sh`) | Tested in unprivileged test mode (SQLite, no root): install (from a file and piped), upgrade, rollback after a failed migration and after a failed start (schema downgraded), uninstall, reinstall reusing data, purge. The generated systemd unit passes `systemd-analyze verify`. Not yet run as root: apt packages, the system user, PostgreSQL setup, starting under systemd, Caddy |
 | Upper limits & reference intakes | Hand-transcribed from the DRI tables; verify before relying on them |
