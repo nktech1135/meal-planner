@@ -4,9 +4,9 @@
 # Run it as root for a system-wide install, or as a normal user for a per-user
 # install that needs no root at all:
 #
-#   System-wide:  curl -fsSL https://<host>/<path>/install.sh | sudo bash
-#                 curl -fsSL https://<host>/<path>/install.sh | sudo bash -s -- install --domain meals.example.com
-#   Per-user:     curl -fsSL https://<host>/<path>/install.sh | bash
+#   System-wide:  curl -fsSL https://raw.githubusercontent.com/nktech1135/meal-planner/main/install.sh | sudo bash
+#                 curl -fsSL https://raw.githubusercontent.com/nktech1135/meal-planner/main/install.sh | sudo bash -s -- install --domain meals.example.com
+#   Per-user:     curl -fsSL https://raw.githubusercontent.com/nktech1135/meal-planner/main/install.sh | bash
 #   From a checkout:  ./install.sh install   (or: sudo ./install.sh install)
 #   Afterwards:   [sudo] mealplan upgrade | uninstall [--purge] | status | restart | backup | help
 #
@@ -31,8 +31,8 @@ set -Eeuo pipefail
 umask 022
 
 # --- Pinned settings -----------------------------------------------------------
-# Set DEFAULT_REPO to where the code is published so the one-line install works.
-DEFAULT_REPO="https://github.com/CHANGE-ME/mealplan.git"
+# Where the code is published (a fork can change this, or pass --repo).
+DEFAULT_REPO="https://github.com/nktech1135/meal-planner.git"
 DEFAULT_BRANCH="main"
 DEFAULT_PORT=8080
 

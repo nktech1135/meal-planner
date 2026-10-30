@@ -125,7 +125,7 @@ no Docker.
 ### Per-user install (no root)
 
 ```bash
-curl -fsSL https://<your-host>/mealplan/raw/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nktech1135/meal-planner/main/install.sh | bash
 # or from a checkout:
 ./install.sh install
 ```
@@ -142,10 +142,10 @@ won't come back after a reboot.
 
 ```bash
 # One line (once install.sh is published; see "Publishing" below):
-curl -fsSL https://<your-host>/mealplan/raw/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/nktech1135/meal-planner/main/install.sh | sudo bash
 
 # With HTTPS on your own domain (DNS must already point at this machine):
-curl -fsSL https://<your-host>/mealplan/raw/main/install.sh | sudo bash -s -- install --domain meals.example.com
+curl -fsSL https://raw.githubusercontent.com/nktech1135/meal-planner/main/install.sh | sudo bash -s -- install --domain meals.example.com
 
 # Or from a checkout of this repository:
 sudo ./install.sh install
@@ -200,11 +200,11 @@ where the backup is. The newest 10 backups are kept.
 
 ### Publishing
 
-`install.sh` fetches the code with git. Push this repository somewhere the
-server can reach, then set `DEFAULT_REPO` at the top of `install.sh` to its clone
-URL. The one-line command then fetches `install.sh` from that repository's raw
-file URL. For a private repository, use `--repo` with a URL that carries
-credentials (e.g. a deploy token).
+The code is published at https://github.com/nktech1135/meal-planner, and
+`install.sh` clones it from there (`DEFAULT_REPO` at the top of the script). To
+install from a fork or another server, change `DEFAULT_REPO` or pass `--repo`
+with any git URL or local path; for a private repository, use a URL that
+carries credentials (e.g. a deploy token).
 
 ## Status
 
