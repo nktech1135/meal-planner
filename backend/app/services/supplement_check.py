@@ -67,8 +67,11 @@ class Intake:
                     self.energy_with[code] = self.energy_with.get(code, 0.0) + kcal
                 continue
             key = f"food:{e.food_id}" if e.food_id else f"label:{e.label}"
-            s = self.supplements.setdefault(key, {"food_id": e.food_id, "label": e.label, "days": set(), "servings": 0.0,
-                                                  "nutrients": {}, "components": {}})
+            product = foods.get(e.food_id) if e.food_id else None
+            # Product name without the brand (log labels read "Name (Brand)"); brand kept separately.
+            s = self.supplements.setdefault(key, {"food_id": e.food_id, "label": product.name if product else e.label,
+                                                  "brand": product.brand if product else None, "days": set(),
+                                                  "servings": 0.0, "nutrients": {}, "components": {}})
             s["days"].add(d)
             s["servings"] += _servings(e, foods.get(e.food_id))
             for code, value in e.nutrients.items():
@@ -197,7 +200,8 @@ def check(db: Session, user: User, food: Food, servings_per_day: float | None, d
         "verdict": _verdict(rows, other_ingredients, targets, confidence, reasons),
         "nutrients": rows,
         "other_ingredients": other_ingredients,
-        "other_supplements": [{"food_id": s["food_id"], "label": s["label"], "days_taken": len(s["days"])}
+        "other_supplements": [{"food_id": s["food_id"], "label": s["label"], "brand": s["brand"],
+                               "days_taken": len(s["days"])}
                               for s in sorted(others, key=lambda s: s["label"].lower())],
         "warnings": target_info["warnings"],
         "caveats": caveats,
@@ -252,15 +256,15 @@ def _row(code: str, product: float, intake: Intake, others: list[dict], t: dict 
         notes.append("Part of the label amount can't be counted until its form is chosen.")
     uncertain = coverage is not None and coverage < LOW_COVERAGE and status in GAP
     if uncertain:
-        notes.append(f"Only {coverage:.0%} of the food you logged (by calories) has a value for this nutrient, "
-                     "so your food intake is probably higher than shown.")
+        notes.append("Little of the food you logged reports this nutrient, so food intake is probably higher than shown.")
+    counted = status != "partial"  # nothing countable yet: totals would read as a misleading 0
     return {
         "code": code, "name": nd.name if nd else code, "unit": nd.unit if nd else "",
         "product": round(product, 3), "food": round(food, 3), "other_supplements": round(other, 3),
-        "total_without": round(food + other, 3), "total_with": round(food + other + product, 3),
+        "total_without": round(food + other, 3), "total_with": round(food + other + product, 3) if counted else None,
         "reference": ref, "reference_kind": t.get("kind"), "upper_limit": limit,
         "ul_scope": t.get("ul_scope") if limit is not None else None,
-        "limit_amount_with": round(limit_with, 3) if limit is not None else None,
+        "limit_amount_with": round(limit_with, 3) if limit is not None and counted else None,
         "product_share_of_reference": round(product / ref, 3) if ref else None,
         "food_data_coverage": None if coverage is None else round(coverage, 2),
         "also_in": [s["label"] for s in others if s["nutrients"].get(code, 0) > 0],
@@ -299,9 +303,10 @@ def _verdict(rows: list[dict], other_ingredients: list[dict], targets: dict, con
     if any(r["uncertain"] for r in gaps):
         details.append("Some gaps may be smaller than shown: many food records don't report every nutrient.")
     if unjudged or other_ingredients:
-        details.append(f"{len(unjudged) + len(other_ingredients)} ingredient"
-                       f"{'s have' if len(unjudged) + len(other_ingredients) != 1 else ' has'} no reference intake, so "
-                       "their need can't be judged from your intake. The adviser can summarise the evidence.")
+        n = len(unjudged) + len(other_ingredients)
+        details.append(f"{n} ingredient{'s have' if n != 1 else ' has'} no reference intake, so "
+                       f"{'their' if n != 1 else 'its'} need can't be judged from your intake. "
+                       "The advisor can summarise the evidence.")
     return {"code": code, "headline": headline, "details": details, "confidence": confidence,
             "confidence_reasons": reasons,
             "counts": {"over_limit": len(over), "gaps": len(gaps), "covered": len(covered),
@@ -316,7 +321,7 @@ def stack(db: Session, user: User, days: int) -> dict:
     items = []
     for s in sorted(intake.supplements.values(), key=lambda s: s["label"].lower()):
         food = foods.get(s["food_id"]) if s["food_id"] else None
-        item = {"food_id": s["food_id"], "label": s["label"], "days_taken": len(s["days"]),
+        item = {"food_id": s["food_id"], "label": s["label"], "brand": s["brand"], "days_taken": len(s["days"]),
                 "servings_per_day": round(s["servings"] / len(s["days"]), 2) if s["days"] else None}
         if food is None:
             item["verdict"] = None

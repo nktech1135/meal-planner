@@ -212,6 +212,7 @@ const ROUTE_TITLES: [string, string][] = [
   ["/recipes", "Recipes"],
   ["/recipes/new", "New recipe"],
   ["/recipes/:id", "Recipe"],
+  ["/supplements/check", "Supplement check"],
   ["/advisor", "Advisor"],
   ["/advisor/:id", "Advisor"],
   ["/profile", "Profile"],

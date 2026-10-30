@@ -505,6 +505,11 @@ export default function TodayPage() {
                       <PanelToggle panel={panel} name={`save:${meal}`} setPanel={setPanel} className="btn-link small">
                         Save as meal…<VisuallyHidden> ({mealLabel(meal)})</VisuallyHidden>
                       </PanelToggle>
+                      {meal === "supplement" && (
+                        <Link to="/supplements/check" className="small">
+                          Check if you need them
+                        </Link>
+                      )}
                     </div>
                   </div>
                   {panel === `copy:${meal}` && (

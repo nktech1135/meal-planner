@@ -696,3 +696,104 @@ export interface BarcodeResult {
   foods: FoodSummary[];
   errors: string[];
 }
+
+// --- supplement check -----------------------------------------------------------
+
+export type VerdictCode = "useful" | "partly_useful" | "not_needed" | "caution" | "unclear" | "unknown";
+export type CheckStatus =
+  | "over_limit"
+  | "closes_gap"
+  | "narrows_gap"
+  | "partial"
+  | "covered_by_supplements"
+  | "covered_by_food"
+  | "minor"
+  | "no_reference"
+  | "info";
+
+export interface SupplementVerdict {
+  code: VerdictCode;
+  headline: string;
+  details: string[];
+  confidence: "normal" | "low";
+  confidence_reasons: string[];
+  counts: { over_limit: number; gaps: number; covered: number; no_reference: number };
+}
+
+export interface UncountedAmount {
+  name: string;
+  amount: number;
+  unit: string | null;
+  /** true: choosing the form on the food page would count it. */
+  resolvable: boolean;
+}
+
+export interface CheckNutrient {
+  code: string;
+  name: string;
+  unit: string;
+  product: number;
+  food: number;
+  other_supplements: number;
+  total_without: number;
+  total_with: number | null;  // null while nothing in the row can be counted yet
+  reference: number | null;
+  reference_kind: string | null;
+  upper_limit: number | null;
+  ul_scope: "total" | "supplemental" | null;
+  /** What the upper limit is compared with: supplements only for supplement-only limits, else total. */
+  limit_amount_with: number | null;
+  product_share_of_reference: number | null;
+  food_data_coverage: number | null;
+  also_in: string[];
+  uncounted: UncountedAmount[];
+  status: CheckStatus;
+  uncertain: boolean;
+  notes: string[];
+}
+
+export interface SupplementCheck {
+  product: {
+    food_id: number;
+    name: string;
+    brand: string | null;
+    kind: Kind;
+    trust_level: Trust;
+    source: string;
+    citation: string | null;
+    source_url: string | null;
+    servings_per_day: number;
+    serving_label: string;
+    result_trust_level: Trust;
+    notes: string[];
+  };
+  window: { start: string; end: string; logged_days: number; avg_energy_kcal: number; energy_target_kcal: number | null };
+  already_taking: { days_taken: number; servings_per_day: number | null } | null;
+  verdict: SupplementVerdict;
+  nutrients: CheckNutrient[];
+  other_ingredients: { name: string; amount: number | null; unit: string | null; also_in: { label: string; amount: number; unit: string | null }[] }[];
+  other_supplements: { food_id: number | null; label: string; brand: string | null; days_taken: number }[];
+  warnings: string[];
+  caveats: string[];
+}
+
+export interface CheckInput {
+  food_id: number;
+  servings_per_day?: number | null;
+  days?: number;
+}
+
+export interface StackItem {
+  food_id: number | null;
+  label: string;
+  brand: string | null;
+  days_taken: number;
+  servings_per_day: number | null;
+  verdict: SupplementVerdict | null;
+  error?: string;
+}
+
+export interface SupplementStack {
+  window: { start: string; end: string; logged_days: number };
+  items: StackItem[];
+}

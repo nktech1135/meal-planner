@@ -112,7 +112,12 @@ export default function FoodFormPage() {
   const existing = useQuery({ queryKey: ["food", editing], queryFn: () => api.food(editing!), enabled: !!editing });
   const [params] = useSearchParams();
   // Arriving from a barcode scan that found nothing: start with the scanned barcode filled in.
-  const [form, setForm] = useState<FormState>(() => ({ ...EMPTY, barcode: params.get("barcode") ?? "" }));
+  // From the supplement check (?kind=supplement): start a supplement label, counted per serving.
+  const [form, setForm] = useState<FormState>(() => ({
+    ...EMPTY,
+    barcode: params.get("barcode") ?? "",
+    ...(params.get("kind") === "supplement" ? { kind: "supplement" as Kind, basis: "serving" as Basis, serving_quantity: "1" } : {}),
+  }));
 
   useEffect(() => {
     if (existing.data) setForm(fromFood(existing.data));

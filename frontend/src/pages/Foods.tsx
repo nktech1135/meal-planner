@@ -246,9 +246,14 @@ export default function FoodsPage() {
     <div className="stack">
       <div className="page-head">
         <h1>Foods</h1>
-        <Link to="/foods/new" className="btn btn-primary">
-          + New food
-        </Link>
+        <div className="row wrap">
+          <Link to="/supplements/check" className="btn">
+            Supplement check
+          </Link>
+          <Link to="/foods/new" className="btn btn-primary">
+            + New food
+          </Link>
+        </div>
       </div>
       <TabList
         id="foods"

@@ -52,6 +52,9 @@ import type {
   TargetsResponse,
   User,
   YieldInput,
+  CheckInput,
+  SupplementCheck,
+  SupplementStack,
 } from "./types";
 
 export class ApiError extends Error {
@@ -235,6 +238,10 @@ export const api = {
   shopping: (start: string, end: string) => get<ShoppingList>(`/api/plan/shopping${qs({ start, end })}`),
   checkShopping: (start: string, end: string, key: string, checked: boolean) =>
     put<void>("/api/plan/shopping/check", { start, end, key, checked }),
+
+  // supplement check
+  checkSupplement: (c: CheckInput) => post<SupplementCheck>("/api/supplements/check", c),
+  supplementStack: (days: number) => get<SupplementStack>(`/api/supplements/stack${qs({ days })}`),
 
   // advisor
   conversations: () => get<Conversation[]>("/api/advisor/conversations"),

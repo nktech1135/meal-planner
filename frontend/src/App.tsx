@@ -17,6 +17,7 @@ import FoodFormPage from "./pages/FoodForm";
 import RecipesPage from "./pages/Recipes";
 import RecipeEditPage from "./pages/RecipeEdit";
 import AdvisorPage from "./pages/Advisor";
+import SupplementCheckPage from "./pages/SupplementCheck";
 import ProfilePage from "./pages/Profile";
 import AccountPage from "./pages/Account";
 import CreditsPage from "./pages/Credits";
@@ -94,6 +95,7 @@ export default function App() {
           <Route path="/recipes" element={<RecipesPage />} />
           <Route path="/recipes/new" element={<RecipeEditPage />} />
           <Route path="/recipes/:id" element={<RecipeEditPage />} />
+          <Route path="/supplements/check" element={<SupplementCheckPage />} />
           <Route path="/advisor" element={<AdvisorPage />} />
           <Route path="/advisor/:id" element={<AdvisorPage />} />
           <Route path="/profile" element={<ProfilePage />} />

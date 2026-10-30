@@ -71,7 +71,7 @@ test.beforeAll(async () => {
 async function settle(page: Page) {
   await page.waitForLoadState("networkidle");
   await expect(page.locator("h1").first()).toBeVisible();
-  await expect(page.getByText(/^(Loading|Searching|Checking datasets)…$/)).toHaveCount(0);
+  await expect(page.getByText(/^(Loading|Searching|Checking|Checking datasets)…$/)).toHaveCount(0);
 }
 
 /** Run axe and fail with a readable list of violations. */
@@ -100,6 +100,8 @@ const pages = (s: Seed): [string, string][] => [
   ["Recipe", `/recipes/${s.recipe.id}`],
   ["New recipe", "/recipes/new"],
   ["Advisor", "/advisor"],
+  ["Supplement check", "/supplements/check"],
+  ["Supplement check result", `/supplements/check?food=${s.supp.id}`],
   ["Profile", "/profile"],
   ["Account", "/account"],
   ["Settings", "/settings"],
@@ -124,7 +126,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     test("phone-width layouts pass axe", async ({ page }) => {
       await page.setViewportSize({ width: 412, height: 915 });
-      for (const path of ["/", "/log", "/plan", "/trends?days=7", "/advisor", "/foods", "/settings"]) {
+      for (const path of ["/", "/log", "/plan", "/trends?days=7", "/advisor", "/foods", "/settings", `/supplements/check?food=${seed.supp.id}`]) {
         await test.step(path, async () => {
           await page.goto(path);
           await settle(page);

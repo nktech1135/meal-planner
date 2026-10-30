@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
@@ -31,6 +31,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_body_measurements: "checked body measurements",
   get_meal_plan: "read your meal plan",
   propose_plan_items: "proposed plan items",
+  check_supplement: "checked a supplement against your intake",
   web_search: "searched trusted sources",
   web_fetch: "read a source page",
 };
@@ -237,7 +238,13 @@ export default function AdvisorPage() {
   const conversationId = id ? Number(id) : null;
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [text, setText] = useState("");
+  // ?ask=… (from the supplement check): fill in a question for the user to review. Never sent automatically.
+  const [params] = useSearchParams();
+  const ask = conversationId ? null : params.get("ask")?.trim().slice(0, 8000) || null;
+  const [text, setText] = useState(ask ?? "");
+  useEffect(() => {
+    if (ask) setText(ask);
+  }, [ask]);
   const [pending, setPending] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -391,11 +398,17 @@ export default function AdvisorPage() {
             ))}
           </div>
         )}
+        {!unavailable && ask && text === ask && (
+          <p id="composer-prefill" className="small muted composer-note">
+            A question is filled in below. Edit it if you like; nothing is sent until you press Send.
+          </p>
+        )}
         {!unavailable && (
           <form className="composer" onSubmit={submit}>
             <textarea
+              aria-describedby={ask && text === ask ? "composer-prefill" : undefined}
               ref={composer}
-              rows={2}
+              rows={ask && text === ask ? 4 : 2}
               maxLength={8000}
               value={text}
               onChange={(e) => setText(e.target.value)}

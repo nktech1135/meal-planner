@@ -575,6 +575,11 @@ export default function FoodDetailPage() {
           <Link className="btn btn-primary" to="/log">
             Log it
           </Link>
+          {f.kind === "supplement" && (
+            <Link className="btn" to={`/supplements/check?food=${f.id}`}>
+              Check if I need this
+            </Link>
+          )}
           {mine ? (
             <Link className="btn" to={`/foods/${f.id}/edit`}>
               Edit
