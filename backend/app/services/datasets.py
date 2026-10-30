@@ -12,6 +12,7 @@ import csv
 import hashlib
 import importlib
 import io
+import json
 import logging
 import re
 import tempfile
@@ -46,6 +47,7 @@ class RemoteFile:
     url: str
     sha256: str | None = None  # pinned when the publisher's file is a fixed release
     optional: bool = False  # extra detail; the import continues without it
+    suffix: str | None = None  # file type when the URL doesn't show it (e.g. ".xlsx" for figshare links)
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,9 @@ class Dataset:
     # National databases parsed by app.sources.intl.<parser>:
     files: tuple[RemoteFile, ...] = ()
     parser: str | None = None
+    # The parser module assembles the data itself from the publisher's API (fetch_all(client, progress));
+    # used when no bulk file is published. The result is handed to parse() as files["data"] (JSON).
+    assembled: bool = False
     source: str | None = None  # Food.source for its records
     country: str = "United States"
     licence: str = "Public domain (U.S. government work)"
@@ -149,6 +154,23 @@ INTERNATIONAL = (
             licence="Etalab Open Licence 2.0", licence_url="https://www.etalab.gouv.fr/licence-ouverte-open-licence/",
             attribution="Anses. 2025. Table de composition nutritionnelle des aliments Ciqual. "
                         "https://doi.org/10.57745/RDMHWY"),
+    Dataset("intl_dk_fcdb", "Danish Food Composition Database (6.1)",
+            "About 1,400 foods, mostly raw commodities (DTU Food Institute, May 2026).", "~13 MB download",
+            files=(RemoteFile("data", "https://ndownloader.figshare.com/files/65016537",
+                              "aba52ade9dd75f085954ca5561f001efb58e4b37d412b135622fd34d77f45c09", suffix=".xlsx"),),
+            parser="dk_fcdb", source="dk_fcdb", country="Denmark", release="6.1 (May 2026)",
+            licence="CC BY 4.0", licence_url=CC_BY,
+            attribution="The Danish Food Composition Database (http://fcdb.fooddata.dk), version 6.1, May 2026, The Food "
+                        "Institute, Technical University of Denmark. Licensed under CC BY 4.0."),
+    Dataset("intl_swiss", "Swiss Food Composition Database (V 7.1)",
+            "About 1,200 generic foods plus 30 branded mineral waters and spirits (FSVO, July 2026).", "~1 MB download",
+            files=(RemoteFile("data", "https://naehrwertdaten.ch/wp-content/uploads/2026/07/Swiss_food_composition_database.xlsx",
+                              "323bae2eecd639d2c3b3bf3797d30b1426ccb0253fb62810f522778b38089196"),),
+            parser="swiss", source="swiss", country="Switzerland", release="V 7.1 (2026)",
+            licence="Free use, including commercial, with acknowledgement of the source (FSVO)",
+            licence_url="https://naehrwertdaten.ch/en/downloads/",
+            attribution="Swiss Food Composition Database V 7.1 (01.07.2026), Federal Food Safety and Veterinary Office "
+                        "FSVO, www.naehrwertdaten.ch"),
     Dataset("intl_matvaretabellen", "Norwegian Food Composition Table (Matvaretabellen)",
             "About 2,100 foods with English names (Norwegian Food Safety Authority).", "~15 MB download",
             files=(RemoteFile("foods", "https://www.matvaretabellen.no/api/en/foods.json"),
@@ -164,6 +186,8 @@ DATASETS = DATASETS + INTERNATIONAL
 BY_KEY = {d.key: d for d in DATASETS}
 
 _discovered: dict[str, tuple[datetime, str]] = {}
+VENDORED = "vendored:"  # RemoteFile.url prefix for files shipped in app/data
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 BATCH = 1000  # foods per database round
 
 
@@ -311,9 +335,21 @@ def _import_parsed(db: Session, ds: Dataset, client: httpx.Client, job: ImportJo
     module = importlib.import_module(f"app.sources.intl.{ds.parser}")
     with tempfile.TemporaryDirectory() as tmp:
         paths = {}
+        if ds.assembled:
+            data = module.fetch_all(client, lambda message, done=None, total=None: report(message, done, total))
+            paths["data"] = Path(tmp) / "data.json"
+            paths["data"].write_text(json.dumps(data))
         for remote in ds.files:
+            if remote.url.startswith(VENDORED):
+                # Shipped with the app (the publisher's site blocks automated downloads).
+                path = DATA_DIR / remote.url.removeprefix(VENDORED)
+                if remote.sha256 and _sha256(path) != remote.sha256:
+                    raise ValueError(f"The bundled file '{remote.name}' doesn't match its recorded checksum")
+                paths[remote.name] = path
+                continue
             # Keep the published extension: spreadsheet readers go by it.
-            path = Path(tmp) / (remote.name + Path(urlsplit(remote.url).path).suffix.replace("%20", ""))
+            suffix = remote.suffix or Path(urlsplit(remote.url).path).suffix.replace("%20", "")
+            path = Path(tmp) / (remote.name + suffix)
             try:
                 with path.open("wb") as fh:
                     _download(client, remote.url, fh, report)

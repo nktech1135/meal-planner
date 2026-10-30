@@ -112,10 +112,10 @@ class Components:
 
 def make_food(*, source: str, source_id: str, name: str, data_type: str, citation: str,
               components: Components, category: str | None = None, source_url: str | None = None,
-              portions: Iterable[tuple[str, float]] = ()) -> ExternalFood:
+              portions: Iterable[tuple[str, float]] = (), trust_level: str = "analytical") -> ExternalFood:
     state, method = guess_state(name)
     return ExternalFood(
-        source=source, source_id=str(source_id), name=name.strip(), trust_level="analytical", kind="food",
+        source=source, source_id=str(source_id), name=name.strip(), trust_level=trust_level, kind="food",
         state=state, cooking_method=method, basis="100g", data_type=data_type, category=category,
         source_url=source_url, citation=citation, nutrients=components.nutrients(), portions=list(portions),
     )
