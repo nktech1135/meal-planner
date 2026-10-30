@@ -7,7 +7,8 @@ export default defineConfig({
   fullyParallel: false, // tests share one server and its first-account-is-admin rule
   workers: 1,
   retries: 0,
-  reporter: [["list"]],
+  // On CI, failures also become annotations on the run, readable without downloading the logs.
+  reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     trace: "retain-on-failure",
