@@ -89,8 +89,9 @@ volume. The API applies migrations on start-up.
 
 | Area | State |
 |---|---|
-| Nutrient math, conversions, targets, API, auth, privacy | Covered by the backend test suite |
-| USDA FDC and NIH DSLD adapters | Tested against recorded live responses (2026-10-30) |
+| Nutrient math, conversions, targets, API, auth, privacy | Covered by the backend test suite (52 tests) |
+| USDA FDC and NIH DSLD adapters | Run live end-to-end; tests use recorded responses (2026-10-30) |
+| Web UI | Builds with no type errors; smoke-tested against the API through the dev proxy |
 | Nutritionix and Edamam adapters | Written to the vendors' published API docs; need a live check with real keys |
 | AI advisor | Tool loop tested with a fake client; needs a live check with an API key |
 | Docker images / Compose | Written, not yet built in this environment |

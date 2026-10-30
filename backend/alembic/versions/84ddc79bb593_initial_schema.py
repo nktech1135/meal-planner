@@ -85,7 +85,7 @@ def upgrade() -> None:
     sa.Column('activity_level', sa.String(length=20), nullable=False),
     sa.Column('goal', sa.String(length=20), nullable=False),
     sa.Column('life_stage', sa.String(length=20), nullable=False),
-    sa.Column('timezone', sa.String(length=64), nullable=False),
+    sa.Column('timezone', sa.String(length=64), nullable=True),
     sa.Column('health_notes', sa.Text(), nullable=False),
     sa.Column('target_overrides', sa.JSON(), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),

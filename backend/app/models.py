@@ -47,7 +47,7 @@ class Profile(Base):
     activity_level: Mapped[str] = mapped_column(String(20), default="moderate")
     goal: Mapped[str] = mapped_column(String(20), default="maintain")  # lose | maintain | gain
     life_stage: Mapped[str] = mapped_column(String(20), default="none")  # none | pregnant | lactating
-    timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    timezone: Mapped[str | None] = mapped_column(String(64))  # IANA name; None = not set yet (UTC used)
     # Free text the advisor sees: conditions, medications, dietary pattern, allergies.
     health_notes: Mapped[str] = mapped_column(Text, default="")
     # {nutrient_code: {"min": x, "target": y, "max": z}} — overrides computed targets.

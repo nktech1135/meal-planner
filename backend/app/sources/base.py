@@ -88,11 +88,24 @@ class DataSource(ABC):
         if resp.status_code == 429:
             raise SourceError(f"{self.name}: rate limited, try again later")
         if resp.status_code >= 400:
-            raise SourceError(f"{self.name} returned HTTP {resp.status_code}")
+            raise SourceError(f"{self.name} returned HTTP {resp.status_code}{_upstream_message(resp)}")
         try:
             return resp.json()
         except ValueError as exc:
             raise SourceError(f"{self.name} returned invalid JSON") from exc
+
+
+def _upstream_message(resp: httpx.Response) -> str:
+    """A short reason from the upstream error body, if it has one."""
+    try:
+        body = resp.json()
+    except ValueError:
+        return ""
+    msg = None
+    if isinstance(body, dict):
+        err = body.get("error")
+        msg = body.get("message") or (err.get("message") if isinstance(err, dict) else err)
+    return f": {str(msg)[:200]}" if msg else ""
 
 
 _COOK_METHODS = (

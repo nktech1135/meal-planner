@@ -42,6 +42,16 @@ make a copy. The copy becomes `user` data and cites the original.
   is converted. Vitamin A in IU and folate in plain µg are not: their µg RAE /
   µg DFE equivalents depend on the chemical form. These rows are kept as
   "other components" with a note, never silently guessed.
+- Only rows whose name *is* the nutrient ("Vitamin C", "Vit. K", "Vitamin D3")
+  are counted. A row named after a compound ("Magnesium Glycinate 2 g",
+  "D-Alpha-Tocopheryl Acetate 143 mg") declares the compound's mass, not the
+  nutrient's, so it is kept as an other component with a note.
+- **%DV cross-check.** When a label row also gives a % Daily Value, the amount is
+  checked against it, using both current and pre-2016 FDA Daily Values. If the
+  amount is more than 5× off from what the %DV implies, it is **not counted** and
+  is flagged on the food. This catches DSLD transcription errors seen in real
+  records, e.g. "Iodine 109 mg (70% DV)" where the label means 109 mcg. Counted
+  as-is, that would trigger a false upper-limit alert.
 - Ingredients that aren't standard nutrients (botanicals, creatine, probiotics…)
   are kept as other components and totalled per day.
 

@@ -76,7 +76,7 @@ def run_turn(
     The whole turn is committed at the end, so a failure leaves the conversation unchanged.
     """
     history = [{"role": m.role, "content": m.content} for m in conversation.messages]
-    tz = user.profile.timezone if user.profile else "UTC"
+    tz = (user.profile.timezone if user.profile else None) or "UTC"
     user_content = [
         {"type": "text", "text": f"<context>Today is {local_today(user).isoformat()} ({tz}).</context>"},
         {"type": "text", "text": text},

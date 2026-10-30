@@ -80,7 +80,7 @@ def test_dsld_ambiguous_units_are_not_guessed():
     assert "vitamin_a_ug" not in nutrients
     assert nutrients["folate_ug_dfe"][0] == 680
     names = {o["name"]: o for o in others}
-    assert "ambiguous" in names["Vitamin A"]["note"]
+    assert "chemical form" in names["Vitamin A"]["note"]
     assert names["Ashwagandha"]["amount"] == 300
 
 
@@ -157,3 +157,43 @@ def test_reimport_replaces_nutrients(sources, db_session):
 ])
 def test_guess_state(text, expected):
     assert guess_state(text) == expected
+
+
+def test_dsld_real_label_safeguards():
+    """Label 79532 has mg-for-mcg errors in DSLD and compound-named rows."""
+    from app.sources.nih_dsld import parse_label
+
+    nutrients, others, notes = parse_label(load_fixture("dsld_label_79532.json"))
+    assert nutrients["vitamin_c_mg"][0] == 158  # group "Vitamin C (unspecified)", name "Vitamin C"
+    assert nutrients["vitamin_k_ug"][0] == 65  # name "Vit. K"
+    assert nutrients["vitamin_d_ug"][0] == 25  # not double counted with the nested "Vitamin D3" row
+    # "Biotin 30 mg (10% DV)" and "Iodine 109 mg (70% DV)" contradict their own %DV: excluded and flagged.
+    assert "biotin_ug" not in nutrients and "iodine_ug" not in nutrients
+    assert any(n.startswith("Iodine: amount contradicts") for n in notes)
+    # Compound masses are not counted as the nutrient.
+    assert "vitamin_e_mg" not in nutrients
+    tocopheryl = next(o for o in others if o["name"] == "D-Alpha-Tocopheryl Acetate")
+    assert "compound" in tocopheryl["note"]
+
+
+@pytest.mark.parametrize("unit,expected", [("Gram(s)", 3.0), ("g", 3.0), ("mg", 0.003), ("Calorie(s)", None)])
+def test_unit_aliases(unit, expected):
+    from app.nutrients import BY_CODE, convert_amount
+
+    assert convert_amount(3, unit, BY_CODE["fiber_g"]) == (pytest.approx(expected) if expected else None)
+
+
+def test_plain_microgram_folate_is_refused_from_labels():
+    from app.nutrients import BY_CODE, convert_amount
+
+    assert convert_amount(400, "µg", BY_CODE["folate_ug_dfe"]) is None
+    assert convert_amount(400, "mcg DFE", BY_CODE["folate_ug_dfe"]) == 400
+    assert convert_amount(400, "UG", BY_CODE["folate_ug_dfe"], form_known=True) == 400  # FDC nutrient 435
+
+
+@respx.mock
+def test_upstream_error_message_is_surfaced(sources):
+    respx.get("https://api.nal.usda.gov/fdc/v1/foods/search").respond(
+        status_code=400, json={"error": "Invalid dataType value"})
+    with pytest.raises(SourceError, match="HTTP 400: Invalid dataType value"):
+        sources["usda_fdc"].search("oats")

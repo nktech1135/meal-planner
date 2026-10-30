@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import CookingYield, User
-from app.nutrients import Trust
+from app.nutrients import Trust, weakest
 from app.schemas import CalculateIn, DeriveIn, NutritionOut, YieldIn, YieldOut
 from app.security import current_user
 from app.services.access import get_food, get_recipe, get_yield, recipe_yields, visible
@@ -26,18 +26,26 @@ def list_yields(food_id: int, user: User = Depends(current_user), db: Session = 
 def create_yield(body: YieldIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     raw = get_food(db, user, body.raw_food_id)
     cooked = get_food(db, user, body.cooked_food_id) if body.cooked_food_id else None
-    factor = body.yield_factor
     notes = body.notes
-    if body.raw_weight_g and body.cooked_weight_g:
-        factor = body.cooked_weight_g / body.raw_weight_g
-        notes = (notes + " " if notes else "") + f"Measured: {body.raw_weight_g:g} g raw → {body.cooked_weight_g:g} g cooked."
-    if factor is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Give a yield factor or raw and cooked weights")
     trust = Trust.USER
     if body.basis == "derived":
+        # Computed here rather than accepted from the client, so the trust level reflects the source data.
         if cooked is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Derived yields need the cooked food")
-        trust = derive_yield(raw, cooked)["trust_level"]
+        try:
+            derived = derive_yield(raw, cooked)
+        except NutritionError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
+        factor = derived["yield_factor"]
+        trust = weakest([derived["trust_level"], Trust.USER if body.retention else None])
+        notes = (notes + " " if notes else "") + derived["method_note"]
+    elif body.raw_weight_g and body.cooked_weight_g:
+        factor = body.cooked_weight_g / body.raw_weight_g
+        notes = (notes + " " if notes else "") + f"Measured: {body.raw_weight_g:g} g raw → {body.cooked_weight_g:g} g cooked."
+    else:
+        factor = body.yield_factor
+    if factor is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Give a yield factor or raw and cooked weights")
     if body.basis == "published" and not body.citation:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Published yields need a citation")
     y = CookingYield(

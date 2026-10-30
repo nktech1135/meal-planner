@@ -14,9 +14,11 @@ router = APIRouter(prefix="/api/advisor", tags=["advisor"])
 
 
 def get_anthropic_client() -> anthropic.Anthropic:
-    key = get_settings().anthropic_api_key
-    # Without an explicit key the SDK falls back to ANTHROPIC_API_KEY / an `ant auth login` profile.
-    return anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
+    key = get_settings().anthropic_api_key  # from ANTHROPIC_API_KEY in the environment or .env
+    if not key:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            "The advisor isn't configured: set ANTHROPIC_API_KEY on the server")
+    return anthropic.Anthropic(api_key=key)
 
 
 def _conversation(db: Session, user: User, conversation_id: int) -> AdvisorConversation:

@@ -92,10 +92,33 @@ BY_EDAMAM = {n.edamam: n for n in NUTRIENTS if n.edamam}
 
 MACRO_CODES = ("energy_kcal", "protein_g", "fat_g", "carbs_g", "fiber_g", "sugars_g")
 
-# Unit conversion into our canonical units. Ambiguous conversions (vitamin A IU,
-# vitamin E IU, folate µg vs µg DFE) are deliberately absent: those values are kept
-# as unconverted "other" components rather than silently guessed.
-_MASS_TO_G = {"g": 1.0, "mg": 1e-3, "µg": 1e-6, "ug": 1e-6, "mcg": 1e-6}
+# Unit conversion into our canonical units. Ambiguous conversions (vitamin A in IU or
+# plain µg, folate in plain µg, vitamin E in IU) are refused: callers keep those values
+# as unconverted "other" components rather than silently guessing.
+_MASS_TO_G = {"g": 1.0, "mg": 1e-3, "µg": 1e-6}
+_UNIT_ALIASES = {
+    "gram": "g", "grams": "g", "gram(s)": "g",
+    "milligram": "mg", "milligrams": "mg", "milligram(s)": "mg",
+    "ug": "µg", "mcg": "µg", "microgram": "µg", "micrograms": "µg", "microgram(s)": "µg",
+    "cal": "kcal", "calorie": "kcal", "calories": "kcal", "calorie(s)": "kcal", "{calories}": "kcal",
+    "kilojoule": "kj", "kilojoules": "kj", "kilojoule(s)": "kj",
+    "mcg dfe": "µg dfe", "ug dfe": "µg dfe", "mcg rae": "µg rae", "ug rae": "µg rae",
+}
+# Nutrients whose amount depends on chemical form, with the unit that states the form.
+FORM_UNITS = {"folate_ug_dfe": "µg dfe", "vitamin_a_ug": "µg rae"}
+
+
+def normalize_unit(unit: str) -> str:
+    u = unit.strip().lower().replace("μ", "µ")
+    return _UNIT_ALIASES.get(u, u)
+
+
+def is_form_ambiguous(unit: str, nutrient: NutrientDef) -> bool:
+    """True when ``unit`` can't be converted without knowing the nutrient's chemical form."""
+    u = normalize_unit(unit)
+    if nutrient.code in FORM_UNITS:
+        return u != FORM_UNITS[nutrient.code]
+    return u == "iu" and nutrient.code != "vitamin_d_ug"
 
 
 def convert_amount(value: float, from_unit: str, nutrient: NutrientDef, form_known: bool = False) -> float | None:
@@ -104,22 +127,18 @@ def convert_amount(value: float, from_unit: str, nutrient: NutrientDef, form_kno
     ``form_known`` is true when the source identifies the nutrient form itself (an FDC
     nutrient number such as 435 "Folate, DFE"), so plain mass units are unambiguous.
     """
-    unit = from_unit.strip().lower().replace("μ", "µ")
-    target = nutrient.unit.lower()
+    unit, target = normalize_unit(from_unit), normalize_unit(nutrient.unit)
+    if nutrient.code in FORM_UNITS:
+        if unit == FORM_UNITS[nutrient.code]:
+            return value
+        if not form_known:
+            return None
+    if unit == "iu":
+        return value * 0.025 if nutrient.code == "vitamin_d_ug" else None  # 1 IU vitamin D = 0.025 µg
     if unit == target:
-        return value
-    if unit in ("kcal", "cal", "calories", "{calories}") and target == "kcal":
         return value
     if unit == "kj" and target == "kcal":
         return value / 4.184
-    if unit == "iu" and nutrient.code == "vitamin_d_ug":
-        return value * 0.025  # 1 IU vitamin D = 0.025 µg (unambiguous)
-    if unit in ("mcg dfe", "µg dfe", "ug dfe") and nutrient.code == "folate_ug_dfe":
-        return value
-    if unit in ("mcg rae", "µg rae", "ug rae") and nutrient.code == "vitamin_a_ug":
-        return value
     if unit in _MASS_TO_G and target in _MASS_TO_G:
-        if not form_known and nutrient.code in ("folate_ug_dfe", "vitamin_a_ug"):
-            return None  # plain µg is ambiguous for these (folic acid vs DFE, retinol vs carotenoids)
         return value * _MASS_TO_G[unit] / _MASS_TO_G[target]
     return None

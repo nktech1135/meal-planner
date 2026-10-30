@@ -11,7 +11,7 @@ from app.services.targets import compute_targets
 
 
 def user_tz(user: User) -> ZoneInfo:
-    return ZoneInfo(user.profile.timezone if user.profile else "UTC")
+    return ZoneInfo((user.profile.timezone if user.profile else None) or "UTC")
 
 
 def local_today(user: User) -> date:

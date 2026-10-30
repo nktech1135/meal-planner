@@ -46,15 +46,17 @@ class ProfileIn(BaseModel):
     activity_level: Literal["sedentary", "light", "moderate", "active", "very_active"] = "moderate"
     goal: Literal["lose", "maintain", "gain"] = "maintain"
     life_stage: Literal["none", "pregnant", "lactating"] = "none"
-    timezone: str = "UTC"
+    timezone: str | None = None
     health_notes: str = Field(default="", max_length=4000)
     target_overrides: dict[str, dict[str, float | None]] = {}
 
     @field_validator("timezone")
     @classmethod
-    def _tz(cls, v: str) -> str:
+    def _tz(cls, v: str | None) -> str | None:
         from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+        if v is None:
+            return None
         try:
             ZoneInfo(v)
         except (ZoneInfoNotFoundError, ValueError):

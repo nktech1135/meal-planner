@@ -170,3 +170,27 @@ def test_validation(user_client):
     assert user_client.put("/api/profile", json={"timezone": "Mars/Base"}).status_code == 422
     naive = user_client.post("/api/log", json={"food_id": 1, "quantity": 1, "consumed_at": "2026-01-01T12:00:00"})
     assert naive.status_code in (404, 422)
+
+
+def test_derived_yield_is_computed_server_side(user_client):
+    raw = create_food(user_client, nutrients={"protein_g": 22.5, "water_g": 74})
+    cooked = create_food(user_client, name="Chicken breast, roasted", state="cooked",
+                         nutrients={"protein_g": 31.0, "water_g": 65})
+    y = user_client.post("/api/yields", json={"raw_food_id": raw["id"], "cooked_food_id": cooked["id"],
+                                              "method": "roasted", "basis": "derived", "yield_factor": 0.99}).json()
+    assert y["yield_factor"] == pytest.approx(22.5 / 31.0, abs=1e-4)  # client value ignored
+    assert y["basis"] == "derived"
+
+
+def test_advisor_without_api_key_is_503(user_client, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "anthropic_api_key", None)
+    resp = user_client.post("/api/advisor/chat", json={"message": "hi"})
+    assert resp.status_code == 503 and "ANTHROPIC_API_KEY" in resp.json()["detail"]
+
+
+def test_timezone_unset_until_chosen(user_client):
+    assert user_client.get("/api/profile").json()["timezone"] is None
+    assert user_client.get("/api/summary/day").status_code == 200
+    assert user_client.put("/api/profile", json={"timezone": "UTC"}).json()["timezone"] == "UTC"
