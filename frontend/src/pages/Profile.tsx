@@ -20,6 +20,32 @@ const MAX_PINNED = 40;
 /** Always shown on Today anyway. */
 const CORE = ["energy_kcal", "protein_g", "fat_g", "carbs_g", "fiber_g"];
 
+function SearchSources({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const dbs = useQuery({ queryKey: ["food-databases"], queryFn: api.foodDatabases });
+  const installed = (dbs.data ?? []).filter((d) => d.records > 0);
+  if (installed.length < 2) return null; // nothing to choose between
+  return (
+    <section className="card stack" id="sources" aria-labelledby="sources-title">
+      <h2 id="sources-title">Food databases in search</h2>
+      <p className="muted small">Choose which reference databases appear when you search for foods. Your own foods always appear.</p>
+      <div className="stack-sm">
+        {installed.map((d) => (
+          <label key={d.source} className="checkbox">
+            <input
+              type="checkbox"
+              checked={!value.includes(d.source)}
+              onChange={(e) => onChange(e.target.checked ? value.filter((s) => s !== d.source) : [...value, d.source])}
+            />
+            <span>
+              {d.label} <span className="muted small">· {d.country} · {d.records.toLocaleString()} foods</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function PinnedNutrients({ defs, value, onChange }: { defs: NutrientDef[]; value: string[]; onChange: (v: string[]) => void }) {
   const categories: string[] = [];
   for (const d of defs) if (!categories.includes(d.category)) categories.push(d.category);
@@ -271,6 +297,7 @@ export default function ProfilePage() {
         </section>
 
         <PinnedNutrients defs={nutrientDefs} value={form.pinned_nutrients} onChange={(v) => set("pinned_nutrients", v)} />
+        <SearchSources value={form.hidden_sources ?? []} onChange={(v) => set("hidden_sources", v)} />
 
         <ErrorBox error={save.error} />
         <div className="row">

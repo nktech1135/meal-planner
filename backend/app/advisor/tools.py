@@ -170,6 +170,9 @@ def run_tool(db: Session, user: User, name: str, args: dict, conversation_id: in
         result = [_entry(user, e) for e in entries_between(db, user, start, end)]
     elif name == "search_foods":
         stmt = select(Food).where(visible(Food, user))
+        hidden = (user.profile.hidden_sources if user.profile else None) or []
+        if hidden:
+            stmt = stmt.where(Food.source.not_in(hidden))
         for term in args["query"].split():
             stmt = stmt.where(or_(Food.name.ilike(f"%{term}%"), Food.brand.ilike(f"%{term}%")))
         if args.get("kind") in ("food", "supplement"):

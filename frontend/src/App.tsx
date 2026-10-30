@@ -17,6 +17,7 @@ import RecipeEditPage from "./pages/RecipeEdit";
 import AdvisorPage from "./pages/Advisor";
 import ProfilePage from "./pages/Profile";
 import AccountPage from "./pages/Account";
+import CreditsPage from "./pages/Credits";
 import SettingsPage from "./pages/Settings";
 import AdminDataPage from "./pages/AdminData";
 import AdminUsersPage from "./pages/AdminUsers";
@@ -83,6 +84,7 @@ export default function App() {
           <Route path="/advisor/:id" element={<AdvisorPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/about/data" element={<CreditsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/data" element={<AdminDataPage />} />
           <Route path="/settings/users" element={<AdminUsersPage />} />

@@ -69,6 +69,9 @@ export function MeMenu({ user, onSignOut }: { user: User; onSignOut: () => void 
           <NavLink to="/account" className={link}>
             Account
           </NavLink>
+          <NavLink to="/about/data" className={link}>
+            Data sources & credits
+          </NavLink>
           {user.is_admin && (
             <NavLink to="/settings" className={link}>
               Settings (admin)

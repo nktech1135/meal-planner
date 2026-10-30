@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from app.routers.log import recalculate
 from app.schemas import FoodIn, FoodOut, FoodSummary, NutrientDefOut
 from app.security import current_user
 from app.services.access import get_food, visible
+from app.services.datasets import DATASETS
 from app.services.forms import options_for
 from app.sources.base import normalize_barcode
 
@@ -51,6 +52,9 @@ def search_foods(
     db: Session = Depends(get_db),
 ):
     stmt = select(Food).where(Food.owner_id == user.id if mine else visible(Food, user))
+    hidden = (user.profile.hidden_sources if user.profile else None) or []
+    if hidden and not mine:
+        stmt = stmt.where(Food.source.not_in(hidden))
     terms = q.lower().split()
     for term in terms:
         like = f"%{term}%"
@@ -222,3 +226,24 @@ def set_form_choice(food_id: int, body: FormChoiceIn, user: User = Depends(curre
         recalculate(db, user, entry)
     db.commit()
     return {"forms": _form_rows(db, user, food), "recalculated_entries": len(entries)}
+
+
+@router.get("/datasets")
+def food_databases(_: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Reference databases this server can hold, with what's imported and the licence/attribution
+    each requires (shown on the credits page and the search preferences)."""
+    counts = dict(db.execute(select(Food.source, func.count(Food.id)).where(Food.owner_id.is_(None))
+                             .group_by(Food.source)).all())
+    by_source: dict[str, dict] = {}
+    for ds in DATASETS:
+        source = ds.source or ("usda_fdc" if ds.root_key else None)
+        if source is None:
+            continue
+        row = by_source.setdefault(source, {
+            "source": source, "label": "USDA FoodData Central" if source == "usda_fdc" else ds.label,
+            "country": ds.country, "licence": ds.licence, "licence_url": ds.licence_url,
+            "attribution": ds.attribution or "U.S. Department of Agriculture, Agricultural Research Service. "
+                                               "FoodData Central.",
+            "records": counts.get(source, 0)})
+        row["records"] = counts.get(source, 0)
+    return sorted(by_source.values(), key=lambda r: (r["country"] != "United States", r["country"], r["label"]))

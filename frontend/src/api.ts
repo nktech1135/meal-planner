@@ -1,4 +1,5 @@
 import type {
+  FoodDatabase,
   BarcodeResult,
   AccountUpdate,
   AdminUser,
@@ -162,6 +163,7 @@ export const api = {
 
   // foods
   nutrients: () => get<NutrientDef[]>("/api/nutrients"),
+  foodDatabases: () => get<FoodDatabase[]>("/api/datasets"),
   foods: (q: string, opts: { kind?: string; mine?: boolean; limit?: number } = {}) =>
     get<FoodSummary[]>(`/api/foods${qs({ q, ...opts })}`),
   food: (id: number) => get<Food>(`/api/foods/${id}`),

@@ -51,6 +51,7 @@ class ProfileIn(BaseModel):
     target_overrides: dict[str, dict[str, float | None]] = {}
     pinned_nutrients: list[str] = Field(default=[], max_length=40)
     unit_system: Literal["metric", "imperial"] = "metric"
+    hidden_sources: list[str] = Field(default=[], max_length=30)
 
     @field_validator("pinned_nutrients")
     @classmethod

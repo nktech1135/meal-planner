@@ -152,3 +152,28 @@ def test_search_ranking(user_client, db_session, fake_usda):
     names = [f["name"] for f in user_client.get("/api/foods", params={"q": "chicken"}).json()]
     assert names[0] == "My chicken stir fry"  # your own foods first
     assert names[1] == "Chicken, breast, meat only, raw"  # then shortest name starting with the query
+
+
+def test_hidden_sources_filter_search(user_client, db_session):
+    from app.sources.base import ExternalFood
+    from app.sources.registry import bulk_upsert_external_foods
+
+    def food(source, sid, name):
+        return ExternalFood(source=source, source_id=sid, name=name, trust_level="analytical",
+                            nutrients={"energy_kcal": (52.0, None)})
+    bulk_upsert_external_foods(db_session, [food("ciqual", "1", "Apple, raw (FR)")])
+    bulk_upsert_external_foods(db_session, [food("afcd", "F1", "Apple, raw (AU)")])
+    db_session.commit()
+    names = lambda: sorted(f["name"] for f in user_client.get("/api/foods", params={"q": "apple"}).json())  # noqa: E731
+    assert names() == ["Apple, raw (AU)", "Apple, raw (FR)"]
+    profile = user_client.get("/api/profile").json()
+    user_client.put("/api/profile", json={**profile, "hidden_sources": ["ciqual"]})
+    assert names() == ["Apple, raw (AU)"]
+
+
+def test_food_database_credits(user_client, db_session):
+    rows = {r["source"]: r for r in user_client.get("/api/datasets").json()}
+    assert rows["usda_fdc"]["country"] == "United States"
+    assert rows["cofid"]["licence"] == "Open Government Licence v3.0"
+    assert "Open Government Licence – Canada" in rows["cnf"]["attribution"]
+    assert all(r["records"] == 0 for r in rows.values())

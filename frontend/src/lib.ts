@@ -160,6 +160,12 @@ export const SOURCE_NAMES: Record<string, string> = {
   nutritionix: "Nutritionix",
   edamam: "Edamam",
   open_food_facts: "Open Food Facts",
+  afcd: "Australian Food Composition Database (FSANZ)",
+  cofid: "UK Composition of Foods Integrated Dataset (CoFID)",
+  bls: "German Nutrient Database (BLS, Max Rubner-Institut)",
+  cnf: "Canadian Nutrient File (Health Canada)",
+  ciqual: "French Food Composition Table (Ciqual, ANSES)",
+  matvaretabellen: "Norwegian Food Composition Table (Mattilsynet)",
 };
 
 export const parseNum = (s: string): number | null => {

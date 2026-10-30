@@ -58,6 +58,8 @@ class Profile(Base):
     # Nutrients always shown on the condensed day view, besides energy, macros and anything flagged.
     pinned_nutrients: Mapped[list] = mapped_column(JSON, default=list)
     unit_system: Mapped[str] = mapped_column(String(10), default="metric")  # metric | imperial (display only)
+    # Food databases (Food.source keys) this user doesn't want in search results, e.g. ["ciqual", "bls"].
+    hidden_sources: Mapped[list] = mapped_column(JSON, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     user: Mapped[User] = relationship(back_populates="profile")

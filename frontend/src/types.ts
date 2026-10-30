@@ -32,6 +32,7 @@ export interface Profile {
   target_overrides: Record<string, TargetBound>;
   pinned_nutrients: string[]; // nutrient codes always shown on Today
   unit_system: UnitSystem;
+  hidden_sources?: string[];
 }
 
 export type UnitSystem = "metric" | "imperial";
@@ -516,6 +517,21 @@ export interface Dataset {
   update_available: boolean;
   records: number;
   last_job: ImportJob | null;
+  country: string;
+  licence: string;
+  licence_url: string | null;
+  attribution: string | null;
+}
+
+/** A reference food database (credits page and search preferences). */
+export interface FoodDatabase {
+  source: string;
+  label: string;
+  country: string;
+  licence: string;
+  licence_url: string | null;
+  attribution: string;
+  records: number;
 }
 
 // --- users (admin) and the signed-in account -------------------------------------

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "../api";
 import { useAuth } from "../auth";
@@ -6,7 +7,10 @@ import { AdminFrame } from "../components/AdminTabs";
 import { ErrorBox, Loading, ResultNote } from "../components/common";
 import type { Dataset, ImportJob } from "../types";
 
-const ORDER = ["fdc_sr_legacy", "fdc_foundation", "fdc_survey", "usda_retention"];
+const ORDER = [
+  "fdc_sr_legacy", "fdc_foundation", "fdc_survey", "usda_retention", "fdc_branded",
+  "intl_cofid", "intl_cnf", "intl_afcd", "intl_bls", "intl_ciqual", "intl_matvaretabellen",
+];
 const active = (j: ImportJob | null | undefined) => !!j && (j.status === "queued" || j.status === "running");
 
 /** Polls a queued/running job every 1.5 s until it finishes. */
@@ -90,7 +94,18 @@ function DatasetCard({ ds, busy }: { ds: Dataset; busy: boolean }) {
         <dd>{ds.available_release ?? "unknown"}</dd>
         <dt>Download</dt>
         <dd>{ds.size}</dd>
+        <dt>Licence</dt>
+        <dd>
+          {ds.licence_url ? (
+            <a href={ds.licence_url} target="_blank" rel="noopener noreferrer">
+              {ds.licence} ↗
+            </a>
+          ) : (
+            ds.licence
+          )}
+        </dd>
       </dl>
+      {ds.attribution && <p className="muted small">{ds.attribution}</p>}
       {running && ds.last_job && <JobProgress job={ds.last_job} />}
       {start.data && !running && start.data.id !== ds.last_job?.id && <JobProgress job={start.data} />}
       {lastFinished?.status === "failed" && <ResultNote ok={false}>Last import failed: {lastFinished.message}</ResultNote>}
@@ -138,8 +153,9 @@ export default function AdminDataPage() {
     <AdminFrame
       intro={
         <p className="muted">
-          Public-domain reference data from the USDA, imported into this server's food database so everyone can search it offline. Imports run in
-          the background; you can leave this page.
+          Reference food databases from government and research agencies, imported into this server so everyone can search them offline.
+          Imports run in the background; you can leave this page. Each database's licence and required credit are shown on its card and on
+          the <Link to="/about/data">Data sources & credits</Link> page.
         </p>
       }
     >
@@ -150,8 +166,19 @@ export default function AdminDataPage() {
       </div>
       {datasets.isLoading && <Loading what="Checking datasets" />}
       <ErrorBox error={datasets.error} />
+      <h2 className="h-sm">United States</h2>
       <ul className="plain-list cards dataset-grid">
-        {list.map((d) => (
+        {list.filter((d) => d.country === "United States").map((d) => (
+          <DatasetCard key={d.key} ds={d} busy={anyRunning} />
+        ))}
+      </ul>
+      <h2 className="h-sm">Other countries</h2>
+      <p className="muted small">
+        Free national databases with open licences. They add foods sold or cooked in those countries; people who don't want them in search
+        results can hide them in their Profile.
+      </p>
+      <ul className="plain-list cards dataset-grid">
+        {list.filter((d) => d.country !== "United States").map((d) => (
           <DatasetCard key={d.key} ds={d} busy={anyRunning} />
         ))}
       </ul>
