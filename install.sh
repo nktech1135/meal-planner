@@ -620,6 +620,7 @@ cmd_upgrade() {
     fi
     if [[ -n "$old_rel" ]]; then
       switch_to "$old_rel"
+      rm -rf "$new_rel"
       service_start
       health_check || warn "the previous release did not come back up either; see: journalctl -u mealplan -n 50"
       die "rolled back to ${old_rev:0:12}. Database backup from before the upgrade: ${backup:-none}"
