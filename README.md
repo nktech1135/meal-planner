@@ -212,7 +212,7 @@ credentials (e.g. a deploy token).
 |---|---|
 | Nutrient math, conversions, targets, API, auth, privacy | Covered by the backend test suite |
 | USDA FDC and NIH DSLD adapters | Run live end-to-end; tests use recorded responses (2026-10-30) |
-| Web UI | Builds with no type errors; smoke-tested against the API through the dev proxy |
+| Web UI | Builds with no type errors; Playwright suite (58 tests) on the built app, incl. axe accessibility checks in light and dark; not yet tried with a real screen reader |
 | Nutritionix and Edamam adapters | Written to the vendors' published API docs; need a live check with real keys |
 | AI advisor | Tool loop tested with a fake client; needs a live check with an API key |
 | Installer (`install.sh`) | Tested in unprivileged test mode (SQLite, no root): install (from a file and piped), upgrade, rollback after a failed migration and after a failed start (schema downgraded), uninstall, reinstall reusing data, purge. The generated systemd unit passes `systemd-analyze verify`. Per-user mode run for real without root (in a scratch home, as a background process): install, restart, upgrade, uninstall, purge; its systemd user unit passes `systemd-analyze --user verify` but hasn't been started. Not yet run as root: apt packages, the system user, PostgreSQL setup, starting under systemd, Caddy |

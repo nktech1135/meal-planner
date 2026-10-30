@@ -1,7 +1,7 @@
 """Open Food Facts (https://world.openfoodfacts.org/). Free, crowdsourced (ODbL).
 
 Anyone can edit these records and values are not checked against a lab or the
-label, so this source is OFF unless ENABLE_UNVERIFIED_SOURCES=true and every record
+label, so this source is OFF unless an admin allows crowdsourced data in Settings, and every record
 is stored with trust level "unverified".
 """
 
@@ -44,7 +44,7 @@ class OpenFoodFacts(DataSource):
 
     @property
     def disabled_reason(self) -> str | None:
-        return None if self.enabled else "Unverified source; set ENABLE_UNVERIFIED_SOURCES=true to allow"
+        return None if self.enabled else "Unverified source; an admin can allow crowdsourced data in Settings → App settings"
 
     @property
     def _headers(self) -> dict:

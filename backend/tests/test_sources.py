@@ -114,7 +114,7 @@ def test_edamam_nutrients(sources):
 def test_unverified_source_disabled_by_default(sources):
     off = sources["open_food_facts"]
     assert not off.enabled
-    assert "ENABLE_UNVERIFIED_SOURCES" in off.disabled_reason
+    assert "Settings" in off.disabled_reason
 
 
 @respx.mock
