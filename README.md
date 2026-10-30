@@ -161,9 +161,10 @@ The installer:
 - unpacks the web interface that CI built and published to the `web-builds`
   branch after the tests passed, so the server needs no Node.js and does no
   building. If the newest commit isn't published yet, it installs the newest
-  one that is. For a commit with no published build (a fork, another branch,
-  `upgrade --ref`), it downloads a pinned Node.js and builds the interface
-  itself, which needs about 500 MB of memory;
+  one that is. Installs from a local copy, mirror or fork also use the
+  official builds for the commits they share. The whole install runs on a
+  machine with less than 1 GB of memory. Building the interface on the
+  server instead needs about 1 GB and only happens with `--build-web`;
 - puts the app in `/opt/mealplan/releases/<commit>`, runs migrations, and
   starts the `mealplan` systemd service with a hardened unit (read-only system,
   no capabilities);
