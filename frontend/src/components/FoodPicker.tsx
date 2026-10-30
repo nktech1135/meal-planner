@@ -7,6 +7,7 @@ import { BarcodeScanner } from "./BarcodeScanner";
 import { MacroLine } from "./common";
 import { TrustBadge } from "./TrustBadge";
 import { useAnnounceWhen, useReturnFocus } from "./a11y";
+import { useActingFor } from "./actingFor";
 
 function useDebounced<T>(value: T, ms = 250): T {
   const [v, setV] = useState(value);
@@ -35,6 +36,10 @@ export function FoodPicker({
   /** Shown between the search box and the database results while searching. */
   beforeResults?: ReactNode;
 }) {
+  // Planning for someone else: search as them, and leave out the barcode lookup, which imports foods
+  // into your own list (they couldn't see them).
+  const actingFor = useActingFor();
+  const forUser = actingFor?.id ?? null;
   const [q, setQ] = useState("");
   const [scanning, setScanning] = useState(false);
   const dq = useDebounced(q);
@@ -42,8 +47,8 @@ export function FoodPicker({
     onQueryChange?.(dq.trim());
   }, [dq, onQueryChange]);
   const results = useQuery({
-    queryKey: ["foods", dq, kind ?? ""],
-    queryFn: () => api.foods(dq, { kind, limit: 25 }),
+    queryKey: ["foods", dq, kind ?? "", forUser],
+    queryFn: () => api.foods(dq, { kind, limit: 25, for_user: forUser }),
     enabled: dq.trim().length >= 1,
   });
   const items = (results.data ?? []).filter((f) => f.id !== excludeId);
@@ -57,11 +62,19 @@ export function FoodPicker({
     <div className="picker">
       <div className="picker-search">
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label="Search foods" />
-        <button ref={scanButton} type="button" className="btn btn-sm" aria-expanded={scanning} onClick={() => setScanning((s) => !s)}>
-          Scan barcode
-        </button>
+        {!actingFor && (
+          <button ref={scanButton} type="button" className="btn btn-sm" aria-expanded={scanning} onClick={() => setScanning((s) => !s)}>
+            Scan barcode
+          </button>
+        )}
       </div>
-      {scanning && (
+      {actingFor && (
+        <p className="muted small">
+          Showing the shared food database and {actingFor.name}'s own foods. Your private foods aren't offered, since {actingFor.name} couldn't see
+          them.
+        </p>
+      )}
+      {scanning && !actingFor && (
         <BarcodeScanner
           onClose={() => setScanning(false)}
           onPick={(f) => {
@@ -75,7 +88,11 @@ export function FoodPicker({
         <ul className="pick-list" aria-label="Food database results">
           {results.isLoading && <li className="muted">Searching…</li>}
           {!results.isLoading && items.length === 0 && (
-            <li className="muted">No matches. Import from an online source or add it manually under Foods.</li>
+            <li className="muted">
+              {actingFor
+                ? `No matches among the shared foods or ${actingFor.name}'s own. ${actingFor.name} can add it under Foods.`
+                : "No matches. Import from an online source or add it manually under Foods."}
+            </li>
           )}
           {items.map((f) => (
             <li key={f.id}>

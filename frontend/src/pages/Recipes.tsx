@@ -6,7 +6,7 @@ import { TrustBadge } from "../components/TrustBadge";
 import { fmtNum } from "../lib";
 
 export default function RecipesPage() {
-  const recipes = useQuery({ queryKey: ["recipes"], queryFn: api.recipes });
+  const recipes = useQuery({ queryKey: ["recipes"], queryFn: () => api.recipes() });
   return (
     <div className="stack">
       <div className="page-head">

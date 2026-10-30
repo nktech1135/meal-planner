@@ -6,6 +6,7 @@ import { canWeighCooked, fmtNum, recipeUnitOptions, unitOptions, type UnitOption
 import type { Food, Recipe, WeighedState } from "../types";
 import { Field } from "./common";
 import { VisuallyHidden } from "./a11y";
+import { useActingFor } from "./actingFor";
 
 /** Keep a value that isn't (or is no longer) offered visible in the select instead of silently switching. */
 export function withCurrent(opts: UnitOption[], unit: string): UnitOption[] {
@@ -33,9 +34,11 @@ export function WeighedFields({
   onYield: (id: number | null) => void;
 }) {
   const name = useId();
+  const actingFor = useActingFor();
+  const forUser = actingFor?.id ?? null;
   const yields = useQuery({
-    queryKey: ["yields", food.id],
-    queryFn: () => api.yields(food.id),
+    queryKey: ["yields", food.id, forUser],
+    queryFn: () => api.yields(food.id, forUser),
     enabled: weighed === "cooked",
   });
   if (!canWeighCooked(food)) return null;
@@ -54,7 +57,13 @@ export function WeighedFields({
         <Field label="Cooking yield" hint="Converts cooked weight back to raw weight for the nutrient calculation.">
           {yields.data && yields.data.length === 0 ? (
             <p className="alert alert-warn">
-              No cooking yields for this food yet. <Link to={`/foods/${food.id}`}>Add one on the food page</Link> (weigh it raw and cooked once).
+              {actingFor ? (
+                <>No cooking yields for this food that {actingFor.name} can use yet. They can add one on the food's page.</>
+              ) : (
+                <>
+                  No cooking yields for this food yet. <Link to={`/foods/${food.id}`}>Add one on the food page</Link> (weigh it raw and cooked once).
+                </>
+              )}
             </p>
           ) : (
             <select value={yieldId ?? ""} onChange={(e) => onYield(e.target.value ? Number(e.target.value) : null)} required>

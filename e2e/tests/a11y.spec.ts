@@ -15,7 +15,7 @@ const STRUCTURE = ["page-has-heading-one", "landmark-one-main", "region", "headi
 const BASE = `http://127.0.0.1:${process.env.E2E_PORT ?? 8799}`;
 const tag = Math.random().toString(36).slice(2, 6);
 
-type Seed = { oats: any; yogurt: any; chicken: any; supp: any; recipe: any; meal: any };
+type Seed = { oats: any; yogurt: any; chicken: any; supp: any; recipe: any; meal: any; sharer: any };
 let seed: Seed;
 
 async function seedData(req: APIRequestContext): Promise<Seed> {
@@ -59,7 +59,18 @@ async function seedData(req: APIRequestContext): Promise<Seed> {
     ],
   });
   const meal = await api(req, "POST", "/api/saved-meals/from-log", { name: `Usual breakfast ${tag}`, date: t, meal: "breakfast" });
-  return { oats, yogurt, chicken, supp, recipe, meal };
+
+  // Someone who shares their plan with the admin (who can edit it), and whom the admin shares with.
+  const password = `sharer password ${tag}`;
+  const { user: sharer } = await api(req, "POST", "/api/admin/users", { email: `sharer-${tag}@example.com`, display_name: `Sam ${tag}`, password });
+  const other = await pwRequest.newContext({ baseURL: BASE });
+  await api(other, "POST", "/api/auth/login", { email: sharer.email, password });
+  const bread = await api(other, "POST", "/api/foods", { name: `Sam's bread ${tag}`, citation: "a11y test", nutrients: { energy_kcal: 250, protein_g: 9 } });
+  await api(other, "POST", "/api/plan", { date: t, meal: "lunch", food_id: bread.id, quantity: 80, unit: "g" });
+  await api(other, "PUT", "/api/plan-shares", { email: "admin@example.com", can_edit: true });
+  await api(req, "PUT", "/api/plan-shares", { email: sharer.email, can_edit: false });
+  await other.dispose();
+  return { oats, yogurt, chicken, supp, recipe, meal, sharer };
 }
 
 test.beforeAll(async () => {
@@ -129,7 +140,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     test("phone-width layouts pass axe", async ({ page }) => {
       await page.setViewportSize({ width: 412, height: 915 });
-      for (const path of ["/", "/log", "/plan", "/trends?days=7", "/advisor", "/foods", "/settings", `/supplements/check?food=${seed.supp.id}`]) {
+      for (const path of ["/", "/log", "/plan", "/trends?days=7", "/advisor", "/foods", "/settings", `/supplements/check?food=${seed.supp.id}`, `/plan?of=${seed.sharer.id}`]) {
         await test.step(path, async () => {
           await page.goto(path);
           await settle(page);
@@ -222,6 +233,48 @@ for (const scheme of ["light", "dark"] as const) {
         await day.getByRole("button", { name: "+ Add to today" }).click();
         await expect(day.getByRole("form", { name: /^Add to/ })).toBeVisible();
         await audit(page, "add-to-plan open");
+      });
+      await test.step("plan viewed as someone else, adding to it", async () => {
+        await page.goto(`/plan?of=${seed.sharer.id}`);
+        await settle(page);
+        await expect(page.getByRole("note", { name: "Whose plan" })).toBeVisible();
+        const day = page.locator(".plan-day.is-today");
+        await day.getByRole("button", { name: "+ Add to today" }).click();
+        await day.getByRole("searchbox", { name: "Search foods" }).fill("bread");
+        await expect(day.locator(".pick-item").first()).toBeVisible();
+        await page.waitForLoadState("networkidle");
+        await audit(page, "plan of someone else");
+      });
+      await test.step("shopping list of someone else", async () => {
+        await page.goto(`/plan/shopping?of=${seed.sharer.id}`);
+        await settle(page);
+        await audit(page, "shopping list of someone else");
+      });
+      await test.step("sharing section open", async () => {
+        await page.goto("/plan");
+        await settle(page);
+        await page.getByText("Share your plan").click();
+        await expect(page.getByRole("heading", { name: "Plans shared with you" })).toBeVisible();
+        const form = page.getByRole("form", { name: "Share your plan" });
+        await form.getByLabel("Share with (email)").fill("nobody-at-all@example.com");
+        await form.getByRole("button", { name: "Share" }).click();
+        await expect(form.getByLabel("Share with (email)")).toHaveAttribute("aria-invalid", "true");
+        await audit(page, "sharing section open");
+      });
+      await test.step("add-user form with a password, plan access open", async () => {
+        await page.goto("/settings/users");
+        await settle(page);
+        const form = page.getByRole("region", { name: "Add a user" });
+        await form.getByLabel("Set a password now").check();
+        await form.getByLabel("Email").fill(`nobody-${tag}@example.com`);
+        await form.getByLabel("Password", { exact: true }).fill("first password 1");
+        await form.getByLabel("Confirm password").fill("other password 2");
+        await form.getByRole("button", { name: "Add user" }).click();
+        await expect(form.getByLabel("Confirm password")).toHaveAttribute("aria-invalid", "true");
+        await page.locator("li.user-row").filter({ hasText: seed.sharer.email }).getByText("Plan access").click();
+        await expect(page.getByRole("heading", { name: `Who can see Sam ${tag}'s plan` })).toBeVisible();
+        await page.waitForLoadState("networkidle");
+        await audit(page, "add-user form with password");
       });
       await test.step("chart tables open", async () => {
         await page.goto("/trends?days=30");

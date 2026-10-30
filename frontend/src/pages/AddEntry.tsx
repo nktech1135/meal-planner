@@ -81,7 +81,7 @@ export default function AddEntryPage() {
   const onQueryChange = useCallback((q: string) => setSearchQ(q), []);
 
   const food = useQuery({ queryKey: ["food", picked?.id], queryFn: () => api.food(picked!.id), enabled: !!picked });
-  const recipes = useQuery({ queryKey: ["recipes"], queryFn: api.recipes, enabled: mode === "recipe" });
+  const recipes = useQuery({ queryKey: ["recipes"], queryFn: () => api.recipes(), enabled: mode === "recipe" });
   const recipe = recipes.data?.find((r) => r.id === recipeId) ?? null;
   const showSuggestions = mode === "food" && !picked;
   const suggestions = useQuery({

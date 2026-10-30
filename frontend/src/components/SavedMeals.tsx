@@ -244,7 +244,7 @@ function SavedMealCard({ meal, logMeal, when }: { meal: SavedMeal; logMeal: Meal
 
 /** Saved meals with one-click logging. ``logMeal`` "" means each meal's own default. */
 export function SavedMeals({ logMeal, when }: { logMeal: Meal | ""; when: string }) {
-  const meals = useQuery({ queryKey: ["saved-meals"], queryFn: api.savedMeals });
+  const meals = useQuery({ queryKey: ["saved-meals"], queryFn: () => api.savedMeals() });
   if (meals.isLoading) return <Loading />;
   return (
     <div className="stack">

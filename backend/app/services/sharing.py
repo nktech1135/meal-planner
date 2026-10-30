@@ -44,7 +44,7 @@ def person(user: User) -> dict:
 
 def shares_of(db: Session, user: User) -> dict:
     granted = db.execute(select(PlanShare, User).join(User, User.id == PlanShare.member_id)
-                         .where(PlanShare.owner_id == user.id).order_by(User.email)).all()
+                         .where(PlanShare.owner_id == user.id, User.is_active).order_by(User.email)).all()
     received = db.execute(select(PlanShare, User).join(User, User.id == PlanShare.owner_id)
                           .where(PlanShare.member_id == user.id, User.is_active).order_by(User.email)).all()
     return {

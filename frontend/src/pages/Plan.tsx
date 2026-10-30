@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
@@ -7,14 +7,25 @@ import { ErrorBox, Field, Loading, MacroLine } from "../components/common";
 import { FoodPicker } from "../components/FoodPicker";
 import { TrustBadge } from "../components/TrustBadge";
 import { addDays, basisLabel, fmtDay, fmtNum, fmtShortDate, mealLabel, mondayOf, nutrientName, parseNum, todayISO, unitText, useMedia, useNutrients } from "../lib";
-import { MEALS, type FoodSummary, type Meal, type PlanDay, type PlanItem, type PlanItemUpdate, type WeighedState } from "../types";
-import { Button, focusSoon, rescueFocus, tabPanelProps, TabList, useAnnounce, useAnnounceText, useReturnFocus, VisuallyHidden } from "../components/a11y";
+import { MEALS, type FoodSummary, type Meal, type PlanDay, type PlanItem, type PlanItemUpdate, type PlanPerson, type WeighedState } from "../types";
+import { Button, focusSoon, rescueFocus, tabPanelProps, TabList, titleText, useAnnounce, useAnnounceText, useReturnFocus, VisuallyHidden } from "../components/a11y";
+import { ActingForProvider, useActingFor } from "../components/actingFor";
+import { PlanSharing } from "../components/PlanSharing";
+import { useAuth } from "../auth";
 
 const ORIGIN: Record<string, string | null> = { manual: null, advisor: "from advisor", copy: "copied", saved_meal: "saved meal" };
 
 function invalidateAfterLog(qc: QueryClient) {
   for (const key of ["plan", "day", "suggestions", "trends", "range", "shopping"]) qc.invalidateQueries({ queryKey: [key] });
 }
+
+/**
+ * Whose plan is shown and what you may do with it. `of` is the owner's id when it's a plan someone
+ * shared with you (null for your own). Editing needs an edit share; logging is only ever the owner's.
+ */
+type PlanAccess = { of: number | null; owner: PlanPerson | null; canEdit: boolean; canLog: boolean };
+const PlanAccessContext = createContext<PlanAccess>({ of: null, owner: null, canEdit: true, canLog: true });
+const usePlanAccess = () => useContext(PlanAccessContext);
 
 const longDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
 
@@ -23,6 +34,9 @@ type AddMode = "food" | "recipe" | "saved";
 /** Add a food, recipe or saved meal to one day of the plan. */
 function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Meal; onDone: (msg: string) => void }) {
   const qc = useQueryClient();
+  const { of } = usePlanAccess();
+  const actingFor = useActingFor();
+  const forUser = actingFor?.id ?? null;
   const [mode, setMode] = useState<AddMode>("food");
   const [meal, setMeal] = useState<Meal>(defaultMeal);
   const [picked, setPicked] = useState<FoodSummary | null>(null);
@@ -34,9 +48,9 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
   const [weighed, setWeighed] = useState<WeighedState>("as_is");
   const [yieldId, setYieldId] = useState<number | null>(null);
   const [note, setNote] = useState("");
-  const food = useQuery({ queryKey: ["food", picked?.id], queryFn: () => api.food(picked!.id), enabled: !!picked });
-  const recipes = useQuery({ queryKey: ["recipes"], queryFn: api.recipes, enabled: mode === "recipe" });
-  const saved = useQuery({ queryKey: ["saved-meals"], queryFn: api.savedMeals, enabled: mode === "saved" });
+  const food = useQuery({ queryKey: ["food", picked?.id, forUser], queryFn: () => api.food(picked!.id, forUser), enabled: !!picked });
+  const recipes = useQuery({ queryKey: ["recipes", forUser], queryFn: () => api.recipes(forUser), enabled: mode === "recipe" });
+  const saved = useQuery({ queryKey: ["saved-meals", forUser], queryFn: () => api.savedMeals(forUser), enabled: mode === "saved" });
   const recipe = recipes.data?.find((r) => r.id === recipeId) ?? null;
   const qty = parseNum(quantity);
   const selectedRef = useRef<HTMLDivElement>(null);
@@ -44,7 +58,7 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
   const add = useMutation({
     mutationFn: async () => {
       if (mode === "saved") {
-        const items = await api.planSavedMeal(savedId!, date, savedMeal || null);
+        const items = await api.planSavedMeal(savedId!, date, savedMeal || null, of);
         return `Added ${items.length} item${items.length === 1 ? "" : "s"} from the saved meal.`;
       }
       const item = await api.addPlanItem({
@@ -57,7 +71,7 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
         weighed_state: mode === "food" ? weighed : "as_is",
         yield_id: mode === "food" && weighed === "cooked" ? yieldId : null,
         note: note.trim(),
-      });
+      }, of);
       return `Added ${item.label}.`;
     },
     onSuccess: (msg) => {
@@ -170,8 +184,17 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
       )}
       {mode === "recipe" && recipes.data?.length === 0 && (
         <p className="muted small">
-          No recipes yet. <Link to="/recipes/new">Create one</Link>.
+          {actingFor ? (
+            `${actingFor.name} has no recipes yet.`
+          ) : (
+            <>
+              No recipes yet. <Link to="/recipes/new">Create one</Link>.
+            </>
+          )}
         </p>
+      )}
+      {mode === "recipe" && actingFor && recipes.data && recipes.data.length > 0 && (
+        <p className="muted small">These are {actingFor.name}'s recipes.</p>
       )}
 
       {mode === "saved" && (
@@ -186,7 +209,11 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
           </select>
         </Field>
       )}
-      {mode === "saved" && saved.data?.length === 0 && <p className="muted small">No saved meals yet. Save one from a meal on the Today page.</p>}
+      {mode === "saved" && saved.data?.length === 0 && (
+        <p className="muted small">
+          {actingFor ? `${actingFor.name} has no saved meals yet.` : "No saved meals yet. Save one from a meal on the Today page."}
+        </p>
+      )}
 
       {((mode === "food" && food.data) || (mode === "recipe" && recipe)) && (
         <>
@@ -231,8 +258,9 @@ function AddItem({ date, defaultMeal, onDone }: { date: string; defaultMeal: Mea
 
 function ItemEditor({ item, onDone }: { item: PlanItem; onDone: () => void }) {
   const qc = useQueryClient();
-  const food = useQuery({ queryKey: ["food", item.food_id], queryFn: () => api.food(item.food_id!), enabled: !!item.food_id });
-  const recipe = useQuery({ queryKey: ["recipe", item.recipe_id], queryFn: () => api.recipe(item.recipe_id!), enabled: !!item.recipe_id });
+  const { of } = usePlanAccess();
+  const food = useQuery({ queryKey: ["food", item.food_id, of], queryFn: () => api.food(item.food_id!, of), enabled: !!item.food_id });
+  const recipe = useQuery({ queryKey: ["recipe", item.recipe_id, of], queryFn: () => api.recipe(item.recipe_id!, of), enabled: !!item.recipe_id });
   const [quantity, setQuantity] = useState(String(item.quantity));
   const [unit, setUnit] = useState(item.unit);
   const [weighed, setWeighed] = useState<WeighedState>(item.weighed_state);
@@ -252,7 +280,7 @@ function ItemEditor({ item, onDone }: { item: PlanItem; onDone: () => void }) {
   if (note !== item.note) changes.note = note;
   const invalid = !q || q <= 0 || (weighed === "cooked" && !yieldId) || !date;
   const save = useMutation({
-    mutationFn: () => api.updatePlanItem(item.id, changes),
+    mutationFn: () => api.updatePlanItem(item.id, changes, of),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["plan"] });
       qc.invalidateQueries({ queryKey: ["shopping"] });
@@ -327,6 +355,7 @@ function PlanItemRow({
 }) {
   const qc = useQueryClient();
   const announce = useAnnounce();
+  const { of, canEdit, canLog } = usePlanAccess();
   const editButton = useReturnFocus<HTMLButtonElement>(editing);
   const log = useMutation({
     mutationFn: () => api.logPlanItem(item.id),
@@ -338,7 +367,7 @@ function PlanItemRow({
     onError: () => invalidateAfterLog(qc),
   });
   const del = useMutation({
-    mutationFn: () => api.deletePlanItem(item.id),
+    mutationFn: () => api.deletePlanItem(item.id, of),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["plan"] });
       qc.invalidateQueries({ queryKey: ["shopping"] });
@@ -360,7 +389,7 @@ function PlanItemRow({
             {item.weighed_state === "cooked" ? " (weighed cooked)" : ""}
             {kcal !== undefined ? ` · ${Math.round(kcal)} kcal` : ""}
           </span>
-          {(logged || origin || item.trust_level === "unverified") && (
+          {(logged || origin || item.added_by || item.trust_level === "unverified") && (
             <div className="row wrap small plan-badges">
               {logged && (
                 <span className="chip chip-ok">
@@ -369,23 +398,30 @@ function PlanItemRow({
               )}
               {origin && <span className="chip">{origin}</span>}
               {item.trust_level === "unverified" && <TrustBadge level={item.trust_level} />}
+              {item.added_by && <span className="muted added-by">added by {item.added_by}</span>}
             </div>
           )}
         </div>
+        {(canEdit || (canLog && !logged)) && (
         <div className="entry-actions">
-          {!logged && (
+          {canLog && !logged && (
             <Button type="button" className="btn btn-sm" onClick={() => log.mutate()} disabled={log.isPending || !!item.error}>
               {log.isPending ? "Logging…" : "Log"}
               <VisuallyHidden> {item.label}</VisuallyHidden>
             </Button>
           )}
-          <button ref={editButton} type="button" className="btn-link" onClick={editing ? onDone : onEdit} aria-expanded={editing}>
-            Edit<VisuallyHidden> {item.label}</VisuallyHidden>
-          </button>
-          <Button type="button" className="btn-link danger" onClick={() => del.mutate()} disabled={del.isPending}>
-            Remove<VisuallyHidden> {item.label} from the plan</VisuallyHidden>
-          </Button>
+          {canEdit && (
+            <>
+              <button ref={editButton} type="button" className="btn-link" onClick={editing ? onDone : onEdit} aria-expanded={editing}>
+                Edit<VisuallyHidden> {item.label}</VisuallyHidden>
+              </button>
+              <Button type="button" className="btn-link danger" onClick={() => del.mutate()} disabled={del.isPending}>
+                Remove<VisuallyHidden> {item.label} from the plan</VisuallyHidden>
+              </Button>
+            </>
+          )}
         </div>
+        )}
       </div>
       {item.error && (
         <p className="warn-text small" role="note">
@@ -394,7 +430,7 @@ function PlanItemRow({
         </p>
       )}
       {item.note && !editing && <div className="muted small">Note: {item.note}</div>}
-      {editing && <ItemEditor item={item} onDone={onDone} />}
+      {editing && canEdit && <ItemEditor item={item} onDone={onDone} />}
       {alreadyLogged ? <p className="muted small">Already logged.</p> : <ErrorBox error={log.error || del.error} />}
     </li>
   );
@@ -456,9 +492,10 @@ function DayTotals({ day }: { day: PlanDay }) {
 
 function CopyDay({ from, onDone }: { from: string; onDone: (msg: string, goTo?: string) => void }) {
   const qc = useQueryClient();
+  const { of } = usePlanAccess();
   const [to, setTo] = useState(addDays(from, 1));
   const copy = useMutation({
-    mutationFn: () => api.copyPlan(from, from, to),
+    mutationFn: () => api.copyPlan(from, from, to, of),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["plan"] });
       qc.invalidateQueries({ queryKey: ["shopping"] });
@@ -494,6 +531,7 @@ function CopyDay({ from, onDone }: { from: string; onDone: (msg: string, goTo?: 
 
 function DayCard({ day, onGo, panelProps }: { day: PlanDay; onGo: (d: string) => void; panelProps?: Record<string, string> }) {
   const qc = useQueryClient();
+  const { canEdit, canLog } = usePlanAccess();
   const [panel, setPanel] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ text: string; goTo?: string } | null>(null);
@@ -525,13 +563,13 @@ function DayCard({ day, onGo, panelProps }: { day: PlanDay; onGo: (d: string) =>
           {dayName} {isToday && <span className="chip chip-ok">today</span>}
         </h2>
         <div className="row wrap meal-actions">
-          {unlogged > 0 && (
+          {canLog && unlogged > 0 && (
             <Button type="button" className="btn btn-sm" disabled={logAll.isPending} onClick={() => logAll.mutate(null)}>
               {logAll.isPending && logAll.variables === null ? "Logging…" : `Log all (${unlogged})`}
               <VisuallyHidden> for {dayName}</VisuallyHidden>
             </Button>
           )}
-          {day.items.length > 0 && (
+          {canEdit && day.items.length > 0 && (
             <button
               ref={copyButton}
               type="button"
@@ -569,7 +607,7 @@ function DayCard({ day, onGo, panelProps }: { day: PlanDay; onGo: (d: string) =>
               <h3>
                 {mealLabel(meal)} <span className="muted small">{Math.round(kcal)} kcal</span>
               </h3>
-              {open > 0 && open < unlogged && (
+              {canLog && open > 0 && open < unlogged && (
                 <Button type="button" className="btn-link small" disabled={logAll.isPending} onClick={() => logAll.mutate(meal)}>
                   Log {meal}
                   <VisuallyHidden> for {dayName}</VisuallyHidden>
@@ -591,7 +629,7 @@ function DayCard({ day, onGo, panelProps }: { day: PlanDay; onGo: (d: string) =>
           </div>
         );
       })}
-      {panel === "add" ? (
+      {!canEdit ? null : panel === "add" ? (
         <AddItem date={day.date} defaultMeal={day.items.length ? "dinner" : "breakfast"} onDone={(msg) => finish(msg)} />
       ) : (
         <div>
@@ -604,23 +642,115 @@ function DayCard({ day, onGo, panelProps }: { day: PlanDay; onGo: (d: string) =>
   );
 }
 
+/** "Whose plan": you and everyone who shared theirs with you. Only shown when someone has. */
+function WhosePlan({ value, people, onChange }: { value: number | null; people: PlanPerson[]; onChange: (of: number | null) => void }) {
+  return (
+    <Field label="Whose plan">
+      <select value={value ?? ""} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
+        <option value="">Your plan</option>
+        {people.map((p) => (
+          <option key={p.user_id} value={p.user_id}>
+            {p.name}'s plan{p.can_edit ? "" : " (view only)"}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
+function OwnerBanner({ owner, canEdit, onBack }: { owner: PlanPerson; canEdit: boolean; onBack: () => void }) {
+  return (
+    <div className="alert alert-info owner-banner" role="note" aria-label="Whose plan">
+      <p>
+        <strong>You're viewing {owner.name}'s plan</strong> · {canEdit ? "you can edit it" : "view only"}.
+      </p>
+      <p className="small">
+        Targets and totals are {owner.name}'s. Only {owner.name} can log their meals
+        {canEdit ? "; anything you add shows as added by you." : "."}{" "}
+        <button type="button" className="btn-link" onClick={onBack}>
+          Back to your plan
+        </button>
+      </p>
+    </div>
+  );
+}
+
+function ShareMyPlan() {
+  const shares = useQuery({ queryKey: ["plan-shares"], queryFn: api.planShares });
+  const n = shares.data?.shared_with.length ?? 0;
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="card share-details" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>
+        Share your plan
+        {n > 0 && (
+          <span className="muted small">
+            {" "}
+            · shared with {n} {n === 1 ? "person" : "people"}
+          </span>
+        )}
+      </summary>
+      {open && (
+        <div className="share-body">
+          <p className="muted small">
+            Let someone you live or cook with see your plan and shopping list, or plan meals with you. You can change or remove access at any time.
+          </p>
+          <PlanSharing target={{ kind: "mine" }} level={2} />
+        </div>
+      )}
+    </details>
+  );
+}
+
 export default function PlanPage() {
   const [params, setParams] = useSearchParams();
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const announce = useAnnounce();
   const phone = useMedia("(max-width: 640px)");
   const today = todayISO();
   const focus = /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") ?? "") ? params.get("date")! : today;
   const start = mondayOf(focus);
   const end = addDays(start, 6);
-  const plan = useQuery({ queryKey: ["plan", start, end], queryFn: () => api.plan(start, end), placeholderData: (prev) => prev });
+
+  // Whose plan: ?of=<owner id> for a plan someone shared with you.
+  const ofParam = Number(params.get("of"));
+  const of = Number.isInteger(ofParam) && ofParam > 0 && ofParam !== user?.id ? ofParam : null;
+  const shares = useQuery({ queryKey: ["plan-shares"], queryFn: api.planShares });
+  const sharedWithMe = shares.data?.shared_with_me ?? [];
+  const owner = of ? (sharedWithMe.find((p) => p.user_id === of) ?? null) : null;
+  const access: PlanAccess = { of, owner, canEdit: of === null || !!owner?.can_edit, canLog: of === null };
+  const ownerName = owner?.name ?? "this person";
+
+  useEffect(() => {
+    document.title = titleText(owner ? `${owner.name}'s plan` : "Plan");
+  }, [owner]);
+
+  const plan = useQuery({
+    queryKey: ["plan", start, end, of],
+    queryFn: () => api.plan(start, end, of),
+    placeholderData: (prev) => prev,
+    // A plan that's no longer shared answers 404; don't retry that.
+    retry: (n, err) => !(err instanceof ApiError && err.status < 500) && n < 2,
+  });
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const noticeRef = useAnnounceText<HTMLDivElement>();
-  const go = (d: string) => {
+  const view = (date: string, ofId: number | null, push = false) => {
     setNotice(null);
-    setParams(d === today ? {} : { date: d }, { replace: true });
+    const next: Record<string, string> = {};
+    if (ofId) next.of = String(ofId);
+    if (date !== today) next.date = date;
+    // Switching whose plan is a step you can go Back from; moving between weeks isn't.
+    setParams(next, { replace: !push });
+  };
+  const go = (d: string) => view(d, of);
+  const switchOwner = (ofId: number | null) => {
+    view(focus, ofId, true);
+    const p = sharedWithMe.find((x) => x.user_id === ofId);
+    announce(p ? `Showing ${p.name}'s plan, ${p.can_edit ? "you can edit it" : "view only"}.` : "Showing your plan.");
   };
   const copyWeek = useMutation({
-    mutationFn: () => api.copyPlan(start, end, addDays(start, 7)),
+    mutationFn: () => api.copyPlan(start, end, addDays(start, 7), of),
     onMutate: () => setNotice(null),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["plan"] });
@@ -631,112 +761,134 @@ export default function PlanPage() {
       if (err instanceof ApiError && err.status === 404) setNotice({ ok: false, text: "Nothing is planned this week, so there was nothing to copy." });
     },
   });
-  const days = plan.data ?? [];
+  const days = plan.error ? [] : (plan.data ?? []);
   const shownDay = days.find((d) => d.date === focus) ?? days[0];
   const thisWeek = start === mondayOf(today);
   const shopStart = thisWeek ? today : start;
   const anything = days.some((d) => d.items.length > 0);
+  const notShared = of !== null && plan.error instanceof ApiError && plan.error.status === 404;
 
   return (
-    <div className="stack">
-      <div className="page-head">
-        <h1>Plan</h1>
-        <div className="row wrap">
-          <Link className="btn" to={`/plan/shopping?start=${shopStart}&end=${end}`}>
-            Shopping list
-          </Link>
-        </div>
-      </div>
-      <div className="row wrap between plan-controls">
-        <div className="row">
-          <button type="button" className="btn" onClick={() => go(addDays(start, -7))} aria-label="Previous week">
-            <span aria-hidden="true">‹</span>
-          </button>
-          <strong className="nowrap week-label" aria-live="polite">
-            <VisuallyHidden>Week of </VisuallyHidden>
-            {fmtShortDate(start)} – {fmtShortDate(end)}
-          </strong>
-          <button type="button" className="btn" onClick={() => go(addDays(start, 7))} aria-label="Next week">
-            <span aria-hidden="true">›</span>
-          </button>
-        </div>
-        <div className="row wrap">
-          {!thisWeek && (
-            <button type="button" className="btn btn-sm" onClick={() => go(today)}>
-              Jump to today
-            </button>
-          )}
-          <Button type="button" className="btn btn-sm" disabled={copyWeek.isPending || !anything} onClick={() => copyWeek.mutate()}>
-            {copyWeek.isPending ? "Copying…" : "Copy this week to next week"}
-          </Button>
-        </div>
-      </div>
-      {notice && (
-        <div ref={noticeRef} className={`result ${notice.ok ? "result-ok" : "result-info"}`}>
-          <span aria-hidden="true">{notice.ok ? "✓" : "ℹ"}</span> {notice.text}{" "}
-          {notice.ok && (
-            <button type="button" className="btn-link" onClick={() => go(addDays(start, 7))}>
-              View next week
-            </button>
-          )}
-        </div>
-      )}
-      {!(copyWeek.error instanceof ApiError && copyWeek.error.status === 404) && <ErrorBox error={copyWeek.error} />}
-      <ErrorBox error={plan.error} />
-      {plan.isLoading && <Loading />}
-      {days.length > 0 && (
-        <p className="muted small">
-          Plan meals ahead, then log them with one click when you eat them. Amounts and nutrients are worked out the same way as your log.{" "}
-          {!anything && <>Nothing is planned for this week yet. The advisor can also propose meals for you.</>}
-        </p>
-      )}
-      {phone && days.length > 0 && (
-        <TabList
-          id="plan-days"
-          className="day-tabs"
-          label="Day"
-          value={shownDay?.date ?? ""}
-          onChange={go}
-          tabs={days.map((d) => ({
-            value: d.date,
-            label: (
-              <>
-                {/* Compact on screen ("M 26"); the full day for screen readers. */}
-                <span className="day-tab-name" aria-hidden="true">
-                  {new Date(`${d.date}T12:00:00`).toLocaleDateString([], { weekday: "narrow" })}
-                </span>
-                <span className="day-tab-num" aria-hidden="true">
-                  {new Date(`${d.date}T12:00:00`).getDate()}
-                </span>
-                <span className={`day-tab-dot ${d.items.length ? "has" : ""}`} aria-hidden="true" />
-                <VisuallyHidden>
-                  {longDay(d.date)}
-                  {d.items.length ? `, ${d.items.length} planned` : ""}
-                </VisuallyHidden>
-              </>
-            ),
-          }))}
-        />
-      )}
-      <div className={`plan-week ${plan.isPlaceholderData && plan.isFetching ? "is-stale" : ""}`}>
-        {phone
-          ? shownDay && <DayCard key={shownDay.date} day={shownDay} onGo={go} panelProps={tabPanelProps("plan-days", shownDay.date)} />
-          : days.map((d) => <DayCard key={d.date} day={d} onGo={go} />)}
-      </div>
-      {days.length > 0 && anything && (
-        <details className="card">
-          <summary>Week totals</summary>
-          <div className="stack-sm plan-week-totals">
-            {days
-              .filter((d) => d.items.length)
-              .map((d) => (
-                <div key={d.date} className="row wrap small">
-                  <strong className="week-total-day">{fmtShortDate(d.date)}</strong> <MacroLine values={d.totals} />
-                </div>
-              ))}
+    <PlanAccessContext.Provider value={access}>
+      <ActingForProvider value={of ? { id: of, name: ownerName } : null}>
+        <div className="stack">
+          <div className="page-head">
+            <h1>{owner ? `${owner.name}'s plan` : "Plan"}</h1>
+            <div className="row wrap align-end">
+              {(sharedWithMe.length > 0 || of !== null) && <WhosePlan value={of} people={sharedWithMe} onChange={switchOwner} />}
+              <Link className="btn" to={`/plan/shopping?start=${shopStart}&end=${end}${of ? `&of=${of}` : ""}`}>
+                Shopping list
+              </Link>
+            </div>
           </div>
-        </details>
-      )}
-    </div>
+          {owner && <OwnerBanner owner={owner} canEdit={access.canEdit} onBack={() => switchOwner(null)} />}
+          {notShared ? (
+            <div className="alert alert-warn">
+              <p>This plan isn't shared with you (any more).</p>
+              <button type="button" className="btn btn-sm" onClick={() => switchOwner(null)}>
+                Go to your plan
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="row wrap between plan-controls">
+                <div className="row">
+                  <button type="button" className="btn" onClick={() => go(addDays(start, -7))} aria-label="Previous week">
+                    <span aria-hidden="true">‹</span>
+                  </button>
+                  <strong className="nowrap week-label" aria-live="polite">
+                    <VisuallyHidden>Week of </VisuallyHidden>
+                    {fmtShortDate(start)} – {fmtShortDate(end)}
+                  </strong>
+                  <button type="button" className="btn" onClick={() => go(addDays(start, 7))} aria-label="Next week">
+                    <span aria-hidden="true">›</span>
+                  </button>
+                </div>
+                <div className="row wrap">
+                  {!thisWeek && (
+                    <button type="button" className="btn btn-sm" onClick={() => go(today)}>
+                      Jump to today
+                    </button>
+                  )}
+                  {access.canEdit && (
+                    <Button type="button" className="btn btn-sm" disabled={copyWeek.isPending || !anything} onClick={() => copyWeek.mutate()}>
+                      {copyWeek.isPending ? "Copying…" : "Copy this week to next week"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {notice && (
+                <div ref={noticeRef} className={`result ${notice.ok ? "result-ok" : "result-info"}`}>
+                  <span aria-hidden="true">{notice.ok ? "✓" : "ℹ"}</span> {notice.text}{" "}
+                  {notice.ok && (
+                    <button type="button" className="btn-link" onClick={() => go(addDays(start, 7))}>
+                      View next week
+                    </button>
+                  )}
+                </div>
+              )}
+              {!(copyWeek.error instanceof ApiError && copyWeek.error.status === 404) && <ErrorBox error={copyWeek.error} />}
+              <ErrorBox error={plan.error} />
+              {plan.isLoading && <Loading />}
+              {days.length > 0 && of === null && (
+                <p className="muted small">
+                  Plan meals ahead, then log them with one click when you eat them. Amounts and nutrients are worked out the same way as your log.{" "}
+                  {!anything && <>Nothing is planned for this week yet. The advisor can also propose meals for you.</>}
+                </p>
+              )}
+              {days.length > 0 && of !== null && !anything && <p className="muted small">Nothing is planned for this week yet.</p>}
+              {phone && days.length > 0 && (
+                <TabList
+                  id="plan-days"
+                  className="day-tabs"
+                  label="Day"
+                  value={shownDay?.date ?? ""}
+                  onChange={go}
+                  tabs={days.map((d) => ({
+                    value: d.date,
+                    label: (
+                      <>
+                        {/* Compact on screen ("M 26"); the full day for screen readers. */}
+                        <span className="day-tab-name" aria-hidden="true">
+                          {new Date(`${d.date}T12:00:00`).toLocaleDateString([], { weekday: "narrow" })}
+                        </span>
+                        <span className="day-tab-num" aria-hidden="true">
+                          {new Date(`${d.date}T12:00:00`).getDate()}
+                        </span>
+                        <span className={`day-tab-dot ${d.items.length ? "has" : ""}`} aria-hidden="true" />
+                        <VisuallyHidden>
+                          {longDay(d.date)}
+                          {d.items.length ? `, ${d.items.length} planned` : ""}
+                        </VisuallyHidden>
+                      </>
+                    ),
+                  }))}
+                />
+              )}
+              <div className={`plan-week ${plan.isPlaceholderData && plan.isFetching ? "is-stale" : ""}`}>
+                {phone
+                  ? shownDay && <DayCard key={shownDay.date} day={shownDay} onGo={go} panelProps={tabPanelProps("plan-days", shownDay.date)} />
+                  : days.map((d) => <DayCard key={d.date} day={d} onGo={go} />)}
+              </div>
+              {days.length > 0 && anything && (
+                <details className="card">
+                  <summary>Week totals</summary>
+                  <div className="stack-sm plan-week-totals">
+                    {days
+                      .filter((d) => d.items.length)
+                      .map((d) => (
+                        <div key={d.date} className="row wrap small">
+                          <strong className="week-total-day">{fmtShortDate(d.date)}</strong> <MacroLine values={d.totals} />
+                        </div>
+                      ))}
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+          {of === null && <ShareMyPlan />}
+        </div>
+      </ActingForProvider>
+    </PlanAccessContext.Provider>
   );
 }

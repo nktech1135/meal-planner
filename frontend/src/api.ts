@@ -8,6 +8,8 @@ import type {
   Dataset,
   ImportJob,
   InviteResult,
+  NewUserInput,
+  PlanShares,
   PlanDay,
   PlanItem,
   PlanItemInput,
@@ -153,11 +155,15 @@ export const api = {
 
   // admin: users
   adminUsers: () => get<AdminUser[]>("/api/admin/users"),
-  inviteUser: (email: string, display_name: string) => post<InviteResult>("/api/admin/users", { email, display_name }),
+  /** With a password the account is ready to use; without, it's an invite with a set-password link. */
+  addUser: (u: NewUserInput) => post<InviteResult>("/api/admin/users", u),
   updateUser: (id: number, changes: { is_admin?: boolean; is_active?: boolean }) => patch<AdminUser>(`/api/admin/users/${id}`, changes),
   userResetLink: (id: number) => post<ResetLink>(`/api/admin/users/${id}/reset-link`),
   signOutUser: (id: number) => post<{ ok: boolean }>(`/api/admin/users/${id}/sign-out`),
   deleteUser: (id: number) => del(`/api/admin/users/${id}`),
+  userPlanShares: (id: number) => get<PlanShares>(`/api/admin/users/${id}/plan-shares`),
+  shareUserPlan: (id: number, email: string, can_edit: boolean) => put<PlanShares>(`/api/admin/users/${id}/plan-shares`, { email, can_edit }),
+  unshareUserPlan: (id: number, memberId: number) => del(`/api/admin/users/${id}/plan-shares/${memberId}`),
 
   // profile
   profile: () => get<Profile>("/api/profile"),
@@ -167,9 +173,10 @@ export const api = {
   // foods
   nutrients: () => get<NutrientDef[]>("/api/nutrients"),
   foodDatabases: () => get<FoodDatabase[]>("/api/datasets"),
-  foods: (q: string, opts: { kind?: string; mine?: boolean; limit?: number } = {}) =>
+  // `for_user`: read as the owner of a plan shared with you (their foods and recipes, not yours).
+  foods: (q: string, opts: { kind?: string; mine?: boolean; limit?: number; for_user?: number | null } = {}) =>
     get<FoodSummary[]>(`/api/foods${qs({ q, ...opts })}`),
-  food: (id: number) => get<Food>(`/api/foods/${id}`),
+  food: (id: number, for_user?: number | null) => get<Food>(`/api/foods/${id}${qs({ for_user })}`),
   createFood: (f: FoodInput) => post<Food>("/api/foods", f),
   updateFood: (id: number, f: FoodInput) => put<Food>(`/api/foods/${id}`, f),
   copyFood: (id: number) => post<Food>(`/api/foods/${id}/copy`),
@@ -186,7 +193,7 @@ export const api = {
     post<Food>(`/api/sources/${key}/import`, { source_id, name_hint }),
 
   // yields / conversions
-  yields: (foodId: number) => get<CookingYield[]>(`/api/foods/${foodId}/yields`),
+  yields: (foodId: number, for_user?: number | null) => get<CookingYield[]>(`/api/foods/${foodId}/yields${qs({ for_user })}`),
   createYield: (y: YieldInput) => post<CookingYield>("/api/yields", y),
   deleteYield: (id: number) => del(`/api/yields/${id}`),
   retentionProfiles: (food_id: number, q = "") => get<RetentionProfiles>(`/api/retention-profiles${qs({ food_id, q })}`),
@@ -195,8 +202,8 @@ export const api = {
   calculate: (c: CalculateInput) => post<Nutrition>("/api/nutrition/calculate", c),
 
   // recipes
-  recipes: () => get<Recipe[]>("/api/recipes"),
-  recipe: (id: number) => get<Recipe>(`/api/recipes/${id}`),
+  recipes: (for_user?: number | null) => get<Recipe[]>(`/api/recipes${qs({ for_user })}`),
+  recipe: (id: number, for_user?: number | null) => get<Recipe>(`/api/recipes/${id}${qs({ for_user })}`),
   createRecipe: (r: RecipeInput) => post<Recipe>("/api/recipes", r),
   updateRecipe: (id: number, r: RecipeInput) => put<Recipe>(`/api/recipes/${id}`, r),
   deleteRecipe: (id: number) => del(`/api/recipes/${id}`),
@@ -209,7 +216,7 @@ export const api = {
   suggestions: (meal: Meal | null, q = "", limit = 12) => get<Suggestion[]>(`/api/log/suggestions${qs({ meal, q, limit })}`),
 
   // saved meals
-  savedMeals: () => get<SavedMeal[]>("/api/saved-meals"),
+  savedMeals: (for_user?: number | null) => get<SavedMeal[]>(`/api/saved-meals${qs({ for_user })}`),
   updateSavedMeal: (id: number, m: SavedMealInput) => put<SavedMeal>(`/api/saved-meals/${id}`, m),
   deleteSavedMeal: (id: number) => del(`/api/saved-meals/${id}`),
   logSavedMeal: (id: number, body: { meal?: Meal | null; consumed_at?: string | null }) =>
@@ -224,20 +231,27 @@ export const api = {
   putBody: (date: string, b: BodyInput) => put<BodyMeasurement>(`/api/body/${date}`, b),
   deleteBody: (date: string) => del(`/api/body/${date}`),
 
-  // meal plan
-  plan: (start: string, end: string) => get<PlanDay[]>(`/api/plan${qs({ start, end })}`),
-  addPlanItem: (p: PlanItemInput) => post<PlanItem>("/api/plan", p),
-  updatePlanItem: (id: number, changes: PlanItemUpdate) => patch<PlanItem>(`/api/plan/${id}`, changes),
-  deletePlanItem: (id: number) => del(`/api/plan/${id}`),
+  // meal plan. `of`: the owner of a plan shared with you; omitted for your own.
+  plan: (start: string, end: string, of?: number | null) => get<PlanDay[]>(`/api/plan${qs({ start, end, of })}`),
+  addPlanItem: (p: PlanItemInput, of?: number | null) => post<PlanItem>(`/api/plan${qs({ of })}`, p),
+  updatePlanItem: (id: number, changes: PlanItemUpdate, of?: number | null) => patch<PlanItem>(`/api/plan/${id}${qs({ of })}`, changes),
+  deletePlanItem: (id: number, of?: number | null) => del(`/api/plan/${id}${qs({ of })}`),
+  // Logging is the owner's own (it writes to their food log), so no `of`.
   logPlanItem: (id: number) => post<LogEntry>(`/api/plan/${id}/log`),
   logPlanDay: (date: string, meal?: Meal | null) => post<LogEntry[]>("/api/plan/log-day", { date, meal: meal ?? null }),
-  copyPlan: (from_start: string, from_end: string, to_start: string) =>
-    post<{ copied: number }>("/api/plan/copy", { from_start, from_end, to_start }),
-  planSavedMeal: (saved_meal_id: number, date: string, meal?: Meal | null) =>
-    post<PlanItem[]>("/api/plan/from-saved-meal", { saved_meal_id, date, meal: meal ?? null }),
-  shopping: (start: string, end: string) => get<ShoppingList>(`/api/plan/shopping${qs({ start, end })}`),
-  checkShopping: (start: string, end: string, key: string, checked: boolean) =>
-    put<void>("/api/plan/shopping/check", { start, end, key, checked }),
+  copyPlan: (from_start: string, from_end: string, to_start: string, of?: number | null) =>
+    post<{ copied: number }>(`/api/plan/copy${qs({ of })}`, { from_start, from_end, to_start }),
+  planSavedMeal: (saved_meal_id: number, date: string, meal?: Meal | null, of?: number | null) =>
+    post<PlanItem[]>(`/api/plan/from-saved-meal${qs({ of })}`, { saved_meal_id, date, meal: meal ?? null }),
+  shopping: (start: string, end: string, of?: number | null) => get<ShoppingList>(`/api/plan/shopping${qs({ start, end, of })}`),
+  checkShopping: (start: string, end: string, key: string, checked: boolean, of?: number | null) =>
+    put<void>(`/api/plan/shopping/check${qs({ of })}`, { start, end, key, checked }),
+
+  // sharing my plan
+  planShares: () => get<PlanShares>("/api/plan-shares"),
+  sharePlan: (email: string, can_edit: boolean) => put<PlanShares>("/api/plan-shares", { email, can_edit }),
+  unsharePlan: (memberId: number) => del(`/api/plan-shares/${memberId}`),
+  leaveSharedPlan: (ownerId: number) => del(`/api/plan-shares/from/${ownerId}`),
 
   // supplement check
   checkSupplement: (c: CheckInput) => post<SupplementCheck>("/api/supplements/check", c),

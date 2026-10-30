@@ -2324,3 +2324,76 @@ textarea {
 .servings-field {
   max-width: 22rem;
 }
+
+/* --- shared plans ------------------------------------------------------------ */
+.owner-banner {
+  border-left: 4px solid var(--t-label);
+}
+.owner-banner p {
+  margin: 0;
+}
+.owner-banner p + p {
+  margin-top: 4px;
+}
+.added-by {
+  font-style: italic;
+}
+.share-details > summary,
+.plan-access > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.plan-access > summary {
+  color: var(--primary);
+  font-weight: normal;
+}
+.share-details[open] > summary {
+  margin-bottom: 10px;
+}
+.plan-access-body {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+}
+.share-list {
+  border-top: 1px solid var(--border);
+}
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.share-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  flex: 1 1 220px;
+}
+.share-row > .alert {
+  flex-basis: 100%;
+}
+.share-form {
+  max-width: 560px;
+}
+.radio-hint {
+  margin-left: 26px;
+}
+/* In the add-to-plan form's column the fields stack; the inline-panel's row sizing made them 160px tall. */
+.plan-add .stack-sm > .field {
+  flex: none;
+}
+.share-form .radio {
+  display: flex;
+  align-items: flex-start;
+  margin: 2px 0;
+}
+.share-form .radio input {
+  margin-top: 4px;
+}

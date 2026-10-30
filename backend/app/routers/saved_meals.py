@@ -10,6 +10,7 @@ from app.routers.conversions import calculate_nutrition
 from app.routers.log import create_entry, item_label
 from app.schemas import LogIn, LogOut, SavedMealFromLog, SavedMealIn, SavedMealLogIn, SavedMealOut
 from app.security import current_user
+from app.services.sharing import acting_user
 from app.services.summary import entries_between
 
 router = APIRouter(prefix="/api/saved-meals", tags=["saved meals"])
@@ -34,7 +35,7 @@ def _items(db: Session, user: User, body: SavedMealIn) -> list[SavedMealItem]:
 
 
 @router.get("", response_model=list[SavedMealOut])
-def list_meals(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def list_meals(user: User = Depends(acting_user), db: Session = Depends(get_db)):
     return list(db.scalars(select(SavedMeal).where(SavedMeal.owner_id == user.id).order_by(SavedMeal.name)))
 
 

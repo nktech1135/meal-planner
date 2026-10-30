@@ -50,6 +50,12 @@ def test_editor_can_see_and_change_a_shared_plan(people, db_session):
     of = {"of": ids["alice"]}
     added = bob.post("/api/plan", params=of, json=_item(people["oats"]["id"]))
     assert added.status_code == 201, added.text
+    alice.post("/api/saved-meals", json={"name": "Alice's breakfast", "default_meal": "breakfast",
+                                         "items": [{"food_id": people["oats"]["id"], "quantity": 40, "unit": "g"}]})
+    meals = bob.get("/api/saved-meals", params={"for_user": ids["alice"]}).json()
+    assert [m["name"] for m in meals] == ["Alice's breakfast"]
+    assert bob.post("/api/plan/from-saved-meal", params=of,
+                    json={"saved_meal_id": meals[0]["id"], "date": TODAY}).status_code == 201
     # Alice's own recipes are available to Bob for her plan, his private foods aren't.
     assert [r["name"] for r in bob.get("/api/recipes", params={"for_user": ids["alice"]}).json()] == ["Alice's soup"]
     assert bob.post("/api/plan", params=of, json={"date": TODAY, "meal": "dinner", "recipe_id": alice_soup["id"],
@@ -57,7 +63,7 @@ def test_editor_can_see_and_change_a_shared_plan(people, db_session):
     assert bob.post("/api/plan", params=of, json=_item(bob_food["id"])).status_code == 404
 
     [day] = alice.get("/api/plan", params=RANGE).json()
-    assert {i["label"] for i in day["items"]} == {"Oats", "Alice's soup"}
+    assert sorted(i["label"] for i in day["items"]) == ["Alice's soup", "Oats", "Oats"]
     assert all(i["added_by"] == "A" for i in day["items"])  # display name from register()
     item_id = added.json()["id"]
     assert bob.patch(f"/api/plan/{item_id}", params=of, json={"quantity": 80}).json()["quantity"] == 80
@@ -104,9 +110,10 @@ def test_sharing_rejects_unknown_self_and_deactivated(people):
     assert alice.put("/api/plan-shares", json={"email": "alice@example.com"}).status_code == 422
     bob.put("/api/plan-shares", json={"email": "alice@example.com"})
     assert alice.get("/api/plan", params={**RANGE, "of": ids["bob"]}).status_code == 200
+    alice.put("/api/plan-shares", json={"email": "bob@example.com"})
     alice.patch(f"/api/admin/users/{ids['bob']}", json={"is_active": False})
     assert alice.get("/api/plan", params={**RANGE, "of": ids["bob"]}).status_code == 404
-    assert alice.get("/api/plan-shares").json()["shared_with_me"] == []
+    assert alice.get("/api/plan-shares").json() == {"shared_with": [], "shared_with_me": []}
 
 
 def test_admin_adds_user_with_password_and_sets_up_sharing(people):

@@ -550,8 +550,35 @@ export interface AdminUser {
 
 export interface InviteResult {
   user: AdminUser;
-  link: string;
+  /** Null when the admin set a password (nothing to send). */
+  link: string | null;
   emailed: boolean;
+}
+
+export interface NewUserInput {
+  email: string;
+  display_name: string;
+  /** Set now (10–200 characters) instead of sending an invite link. */
+  password?: string;
+  is_admin?: boolean;
+}
+
+// --- shared meal plans ----------------------------------------------------------
+
+export interface PlanPerson {
+  user_id: number;
+  email: string;
+  display_name: string;
+  /** Display name, or the email when there's none. */
+  name: string;
+  can_edit: boolean;
+}
+
+export interface PlanShares {
+  /** Who can see (or edit) this plan. */
+  shared_with: PlanPerson[];
+  /** Whose plans this person can see. */
+  shared_with_me: PlanPerson[];
 }
 
 export interface ResetLink {
@@ -663,6 +690,8 @@ export interface PlanItem {
   trust_level: Trust | null;
   grams: number | null;
   error: string | null;
+  /** Who added it, when that wasn't the plan's owner (someone they share their plan with). */
+  added_by: string | null;
 }
 
 export interface PlanDay {

@@ -4,7 +4,7 @@ test("admin invites someone, who sets a password from the link and signs in", as
   const email = `friend-${Date.now()}@example.com`;
   await page.goto("/settings/users");
   await page.getByLabel("Email").fill(email);
-  await page.getByRole("button", { name: "Invite" }).click();
+  await page.getByRole("button", { name: "Add and create invite" }).click();
   await expect(page.getByText(new RegExp(`Created an account for ${email}`)).first()).toBeVisible();
   const link = await page.getByLabel("Set-password link").inputValue();
   expect(link).toMatch(/\/reset-password\?token=/);
