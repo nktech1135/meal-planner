@@ -1,15 +1,19 @@
+import secrets
+
 import anthropic
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.db import get_db
-from app.models import Food, ImportJob, RetentionProfile, User
-from app.security import admin_user
+from app.models import Food, ImportJob, LogEntry, Profile, RetentionProfile, User
+from app.security import admin_user, hash_password
 from app.services import datasets
+from app.services.accounts import delete_user, end_sessions, is_last_admin, new_reset_token, reset_link
+from app.services.mail import MailError, mail_configured, send_mail
 from app.settings_store import describe, get_runtime, update
 from app.sources.base import SourceError
 from app.sources.registry import build_sources, http_client
@@ -73,6 +77,7 @@ def app_info(settings: Settings = Depends(get_runtime)):
         "allow_registration": settings.allow_registration,
         "advisor_configured": bool(settings.anthropic_api_key),
         "usda_demo_key": settings.usda_fdc_api_key in ("", "DEMO_KEY"),
+        "email_enabled": mail_configured(settings),
     }
 
 
@@ -139,3 +144,106 @@ def read_job(job_id: int, _: User = Depends(admin_user), db: Session = Depends(g
 @router.post("/admin/derive-yields")
 def derive_yields(_: User = Depends(admin_user), db: Session = Depends(get_db)):
     return {"yields": datasets.derive_usda_yields(db)}
+
+
+
+# --- Users ------------------------------------------------------------------------------
+
+class UserAdminUpdate(BaseModel):
+    is_admin: bool | None = None
+    is_active: bool | None = None
+
+
+class InviteIn(BaseModel):
+    email: EmailStr
+    display_name: str = ""
+
+
+def _user_row(db: Session, u: User) -> dict:
+    return {"id": u.id, "email": u.email, "display_name": u.display_name, "is_admin": u.is_admin,
+            "is_active": u.is_active, "created_at": u.created_at, "last_login_at": u.last_login_at,
+            "log_entries": db.scalar(select(func.count(LogEntry.id)).where(LogEntry.user_id == u.id))}
+
+
+def _target(db: Session, user_id: int) -> User:
+    u = db.get(User, user_id)
+    if u is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    return u
+
+
+@router.get("/admin/users")
+def list_users(_: User = Depends(admin_user), db: Session = Depends(get_db)):
+    return [_user_row(db, u) for u in db.scalars(select(User).order_by(User.created_at))]
+
+
+@router.post("/admin/users", status_code=201)
+def invite_user(body: InviteIn, request: Request, admin: User = Depends(admin_user), db: Session = Depends(get_db),
+                settings: Settings = Depends(get_runtime)):
+    """Create an account (even with sign-ups closed) and return a link for the person to set a password."""
+    if db.scalar(select(User).where(User.email == body.email.lower())):
+        raise HTTPException(status.HTTP_409_CONFLICT, "An account with that email already exists")
+    user = User(email=body.email.lower(), display_name=body.display_name,
+                password_hash=hash_password(secrets.token_urlsafe(32)))  # unusable until they set one
+    user.profile = Profile()
+    db.add(user)
+    db.commit()
+    link = reset_link(settings, request, new_reset_token(db, user))
+    emailed = False
+    if mail_configured(settings):
+        try:
+            send_mail(settings, user.email, "You've been invited to Mealplan",
+                      f"{admin.display_name or admin.email} created a Mealplan account for you.\n\n"
+                      f"Open this link within 24 hours to choose your password:\n{link}")
+            emailed = True
+        except MailError:
+            pass
+    return {"user": _user_row(db, user), "link": link, "emailed": emailed}
+
+
+@router.patch("/admin/users/{user_id}")
+def update_user(user_id: int, body: UserAdminUpdate, admin: User = Depends(admin_user), db: Session = Depends(get_db)):
+    u = _target(db, user_id)
+    removing_admin = (body.is_admin is False and u.is_admin) or (body.is_active is False and u.is_admin)
+    if removing_admin and is_last_admin(db, u):
+        raise HTTPException(status.HTTP_409_CONFLICT, "There must be at least one active admin")
+    if body.is_admin is not None:
+        u.is_admin = body.is_admin
+    if body.is_active is not None:
+        if not body.is_active:
+            end_sessions(u)  # signs them out everywhere
+        u.is_active = body.is_active
+    db.commit()
+    return _user_row(db, u)
+
+
+@router.post("/admin/users/{user_id}/reset-link")
+def user_reset_link(user_id: int, request: Request, _: User = Depends(admin_user), db: Session = Depends(get_db),
+                    settings: Settings = Depends(get_runtime)):
+    """A one-time password reset link to pass on (works without email set up)."""
+    u = _target(db, user_id)
+    return {"link": reset_link(settings, request, new_reset_token(db, u)), "expires_in_hours": 24}
+
+
+@router.post("/admin/users/{user_id}/sign-out")
+def sign_out_everywhere(user_id: int, _: User = Depends(admin_user), db: Session = Depends(get_db)):
+    end_sessions(_target(db, user_id))
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/admin/users/{user_id}", status_code=204)
+def remove_user(user_id: int, admin: User = Depends(admin_user), db: Session = Depends(get_db)):
+    u = _target(db, user_id)
+    if u.id == admin.id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Delete your own account from the Account page")
+    delete_user(db, u)
+
+
+@router.post("/admin/settings/test-email")
+def test_email(admin: User = Depends(admin_user), settings: Settings = Depends(get_runtime)):
+    try:
+        send_mail(settings, admin.email, "Mealplan test email", "Email from Mealplan is working.")
+    except MailError as exc:
+        return {"ok": False, "message": str(exc)}
+    return {"ok": True, "message": f"Sent a test email to {admin.email}"}

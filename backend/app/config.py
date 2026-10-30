@@ -16,6 +16,15 @@ class Settings(BaseSettings):
     session_ttl_hours: int = 24 * 7
     cookie_secure: bool = False  # set true behind HTTPS in production
     allow_registration: bool = True
+    public_url: str | None = None
+
+    # Email (password resets)
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_security: str = "starttls"  # starttls | ssl | none
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
     cors_origins: list[str] = []
     static_dir: str | None = None  # built frontend (frontend/dist) to serve alongside the API
 

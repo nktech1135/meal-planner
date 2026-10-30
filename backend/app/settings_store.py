@@ -42,6 +42,14 @@ class SettingDef:
 DEFS: tuple[SettingDef, ...] = (
     SettingDef("allow_registration", "Allow new sign-ups", "Accounts", "bool",
                "Anyone who can reach the site can create an account. Turn off once everyone has one."),
+    SettingDef("public_url", "Site address", "Accounts", "string",
+               "The address people use to reach this site, e.g. https://meals.example.com. Used in emailed links."),
+    SettingDef("smtp_host", "SMTP server", "Email", "string", "Outgoing mail server for password-reset emails."),
+    SettingDef("smtp_port", "SMTP port", "Email", "int", "Usually 587 (STARTTLS) or 465 (SSL).", minimum=1, maximum=65535),
+    SettingDef("smtp_security", "Connection security", "Email", "choice", choices=("starttls", "ssl", "none")),
+    SettingDef("smtp_username", "SMTP username", "Email", "string"),
+    SettingDef("smtp_password", "SMTP password", "Email", "secret"),
+    SettingDef("smtp_from", "From address", "Email", "string", "e.g. Mealplan <noreply@example.com>"),
     SettingDef("anthropic_api_key", "Anthropic API key", "AI advisor", "secret",
                "Enables the advisor.", link="https://console.anthropic.com/settings/keys"),
     SettingDef("advisor_model", "Model", "AI advisor", "choice", "Claude model used by the advisor.",
@@ -119,6 +127,7 @@ def describe(db: Session) -> list[dict]:
     """Every setting with its effective value (secrets masked) and where it comes from."""
     stored = _stored(db)
     base = get_settings()
+    from_env = base.model_fields_set  # fields given by the environment or .env, not defaults
     rows = []
     for d in DEFS:
         in_db = stored.get(d.key) is not None
@@ -130,7 +139,8 @@ def describe(db: Session) -> list[dict]:
             "choices": list(d.choices), "minimum": d.minimum, "maximum": d.maximum, "link": d.link,
             "value": _mask(value) if d.kind == "secret" else value,
             "is_set": bool(value) if d.kind == "secret" else True,
-            "source": "settings" if in_db else ("environment" if value not in (None, "") else "default"),
+            "source": "settings" if in_db else ("environment" if d.key in from_env and value not in (None, "")
+                                                else "default"),
         })
     return rows
 
@@ -145,8 +155,10 @@ def validate(key: str, value):
         if not isinstance(value, str):
             raise ValueError(f"{d.label}: expected text")
         value = value.strip()
-        if any(c.isspace() for c in value) or len(value) > 500:
-            raise ValueError(f"{d.label}: must be a single value without spaces")
+        if len(value) > 500 or "\n" in value or "\r" in value:
+            raise ValueError(f"{d.label}: must be a single line")
+        if d.kind == "secret" and any(c.isspace() for c in value):
+            raise ValueError(f"{d.label}: must not contain spaces")
         return value or None
     if d.kind == "bool":
         if not isinstance(value, bool):

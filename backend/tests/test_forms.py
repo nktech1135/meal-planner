@@ -66,3 +66,15 @@ def test_pinned_nutrients(user_client):
     assert user_client.put("/api/profile", json={"pinned_nutrients": ["iron_mg", "iron_mg", "vitamin_d_ug"]}).json()[
         "pinned_nutrients"] == ["iron_mg", "vitamin_d_ug"]
     assert user_client.put("/api/profile", json={"pinned_nutrients": ["nope"]}).status_code == 422
+
+
+def test_manual_component_can_be_form_dependent(user_client):
+    food = user_client.post("/api/foods", json={"name": "My multi", "kind": "supplement", "basis": "serving",
+                                                "serving_quantity": 1, "serving_unit": "tablet", "other_components": [
+                                                    {"name": "Vitamin A", "amount": 3000, "unit": "IU",
+                                                     "nutrient_code": "vitamin_a_ug"}]}).json()
+    forms = user_client.get(f"/api/foods/{food['id']}/forms").json()
+    assert forms[0]["nutrient_code"] == "vitamin_a_ug" and len(forms[0]["options"]) == 3
+    bad = user_client.post("/api/foods", json={"name": "x", "other_components": [
+        {"name": "A", "amount": 1, "unit": "IU", "nutrient_code": "nope"}]})
+    assert bad.status_code == 422

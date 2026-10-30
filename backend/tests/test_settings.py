@@ -57,3 +57,9 @@ def test_source_toggle_takes_effect(user_client):
 def test_anthropic_test_without_key(user_client):
     resp = user_client.post("/api/admin/settings/test/anthropic").json()
     assert resp == {"ok": False, "message": "No Anthropic API key set"}
+
+
+def test_defaults_are_not_labelled_as_environment(user_client):
+    rows = {r["key"]: r for r in user_client.get("/api/admin/settings").json()}
+    assert rows["advisor_model"]["source"] == "default"
+    assert rows["nih_dsld_enabled"]["source"] == "default"

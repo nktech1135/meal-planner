@@ -104,6 +104,16 @@ class ComponentIn(BaseModel):
     amount: float | None = None
     unit: str | None = None
     note: str | None = None
+    # For label amounts whose conversion depends on the chemical form (e.g. vitamin A in IU):
+    # the nutrient it belongs to, so the day view reports it and the user can choose the form.
+    nutrient_code: str | None = None
+
+    @field_validator("nutrient_code")
+    @classmethod
+    def _known(cls, v: str | None) -> str | None:
+        if v is not None and v not in BY_CODE:
+            raise ValueError(f"Unknown nutrient '{v}'")
+        return v
 
 
 class FoodIn(BaseModel):

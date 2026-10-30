@@ -86,11 +86,18 @@ def read_food(food_id: int, user: User = Depends(current_user), db: Session = De
     return food_out(get_food(db, user, food_id))
 
 
+def _component(c) -> dict:
+    out = c.model_dump(exclude_none=True)
+    if c.nutrient_code:
+        out["reason"] = "form" if options_for(c.nutrient_code, c.unit or "") else "unit"
+    return out
+
+
 def _apply(food: Food, body: FoodIn, db: Session) -> None:
     for key in ("name", "brand", "kind", "state", "cooking_method", "basis", "serving_quantity",
                 "serving_unit", "serving_size_g", "citation"):
         setattr(food, key, getattr(body, key))
-    food.other_components = [c.model_dump() for c in body.other_components]
+    food.other_components = [_component(c) for c in body.other_components]
     food.nutrients.clear()
     food.portions.clear()
     db.flush()
