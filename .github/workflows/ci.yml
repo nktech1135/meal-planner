@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches-ignore: [web-builds]
   pull_request:
 
 jobs:
@@ -69,3 +70,25 @@ jobs:
         with:
           name: playwright-traces
           path: e2e/test-results/
+
+  # The installer unpacks this build instead of building the interface on the server.
+  publish-web:
+    needs: [backend, installer, frontend-and-e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-web
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          .github/publish-web.sh

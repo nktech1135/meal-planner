@@ -38,6 +38,7 @@ umask 022
 # Where the code is published (a fork can change this, or pass --repo).
 DEFAULT_REPO="https://github.com/nktech1135/meal-planner.git"
 DEFAULT_BRANCH="main"
+WEB_BRANCH="web-builds"
 DEFAULT_PORT=8080
 
 UV_VERSION="0.11.25"
@@ -298,6 +299,25 @@ resolve_ref() {  # resolve_ref REF -> full commit id
   git_ -C "$REPO_DIR" rev-parse --verify --quiet "$1^{commit}" || die "unknown branch, tag or commit: $1"
 }
 
+# After the tests pass, CI publishes each main commit's built web interface to the
+# web-builds branch, as a directory named after the commit. Unpacking that spares the
+# server a Node.js download, about 150 MB of packages and the build itself.
+has_web_build() { git_ -C "$REPO_DIR" cat-file -e "refs/heads/$WEB_BRANCH:$1/index.html" 2>/dev/null; }
+
+pick_rev() {  # pick_rev BRANCH -> the newest commit on BRANCH that has a published web build
+  local tip rev
+  tip="$(resolve_ref "$1")"
+  if has_web_build "$tip"; then echo "$tip"; return 0; fi
+  while read -r rev; do
+    if has_web_build "$rev"; then
+      warn "the newest commit, ${tip:0:12}, has no CI build yet (CI may still be testing it); using ${rev:0:12}, the newest that has one"
+      echo "$rev"
+      return 0
+    fi
+  done < <(git_ -C "$REPO_DIR" rev-list --max-count=30 "$tip")
+  echo "$tip"  # nothing published (a fork, or another branch): build it here
+}
+
 build_release() {  # build_release REV -> path of the built release
   local rev="$1" rel="$RELEASES/${1:0:12}"
   rm -rf "$rel" && mkdir -p "$rel"
@@ -314,6 +334,21 @@ build_release() {  # build_release REV -> path of the built release
     "$rel/venv/bin/python" -m compileall -q app alembic >/dev/null
   ) >&2
 
+  if has_web_build "$rev"; then
+    log "Unpacking the web interface built by CI"
+    mkdir -p "$rel/frontend/dist"
+    git_ -C "$REPO_DIR" archive "refs/heads/$WEB_BRANCH:$rev" | tar -x -C "$rel/frontend/dist"
+  else
+    build_web "$rel"
+  fi
+  [[ -f "$rel/frontend/dist/index.html" ]] || die "web interface build produced no index.html"
+  echo "$rel"
+}
+
+build_web() {  # build_web RELEASE: the fallback when CI hasn't published a build of this commit
+  local rel="$1"
+  warn "no prebuilt web interface for this commit; building it here (needs about 500 MB of memory)"
+  install_node
   check_build_memory
   log "Downloading web interface packages"
   web_step "$rel" 900 "the package download" \
@@ -322,8 +357,6 @@ build_release() {  # build_release REV -> path of the built release
   # Type-checking is CI's job; the installer only needs the bundle, which takes less memory.
   web_step "$rel" 900 "bundling" node_modules/.bin/vite build --logLevel warn
   rm -rf "$rel/frontend/node_modules"
-  [[ -f "$rel/frontend/dist/index.html" ]] || die "web interface build produced no index.html"
-  echo "$rel"
 }
 
 # Output goes to a log file rather than the screen, and a stalled step fails after LIMIT seconds
@@ -764,10 +797,9 @@ cmd_install() {
   ensure_user
   make_dirs
   install_uv
-  install_node
   fetch_source
   local rev rel
-  rev="$(resolve_ref "$BRANCH")"
+  rev="$(pick_rev "$BRANCH")"
   rel="$(build_release "$rev")"
   write_config
   PORT="$(env_value MEALPLAN_PORT)"  # a kept configuration from an earlier install wins
@@ -823,9 +855,8 @@ cmd_upgrade() {
   [[ -n "$old_rel" ]] || die "no current release found under $PREFIX"
   old_rev="$(cat "$old_rel/REVISION")"
   install_uv
-  install_node
   fetch_source
-  new_rev="$(resolve_ref "${ref:-$BRANCH}")"
+  if [[ -n "$ref" ]]; then new_rev="$(resolve_ref "$ref")"; else new_rev="$(pick_rev "$BRANCH")"; fi
   if [[ "$new_rev" == "$old_rev" && "$force" != 1 ]]; then
     log "Already at ${old_rev:0:12}; nothing to do (use --force to rebuild)"
     install_cli "$old_rel"
