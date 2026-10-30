@@ -101,6 +101,7 @@ _UNIT_ALIASES = {
     "milligram": "mg", "milligrams": "mg", "milligram(s)": "mg",
     "ug": "µg", "mcg": "µg", "microgram": "µg", "micrograms": "µg", "microgram(s)": "µg",
     "cal": "kcal", "calorie": "kcal", "calories": "kcal", "calorie(s)": "kcal", "{calories}": "kcal",
+    "kilocalorie": "kcal", "kilocalories": "kcal", "international unit": "iu", "international units": "iu",
     "kilojoule": "kj", "kilojoules": "kj", "kilojoule(s)": "kj",
     "mcg dfe": "µg dfe", "ug dfe": "µg dfe", "mcg rae": "µg rae", "ug rae": "µg rae",
 }

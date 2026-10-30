@@ -177,3 +177,28 @@ def test_food_database_credits(user_client, db_session):
     assert rows["cofid"]["licence"] == "Open Government Licence v3.0"
     assert "Open Government Licence – Canada" in rows["cnf"]["attribution"]
     assert all(r["records"] == 0 for r in rows.values())
+
+
+def test_parsed_import_keeps_extensions_and_skips_optional_files(user_client, db_session, monkeypatch):
+    """The real AFCD workbooks go through the job: names keep '.xlsx' (openpyxl needs it)."""
+    from pathlib import Path
+
+    fixtures = Path(__file__).parent / "fixtures" / "intl" / "afcd"
+    ds = datasets.BY_KEY["intl_afcd"]
+    files = tuple(datasets.RemoteFile(f.name, f.url) for f in ds.files) + (
+        datasets.RemoteFile("extra", "https://example.org/missing.json", optional=True),)
+    monkeypatch.setitem(datasets.BY_KEY, "intl_afcd", datasets.Dataset(**{**ds.__dict__, "files": files}))
+    content = {"Nutrient%20profiles": (fixtures / "profiles.xlsx").read_bytes(),
+               "Food%20Details": (fixtures / "details.xlsx").read_bytes()}
+
+    def handler(req):
+        hit = next((v for k, v in content.items() if k in str(req.url)), None)
+        return httpx.Response(200, content=hit) if hit else httpx.Response(404)
+
+    monkeypatch.setattr("app.routers.admin.http_client", lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    app.dependency_overrides[run_in_thread] = lambda: (lambda fn: fn())
+    job = user_client.post("/api/admin/datasets/intl_afcd/import").json()
+    db_session.expire_all()
+    job = db_session.get(ImportJob, job["id"])
+    assert job.status == "done", job.message
+    assert db_session.query(Food).filter_by(source="afcd").count() == 5

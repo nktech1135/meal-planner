@@ -1,0 +1,569 @@
+{
+ "nutrients": [
+  {
+   "uri": "https://www.matvaretabellen.no/en/water/",
+   "nutrientId": "Vann",
+   "name": "Water",
+   "euroFirId": "WATER",
+   "euroFirName": "water",
+   "unit": "g",
+   "decimalPrecision": 0
+  },
+  {
+   "uri": "https://www.matvaretabellen.no/en/fat/",
+   "nutrientId": "Fett",
+   "name": "Fat",
+   "euroFirId": "FAT",
+   "euroFirName": "fat, total",
+   "unit": "g",
+   "decimalPrecision": 1
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acids, total saturated",
+   "euroFirId": "FASAT",
+   "name": "Saturated fatty acids",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/saturated-fatty-acids/",
+   "parentId": "Fett",
+   "nutrientId": "Mettet"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 12:0 (lauric acid)",
+   "euroFirId": "F12:0",
+   "name": "C12:0 (lauric acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c12-0-lauric-acid/",
+   "parentId": "Mettet",
+   "nutrientId": "C12:0Laurinsyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 14:0 (myristic acid)",
+   "euroFirId": "F14:0",
+   "name": "C14:0 (myristic acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c14-0-myristic-acid/",
+   "parentId": "Mettet",
+   "nutrientId": "C14:0Myristinsyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 16:0 (palmitic acid)",
+   "euroFirId": "F16:0",
+   "name": "C16:0 (palmitic acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c16-0-palmitic-acid/",
+   "parentId": "Mettet",
+   "nutrientId": "C16:0Palmitinsyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 18:0 (stearic acid)",
+   "euroFirId": "F18:0",
+   "name": "C18:0 (stearic acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c18-0-stearic-acid/",
+   "parentId": "Mettet",
+   "nutrientId": "C18:0Stearinsyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acids, total trans",
+   "euroFirId": "FATRS",
+   "name": "Trans fatty acids",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/trans-fatty-acids/",
+   "parentId": "Fett",
+   "nutrientId": "Trans"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acids, total monounsaturated",
+   "euroFirId": "FAMS",
+   "name": "Monounsaturated fatty acids",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/monounsaturated-fatty-acids/",
+   "parentId": "Fett",
+   "nutrientId": "Enumet"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 16:1",
+   "euroFirId": "F16:1",
+   "name": "C16:1 sum (palmitoleic acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c16-1-sum-palmitoleic-acid/",
+   "parentId": "Enumet",
+   "nutrientId": "C16:1"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 18:1 (octadecenoic acid)",
+   "euroFirId": "F18:1",
+   "name": "C18:1 sum (oleic acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c18-1-sum-oleic-acid/",
+   "parentId": "Enumet",
+   "nutrientId": "C18:1"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acids, total polyunsaturated",
+   "euroFirId": "FAPU",
+   "name": "Polyunsaturated fatty acids",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/polyunsaturated-fatty-acids/",
+   "parentId": "Fett",
+   "nutrientId": "Flerum"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 18:2 n-6 cis,cis",
+   "euroFirId": "F18:2CN6",
+   "name": "C18:2n-6 (linoleic acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c18-2n-6-linoleic-acid/",
+   "parentId": "Flerum",
+   "nutrientId": "C18:2n-6Linolsyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 18:3 n-3",
+   "euroFirId": "F18:3N3",
+   "name": "C18:3n-3 (alpha-linolenic acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c18-3n-3-alpha-linolenic-acid/",
+   "parentId": "Flerum",
+   "nutrientId": "C18:3n-3AlfaLinolensyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 20:3 n-3",
+   "euroFirId": "F20:3N3",
+   "name": "C20:3n-3 (eicosatrienoic acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c20-3n-3-eicosatrienoic-acid/",
+   "parentId": "Flerum",
+   "nutrientId": "C20:3n-3Eikosatriensyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 20:3 n-6",
+   "euroFirId": "F20:3N6",
+   "name": "C20:3n-6 (dihomo-gamma-linolenic acid, DGLA)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c20-3n-6-dihomo-gamma-linolenic-acid-dgla/",
+   "parentId": "Flerum",
+   "nutrientId": "C20:3n-6DihomoGammaLinolensyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 20:4 n-3",
+   "euroFirId": "F20:4N3",
+   "name": "C20:4n-3 (eicosatetraenoic acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c20-4n-3-eicosatetraenoic-acid/",
+   "parentId": "Flerum",
+   "nutrientId": "C20:4n-3Eikosatetraensyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 20:4 n-6",
+   "euroFirId": "F20:4N6",
+   "name": "C20:4n-6 (arachidonic acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c20-4n-6-arachidonic-acid/",
+   "parentId": "Flerum",
+   "nutrientId": "C20:4n-6Arakidonsyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 20:5 n-3",
+   "euroFirId": "F20:5N3",
+   "name": "C20:5n-3 (eicosapentaenoic acid, EPA)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c20-5n-3-eicosapentaenoic-acid-epa/",
+   "parentId": "Flerum",
+   "nutrientId": "C20:5n-3Eikosapentaensyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 22:5 n-3",
+   "euroFirId": "F22:5N3",
+   "name": "C22:5n-3 (docosapentaenoic acid, DPA)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c22-5n-3-docosapentaenoic-acid-dpa/",
+   "parentId": "Flerum",
+   "nutrientId": "C22:5n-3Dokosapentaensyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acid 22:6 n-3",
+   "euroFirId": "F22:6N3",
+   "name": "C22:6n-3 (docosahexaenoic acid, DHA)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/c22-6n-3-docosahexaenoic-acid-dha/",
+   "parentId": "Flerum",
+   "nutrientId": "C22:6n-3Dokosaheksaensyre"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acids, total n-3",
+   "euroFirId": "FAN3",
+   "name": "Omega-3",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/omega-3/",
+   "parentId": "Fett",
+   "nutrientId": "Omega-3"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "fatty acids, total n-6",
+   "euroFirId": "FAN6",
+   "name": "Omega-6",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/omega-6/",
+   "parentId": "Fett",
+   "nutrientId": "Omega-6"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "cholesterol",
+   "euroFirId": "CHORL",
+   "name": "Cholesterol",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/cholesterol/",
+   "parentId": "Fett",
+   "nutrientId": "Kolest"
+  },
+  {
+   "uri": "https://www.matvaretabellen.no/en/carbohydrate/",
+   "nutrientId": "Karbo",
+   "name": "Carbohydrate",
+   "euroFirId": "CHO",
+   "euroFirName": "carbohydrate",
+   "unit": "g",
+   "decimalPrecision": 1
+  },
+  {
+   "unit": "g",
+   "euroFirName": "starch, total",
+   "euroFirId": "STARCH",
+   "name": "Starch",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/starch/",
+   "parentId": "Karbo",
+   "nutrientId": "Stivel"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "sugars, total",
+   "euroFirId": "SUGAR",
+   "name": "Sugar, total",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/sugar-total/",
+   "parentId": "Karbo",
+   "nutrientId": "Mono+Di"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "sugar, added",
+   "euroFirId": "SUGAD",
+   "name": "Sugar, added",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/sugar-added/",
+   "parentId": "Karbo",
+   "nutrientId": "Sukker"
+  },
+  {
+   "unit": "g",
+   "euroFirName": "sugar, natural",
+   "euroFirId": "SUGAN",
+   "name": "Sugar, free",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/sugar-free/",
+   "parentId": "Karbo",
+   "nutrientId": "SUGAN"
+  },
+  {
+   "uri": "https://www.matvaretabellen.no/en/dietary-fibre/",
+   "nutrientId": "Fiber",
+   "name": "Dietary fibre",
+   "euroFirId": "FIBT",
+   "euroFirName": "fibre, total dietary",
+   "unit": "g",
+   "decimalPrecision": 1
+  },
+  {
+   "uri": "https://www.matvaretabellen.no/en/protein/",
+   "nutrientId": "Protein",
+   "name": "Protein",
+   "euroFirId": "PROT",
+   "euroFirName": "protein, total",
+   "unit": "g",
+   "decimalPrecision": 1
+  },
+  {
+   "unit": "g",
+   "euroFirName": "salt",
+   "euroFirId": "NACL",
+   "name": "Salt (NaCl)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/salt-nacl/",
+   "parentId": "Minerals",
+   "nutrientId": "NaCl"
+  },
+  {
+   "uri": "https://www.matvaretabellen.no/en/alcohol/",
+   "nutrientId": "Alko",
+   "name": "Alcohol",
+   "euroFirId": "ALC",
+   "euroFirName": "alcohol",
+   "unit": "g",
+   "decimalPrecision": 1
+  },
+  {
+   "unit": "RAE",
+   "euroFirName": "vitamin A; retinol equiv from retinol and carotenoid activities",
+   "euroFirId": "VITA",
+   "name": "Vitamin A (RAE)",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/vitamin-a-rae/",
+   "parentId": "FatSolubleVitamins",
+   "nutrientId": "Vit A"
+  },
+  {
+   "unit": "RE",
+   "euroFirName": "vitamin A; retinol equiv from retinol and carotenoid activities",
+   "euroFirId": "VITARE",
+   "name": "Vitamin A (RE)",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/vitamin-a-re/",
+   "parentId": "FatSolubleVitamins",
+   "nutrientId": "Vit A RE"
+  },
+  {
+   "unit": "µg",
+   "euroFirName": "retinol (preformed vitamin A)",
+   "euroFirId": "RETOL",
+   "name": "Retinol",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/retinol/",
+   "parentId": "Vit A RE",
+   "nutrientId": "Retinol"
+  },
+  {
+   "unit": "µg",
+   "euroFirName": "beta-carotene",
+   "euroFirId": "CARTB",
+   "name": "Beta-carotene",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/beta-carotene/",
+   "parentId": "Vit A RE",
+   "nutrientId": "B-karo"
+  },
+  {
+   "unit": "µg",
+   "euroFirName": "vitamin D",
+   "euroFirId": "VITD",
+   "name": "Vitamin D",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/vitamin-d/",
+   "parentId": "FatSolubleVitamins",
+   "nutrientId": "Vit D"
+  },
+  {
+   "unit": "mg-ATE",
+   "euroFirName": "vitamin E; alpha-tocopherol equiv from E vitamer activities",
+   "euroFirId": "VITE",
+   "name": "Vitamin E",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/vitamin-e/",
+   "parentId": "FatSolubleVitamins",
+   "nutrientId": "Vit E"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "thiamin",
+   "euroFirId": "THIA",
+   "name": "Vitamin B1 (thiamin)",
+   "decimalPrecision": 2,
+   "uri": "https://www.matvaretabellen.no/en/vitamin-b1-thiamin/",
+   "parentId": "WaterSolubleVitamins",
+   "nutrientId": "Vit B1"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "riboflavin",
+   "euroFirId": "RIBF",
+   "name": "Vitamin B2 (riboflavin)",
+   "decimalPrecision": 2,
+   "uri": "https://www.matvaretabellen.no/en/vitamin-b2-riboflavin/",
+   "parentId": "WaterSolubleVitamins",
+   "nutrientId": "Vit B2"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "niacin, preformed",
+   "euroFirId": "NIA",
+   "name": "Vitamin B3 (niacin)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/vitamin-b3-niacin/",
+   "parentId": "WaterSolubleVitamins",
+   "nutrientId": "Niacin"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "niacin equivalents, total",
+   "euroFirId": "NIAEQ",
+   "name": "Niacin equivalents",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/niacin-equivalents/",
+   "parentId": "WaterSolubleVitamins",
+   "nutrientId": "NIAEQ"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "vitamin B-6, total",
+   "euroFirId": "VITB6",
+   "name": "Vitamin B6 (pyridoxine)",
+   "decimalPrecision": 2,
+   "uri": "https://www.matvaretabellen.no/en/vitamin-b6-pyridoxine/",
+   "parentId": "WaterSolubleVitamins",
+   "nutrientId": "Vit B6"
+  },
+  {
+   "unit": "µg",
+   "euroFirName": "folate, total",
+   "euroFirId": "FOL",
+   "name": "Vitamin B9 (folate)",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/vitamin-b9-folate/",
+   "parentId": "WaterSolubleVitamins",
+   "nutrientId": "Folat"
+  },
+  {
+   "unit": "µg",
+   "euroFirName": "vitamin B-12",
+   "euroFirId": "VITB12",
+   "name": "Vitamin B12 (cobalamin)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/vitamin-b12-cobalamin/",
+   "parentId": "WaterSolubleVitamins",
+   "nutrientId": "Vit B12"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "vitamin C",
+   "euroFirId": "VITC",
+   "name": "Vitamin C (askorbic acid)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/vitamin-c-askorbic-acid/",
+   "parentId": "WaterSolubleVitamins",
+   "nutrientId": "Vit C"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "calcium",
+   "euroFirId": "CA",
+   "name": "Calcium (Ca)",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/calcium-ca/",
+   "parentId": "Minerals",
+   "nutrientId": "Ca"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "iron, total",
+   "euroFirId": "FE",
+   "name": "Iron (Fe)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/iron-fe/",
+   "parentId": "TraceElements",
+   "nutrientId": "Fe"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "sodium",
+   "euroFirId": "NA",
+   "name": "Sodium (Na)",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/sodium-na/",
+   "parentId": "Minerals",
+   "nutrientId": "Na"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "potassium",
+   "euroFirId": "K",
+   "name": "Potassium (K)",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/potassium-k/",
+   "parentId": "Minerals",
+   "nutrientId": "K"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "magnesium",
+   "euroFirId": "MG",
+   "name": "Magnesium (Mg)",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/magnesium-mg/",
+   "parentId": "Minerals",
+   "nutrientId": "Mg"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "zinc",
+   "euroFirId": "ZN",
+   "name": "Zinc (Zn)",
+   "decimalPrecision": 1,
+   "uri": "https://www.matvaretabellen.no/en/zinc-zn/",
+   "parentId": "TraceElements",
+   "nutrientId": "Zn"
+  },
+  {
+   "unit": "µg",
+   "euroFirName": "selenium, total",
+   "euroFirId": "SE",
+   "name": "Selenium (Se)",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/selenium-se/",
+   "parentId": "TraceElements",
+   "nutrientId": "Se"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "copper",
+   "euroFirId": "CU",
+   "name": "Copper (Cu)",
+   "decimalPrecision": 2,
+   "uri": "https://www.matvaretabellen.no/en/copper-cu/",
+   "parentId": "TraceElements",
+   "nutrientId": "Cu"
+  },
+  {
+   "unit": "mg",
+   "euroFirName": "phosphorus",
+   "euroFirId": "P",
+   "name": "Phosphorus (P)",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/phosphorus-p/",
+   "parentId": "Minerals",
+   "nutrientId": "P"
+  },
+  {
+   "unit": "µg",
+   "euroFirName": "iodide",
+   "euroFirId": "ID",
+   "name": "Iodine (I)",
+   "decimalPrecision": 0,
+   "uri": "https://www.matvaretabellen.no/en/iodine-i/",
+   "parentId": "TraceElements",
+   "nutrientId": "I"
+  }
+ ],
+ "locale": "en"
+}

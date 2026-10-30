@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<TABLE>
+   <ALIM_GRP>
+      <alim_grp_code> 02 </alim_grp_code>
+      <alim_grp_nom_fr> fruits, légumes, légumineuses et oléagineux </alim_grp_nom_fr>
+      <alim_grp_nom_eng> fruits, vegetables, legumes and nuts </alim_grp_nom_eng>
+      <alim_ssgrp_code> 0201 </alim_ssgrp_code>
+      <alim_ssgrp_nom_fr> légumes </alim_ssgrp_nom_fr>
+      <alim_ssgrp_nom_eng> vegetables </alim_ssgrp_nom_eng>
+      <alim_ssssgrp_code> 020101 </alim_ssssgrp_code>
+      <alim_ssssgrp_nom_fr> légumes crus </alim_ssssgrp_nom_fr>
+      <alim_ssssgrp_nom_eng> vegetables, raw </alim_ssssgrp_nom_eng>
+   </ALIM_GRP>
+   <ALIM_GRP>
+      <alim_grp_code> 03 </alim_grp_code>
+      <alim_grp_nom_fr> produits céréaliers </alim_grp_nom_fr>
+      <alim_grp_nom_eng> cereal products </alim_grp_nom_eng>
+      <alim_ssgrp_code> 0301 </alim_ssgrp_code>
+      <alim_ssgrp_nom_fr> pâtes, riz et céréales </alim_ssgrp_nom_fr>
+      <alim_ssgrp_nom_eng> pasta, rice and grains </alim_ssgrp_nom_eng>
+      <alim_ssssgrp_code> 030101 </alim_ssssgrp_code>
+      <alim_ssssgrp_nom_fr> pâtes, riz et céréales cuits </alim_ssssgrp_nom_fr>
+      <alim_ssssgrp_nom_eng> pasta, rice and grains, cooked </alim_ssssgrp_nom_eng>
+   </ALIM_GRP>
+   <ALIM_GRP>
+      <alim_grp_code> 04 </alim_grp_code>
+      <alim_grp_nom_fr> viandes, oeufs, poissons </alim_grp_nom_fr>
+      <alim_grp_nom_eng> meat, egg and fish </alim_grp_nom_eng>
+      <alim_ssgrp_code> 0401 </alim_ssgrp_code>
+      <alim_ssgrp_nom_fr> viandes cuites </alim_ssgrp_nom_fr>
+      <alim_ssgrp_nom_eng> cooked meat </alim_ssgrp_nom_eng>
+      <alim_ssssgrp_code> 000000 </alim_ssssgrp_code>
+      <alim_ssssgrp_nom_fr> - </alim_ssssgrp_nom_fr>
+      <alim_ssssgrp_nom_eng> - </alim_ssssgrp_nom_eng>
+   </ALIM_GRP>
+   <ALIM_GRP>
+      <alim_grp_code> 05 </alim_grp_code>
+      <alim_grp_nom_fr> produits laitiers </alim_grp_nom_fr>
+      <alim_grp_nom_eng> milk and milk products </alim_grp_nom_eng>
+      <alim_ssgrp_code> 0501 </alim_ssgrp_code>
+      <alim_ssgrp_nom_fr> laits </alim_ssgrp_nom_fr>
+      <alim_ssgrp_nom_eng> milk </alim_ssgrp_nom_eng>
+      <alim_ssssgrp_code> 050101 </alim_ssssgrp_code>
+      <alim_ssssgrp_nom_fr> laits de vaches liquides (non concentrés) </alim_ssssgrp_nom_fr>
+      <alim_ssssgrp_nom_eng> milk from cow, liquid (not concentrated) </alim_ssssgrp_nom_eng>
+   </ALIM_GRP>
+   <ALIM_GRP>
+      <alim_grp_code> 06 </alim_grp_code>
+      <alim_grp_nom_fr> eaux et autres boissons </alim_grp_nom_fr>
+      <alim_grp_nom_eng> beverages </alim_grp_nom_eng>
+      <alim_ssgrp_code> 0601 </alim_ssgrp_code>
+      <alim_ssgrp_nom_fr> eaux </alim_ssgrp_nom_fr>
+      <alim_ssgrp_nom_eng> water </alim_ssgrp_nom_eng>
+      <alim_ssssgrp_code> 000000 </alim_ssssgrp_code>
+      <alim_ssssgrp_nom_fr> - </alim_ssssgrp_nom_fr>
+      <alim_ssssgrp_nom_eng> - </alim_ssssgrp_nom_eng>
+   </ALIM_GRP>
+
+</TABLE>

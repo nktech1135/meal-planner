@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<TABLE>
+   <ALIM>
+      <alim_code> 1032 </alim_code>
+      <alim_nom_fr> Haché à base de boeuf et soja, préemballé </alim_nom_fr>
+      <alim_nom_eng> Burger from beef and soybean, prepacked </alim_nom_eng>
+      <alim_nom_sci missing=" " />
+      <alim_grp_code> 04 </alim_grp_code>
+      <alim_ssgrp_code> 0404 </alim_ssgrp_code>
+      <alim_ssssgrp_code> 000000 </alim_ssssgrp_code>
+      <facteur_Jones> 6.25 </facteur_Jones>
+   </ALIM>
+   <ALIM>
+      <alim_code> 2002 </alim_code>
+      <alim_nom_fr> Jus multifruit, pur jus, multivitaminé </alim_nom_fr>
+      <alim_nom_eng> Multifruit juice, pure juice, multivitamin </alim_nom_eng>
+      <alim_nom_sci missing=" " />
+      <alim_grp_code> 06 </alim_grp_code>
+      <alim_ssgrp_code> 0602 </alim_ssgrp_code>
+      <alim_ssssgrp_code> 060201 </alim_ssssgrp_code>
+      <facteur_Jones> 6.25 </facteur_Jones>
+   </ALIM>
+   <ALIM>
+      <alim_code> 9811 </alim_code>
+      <alim_nom_fr> Pâtes sèches, standard, cuites, sans sel ajouté </alim_nom_fr>
+      <alim_nom_eng> Pasta, dry, regular, cooked, no added salt </alim_nom_eng>
+      <alim_nom_sci missing=" " />
+      <alim_grp_code> 03 </alim_grp_code>
+      <alim_ssgrp_code> 0301 </alim_ssgrp_code>
+      <alim_ssssgrp_code> 030101 </alim_ssssgrp_code>
+      <facteur_Jones> 5.7 </facteur_Jones>
+   </ALIM>
+   <ALIM>
+      <alim_code> 13039 </alim_code>
+      <alim_nom_fr> Pomme, chair et peau, crue </alim_nom_fr>
+      <alim_nom_eng> Apple, flesh and skin, raw </alim_nom_eng>
+      <alim_nom_sci> Malus domestica Borkhausen </alim_nom_sci>
+      <alim_grp_code> 02 </alim_grp_code>
+      <alim_ssgrp_code> 0204 </alim_ssgrp_code>
+      <alim_ssssgrp_code> 020401 </alim_ssssgrp_code>
+      <facteur_Jones> 6.25 </facteur_Jones>
+   </ALIM>
+   <ALIM>
+      <alim_code> 19024 </alim_code>
+      <alim_nom_fr> Lait entier, pasteurisé </alim_nom_fr>
+      <alim_nom_eng> Milk, whole, pasteurised </alim_nom_eng>
+      <alim_nom_sci missing=" " />
+      <alim_grp_code> 05 </alim_grp_code>
+      <alim_ssgrp_code> 0501 </alim_ssgrp_code>
+      <alim_ssssgrp_code> 050101 </alim_ssssgrp_code>
+      <facteur_Jones> 6.38 </facteur_Jones>
+   </ALIM>
+
+</TABLE>

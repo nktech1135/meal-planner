@@ -1,0 +1,97 @@
+{
+ "sources": [
+  {
+   "sourceId": "10",
+   "description": "Missing value, content not known."
+  },
+  {
+   "sourceId": "114a",
+   "description": "Data from the industry to the Food Composition Table 2021, unspecified/verified value."
+  },
+  {
+   "sourceId": "117c",
+   "description": "Data from the industry to the Food Composition Table 2024, calculated value."
+  },
+  {
+   "sourceId": "20",
+   "description": "Estimated value."
+  },
+  {
+   "sourceId": "225a",
+   "description": "Norwegian Food Safety Authority. Nutrient analysis 2017-2018. Cereals. Published report (2017): «Næringstoff og tungmetaller, akrylamid og mykotoksin i brød, knekkebrød og frokostblandinger». https://mattilsynet-xp7prod.enonic.cloud/_/attachment/inline/3f648304-e827-48a3-a93b-32610c93b8fd:b6579baf8215bea336408727f15326a5f58a78ea/Rapport%202017_%20N%C3%A6ringstoffer,%20tungmetaller,%20akrylamid%20og%20mykotoksin%20i%20br%C3%B8d,%20knekkebr%C3%B8d%20og%20frokostblandinger.pdf"
+  },
+  {
+   "sourceId": "30",
+   "description": "Calculated value from a similar food item."
+  },
+  {
+   "sourceId": "325",
+   "description": "University of Oslo (2018). Iodine project 2017-2018."
+  },
+  {
+   "sourceId": "331",
+   "description": "Frydenberg, H, Urke EB & Carlsen MH. Sugar project 2021-2024. University of Oslo, department of nutrition."
+  },
+  {
+   "sourceId": "400f",
+   "description": "Swedish National Food Agency. The food database, version 2016.02.17. "
+  },
+  {
+   "sourceId": "460g",
+   "description": "US Department of Agriculture, Agricultural Research Service. USDA National Nutrient Database for Standard Reference, Release 28 (2015). Nutrient Data Laboratory Home Page"
+  },
+  {
+   "sourceId": "50",
+   "description": "Estimated as a naturally occurring zero value, not analysed."
+  },
+  {
+   "sourceId": "60a",
+   "description": "Estimated as zero value when the analysed value is below the limit of quantification."
+  },
+  {
+   "sourceId": "701G",
+   "description": "Aggregated value from several food items"
+  },
+  {
+   "sourceId": "MI0002",
+   "description": "EuroFIR recipe calculation procedure"
+  },
+  {
+   "sourceId": "MI0114",
+   "description": "Energy calculated according to Regulation (EU) 1169/2011 (kJ)   (ENERCJ[kJ] = 17*PROT[g] + 17*(CHO[g] - POLYL[g]) + 37*FAT[g] + 29*ALC[g] + 8*FIBT[g] + 13*OA[g] + 10*POLYL[g])"
+  },
+  {
+   "sourceId": "MI0115",
+   "description": "Energy calculated according to Regulation (EU) 1169/2011 (kcal)   (ENERCC[kcal] = 4*PROT[g] + 4*(CHO[g] - POLYL[g]) + 9*FAT[g] + 7*ALC[g] + 2*FIBT[g] + 3*OA[g] + 2.4*POLYL[g])"
+  },
+  {
+   "sourceId": "MI0120",
+   "description": "Salt equivalent calculated from sodium   (NACL[g]=2.5*NA[mg]/1000.0)"
+  },
+  {
+   "sourceId": "MI0142",
+   "description": "Water by difference   (WATER[g] = 100 - PROT[g] - FAT[g] - CHO[g] - FIBT[g] - ALC[g])"
+  },
+  {
+   "sourceId": "MI0181",
+   "description": "Carbohydrate, available calculated from sugar and starch   (CHO[g] = SUGAR[g] + STARCH[g])"
+  },
+  {
+   "sourceId": "MI0322",
+   "description": "Vitamin A activity calculated from retinol and beta-carotene (factor 1/6) (VITA[µg] = RETOL[µg] + (CARTB[µg] / 6))"
+  },
+  {
+   "sourceId": "MI0325",
+   "description": "Vitamin A activity calculated from retinol and beta-carotene (factor 1/12)   (VITA[µg] = RETOL[µg] + (CARTB[µg] / 12))"
+  },
+  {
+   "sourceId": "MI0421",
+   "description": "Niacin equivalents calculated from niacin and tryptophan   (NIAEQ[mg] = NIA[mg] + TRP[mg] / 60)"
+  },
+  {
+   "sourceId": "MI_SUGAR_NO",
+   "description": "Sugar calculated as the sum of fructose, glucose, lactose, maltose and sucrose   (SUGAR[g] = FRUS[g] + GLUS[g] + LACS[g] + MALS[g] + SUCS[g])"
+  }
+ ],
+ "locale": "en"
+}

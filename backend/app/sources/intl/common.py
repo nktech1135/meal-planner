@@ -50,7 +50,7 @@ def parse_value(raw) -> tuple[float | None, str | None]:
     if low in TRACE:
         return 0.0, "trace"
     if low.startswith("<"):
-        limit = low.lstrip("<").strip()
+        limit = text.lstrip("<").strip()
         return 0.0, f"below limit ({'<' + limit if limit else 'not quantified'})"
     estimate = text.startswith("(") and text.endswith(")")
     if estimate:

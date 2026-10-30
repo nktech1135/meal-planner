@@ -62,7 +62,8 @@ def upsert_external_food(db: Session, ext: ExternalFood, commit: bool = True) ->
     food.nutrients.clear()
     food.portions.clear()
     db.flush()
-    food.nutrients = [FoodNutrient(nutrient_code=c, amount=a, derivation=d) for c, (a, d) in ext.nutrients.items()]
+    food.nutrients = [FoodNutrient(nutrient_code=c, amount=a, derivation=d[:120] if d else d)
+                      for c, (a, d) in ext.nutrients.items()]
     food.portions = [FoodPortion(label=label[:200], gram_weight=g) for label, g in ext.portions]
     if commit:
         db.commit()
@@ -108,7 +109,8 @@ def bulk_upsert_external_foods(db: Session, exts: list[ExternalFood]) -> int:
             {**_food_columns(e, now), "source": source, "source_id": e.source_id, "owner_id": None, "created_at": now}
             for e in new]).all()
         ids.update({source_id: food_id for food_id, source_id in rows})
-    nutrients = [{"food_id": ids[e.source_id], "nutrient_code": code, "amount": amount, "derivation": derivation}
+    nutrients = [{"food_id": ids[e.source_id], "nutrient_code": code, "amount": amount,
+                  "derivation": derivation[:120] if derivation else derivation}
                  for e in batch for code, (amount, derivation) in e.nutrients.items()]
     if nutrients:
         db.execute(insert(FoodNutrient), nutrients)

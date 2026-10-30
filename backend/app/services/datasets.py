@@ -21,6 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 import ijson
@@ -44,6 +45,7 @@ class RemoteFile:
     name: str  # the key the parser looks the file up by
     url: str
     sha256: str | None = None  # pinned when the publisher's file is a fixed release
+    optional: bool = False  # extra detail; the import continues without it
 
 
 @dataclass(frozen=True)
@@ -137,10 +139,12 @@ INTERNATIONAL = (
             "About 3,500 foods with English names (ANSES, 2025).", "~72 MB download",
             files=(RemoteFile("alim", "https://entrepot.recherche.data.gouv.fr/api/access/datafile/666252",
                               "e0b1de25b3039028205e9d54a96892e403e1b313c2efeb41180fabe132627478"),
-                   RemoteFile("compo", "https://entrepot.recherche.data.gouv.fr/api/access/datafile/666249"),
+                   RemoteFile("compo", "https://entrepot.recherche.data.gouv.fr/api/access/datafile/666249",
+                              "8c46a9032ece4eab4ffccc9dfcb0c490ec2f416aa664cc1ee013b241c6bdd4af"),
                    RemoteFile("const", "https://entrepot.recherche.data.gouv.fr/api/access/datafile/666246",
                               "3a231ea3e9836e4ac0b6ff94511e010210b2523d1b8b486c6b29e211066ba3f3"),
-                   RemoteFile("groups", "https://entrepot.recherche.data.gouv.fr/api/access/datafile/666250")),
+                   RemoteFile("groups", "https://entrepot.recherche.data.gouv.fr/api/access/datafile/666250",
+                              "e216928be1001aed15ba1b120405b70a98145da2a1a76026d6e33542bd5e39dc")),
             parser="ciqual", source="ciqual", country="France", release="2025",
             licence="Etalab Open Licence 2.0", licence_url="https://www.etalab.gouv.fr/licence-ouverte-open-licence/",
             attribution="Anses. 2025. Table de composition nutritionnelle des aliments Ciqual. "
@@ -149,7 +153,8 @@ INTERNATIONAL = (
             "About 2,100 foods with English names (Norwegian Food Safety Authority).", "~15 MB download",
             files=(RemoteFile("foods", "https://www.matvaretabellen.no/api/en/foods.json"),
                    RemoteFile("nutrients", "https://www.matvaretabellen.no/api/en/nutrients.json"),
-                   RemoteFile("groups", "https://www.matvaretabellen.no/api/en/food-groups.json")),
+                   RemoteFile("groups", "https://www.matvaretabellen.no/api/en/food-groups.json"),
+                   RemoteFile("sources", "https://www.matvaretabellen.no/api/en/sources.json", optional=True)),
             parser="matvaretabellen", source="matvaretabellen", country="Norway", release="current",
             licence="CC BY 4.0", licence_url=CC_BY,
             attribution="Matvaretabellen. Mattilsynet (Norwegian Food Safety Authority). www.matvaretabellen.no. "
@@ -307,9 +312,16 @@ def _import_parsed(db: Session, ds: Dataset, client: httpx.Client, job: ImportJo
     with tempfile.TemporaryDirectory() as tmp:
         paths = {}
         for remote in ds.files:
-            path = Path(tmp) / remote.name
-            with path.open("wb") as fh:
-                _download(client, remote.url, fh, report)
+            # Keep the published extension: spreadsheet readers go by it.
+            path = Path(tmp) / (remote.name + Path(urlsplit(remote.url).path).suffix.replace("%20", ""))
+            try:
+                with path.open("wb") as fh:
+                    _download(client, remote.url, fh, report)
+            except httpx.HTTPError:
+                if not remote.optional:
+                    raise
+                log.warning("Optional file %s for %s unavailable; continuing without it", remote.name, ds.key)
+                continue
             if remote.sha256 and _sha256(path) != remote.sha256:
                 raise ValueError(f"Checksum mismatch for '{remote.name}': the publisher has changed the file, so this "
                                  "version of the app can't vouch for it. Update the app to import the new release.")

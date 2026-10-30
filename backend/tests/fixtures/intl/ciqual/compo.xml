@@ -1,0 +1,1939 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<TABLE>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 327 </const_code>
+      <teneur> 888 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 328 </const_code>
+      <teneur> 214 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 333 </const_code>
+      <teneur> 214 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 400 </const_code>
+      <teneur> 63,7 </teneur>
+      <min missing=" " />
+      <max>           65 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 10110 </const_code>
+      <teneur> 330 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 10120 </const_code>
+      <teneur> 29,9 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 10150 </const_code>
+      <teneur> 139 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 10190 </const_code>
+      <teneur> 315 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 10200 </const_code>
+      <teneur> 26,3 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 10251 </const_code>
+      <teneur> 0,26 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 10260 </const_code>
+      <teneur> 1,8 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 10290 </const_code>
+      <teneur> 0,15 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 10300 </const_code>
+      <teneur> 2,9 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 10340 </const_code>
+      <teneur> 8,9 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 10530 </const_code>
+      <teneur> &lt; 2,5 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 25000 </const_code>
+      <teneur> 15 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 25003 </const_code>
+      <teneur> 15 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 31000 </const_code>
+      <teneur> 2,48 </teneur>
+      <min>          0,1 </min>
+      <max>          5,9 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 32000 </const_code>
+      <teneur> 0,7 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 34100 </const_code>
+      <teneur> 4,5 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 40000 </const_code>
+      <teneur> 14,6 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 40302 </const_code>
+      <teneur> 6,29 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 40303 </const_code>
+      <teneur> 6,44 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 40304 </const_code>
+      <teneur> 0,38 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 51104 </const_code>
+      <teneur> 61,8 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 51200 </const_code>
+      <teneur> 60,5 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 51330 </const_code>
+      <teneur> &lt; 30 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 52100 </const_code>
+      <teneur> traces </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 53100 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 54101 </const_code>
+      <teneur> 3,6 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 55100 </const_code>
+      <teneur> 3,57 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 56100 </const_code>
+      <teneur> 0,09 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 56200 </const_code>
+      <teneur> 0,1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 56310 </const_code>
+      <teneur> 2,49 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 56400 </const_code>
+      <teneur> 0,28 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 56500 </const_code>
+      <teneur> 0,13 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 56600 </const_code>
+      <teneur> 1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 56700 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 56702 </const_code>
+      <teneur> 21,6 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 56708 </const_code>
+      <teneur> 5,7 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 60000 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 71010 </const_code>
+      <teneur> 0,31 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 1032 </alim_code>
+      <const_code> 75100 </const_code>
+      <teneur> 44,5 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 406 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 327 </const_code>
+      <teneur> 205 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 328 </const_code>
+      <teneur> 48,4 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 333 </const_code>
+      <teneur> 48,4 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 400 </const_code>
+      <teneur> 86,5 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 187 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 10110 </const_code>
+      <teneur> 1,5 </teneur>
+      <min>            1 </min>
+      <max>            2 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 349 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 10120 </const_code>
+      <teneur> 9,98 </teneur>
+      <min>         9,65 </min>
+      <max>         10,3 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 10150 </const_code>
+      <teneur> 10 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 187 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 10190 </const_code>
+      <teneur> 171 </teneur>
+      <min>          152 </min>
+      <max>          189 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 10200 </const_code>
+      <teneur> 9,6 </teneur>
+      <min>          7,3 </min>
+      <max>         11,9 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 10251 </const_code>
+      <teneur> 0,14 </teneur>
+      <min>         0,13 </min>
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 10260 </const_code>
+      <teneur> 0,12 </teneur>
+      <min>        0,078 </min>
+      <max>         0,17 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 10290 </const_code>
+      <teneur> 0,018 </teneur>
+      <min>        0,016 </min>
+      <max>         0,02 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 10300 </const_code>
+      <teneur> 0,036 </teneur>
+      <min>         0,02 </min>
+      <max>        0,052 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 10340 </const_code>
+      <teneur> &lt; 10 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 10530 </const_code>
+      <teneur> 1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 187 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 25000 </const_code>
+      <teneur> 0,48 </teneur>
+      <min>          0,4 </min>
+      <max>          0,5 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 25003 </const_code>
+      <teneur> 0,48 </teneur>
+      <min>          0,4 </min>
+      <max>          0,5 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 31000 </const_code>
+      <teneur> 11,3 </teneur>
+      <min>         10,5 </min>
+      <max>         12,4 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 32000 </const_code>
+      <teneur> 11 </teneur>
+      <min>         10,5 </min>
+      <max>         12,1 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 349 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 34100 </const_code>
+      <teneur> 0,25 </teneur>
+      <min>          0,1 </min>
+      <max>          0,6 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 349 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 40000 </const_code>
+      <teneur> 0,1 </teneur>
+      <min>            0 </min>
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 349 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 40302 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 349 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 40303 </const_code>
+      <teneur> traces </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 244 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 40304 </const_code>
+      <teneur> traces </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 244 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 51104 </const_code>
+      <teneur> 31,7 </teneur>
+      <min>         0,67 </min>
+      <max missing=" " />
+      <code_confiance> B </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 51200 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 244 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 51330 </const_code>
+      <teneur> 380 </teneur>
+      <min>            8 </min>
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 187 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 52100 </const_code>
+      <teneur> &lt; 0,5 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 187 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 53100 </const_code>
+      <teneur> 2 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 349 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 54101 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 55100 </const_code>
+      <teneur> 24 </teneur>
+      <min>           18 </min>
+      <max>           30 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 349 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 56100 </const_code>
+      <teneur> 0,24 </teneur>
+      <min>         0,21 </min>
+      <max>         0,28 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 349 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 56200 </const_code>
+      <teneur> 0,32 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 349 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 56310 </const_code>
+      <teneur> 0,29 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 187 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 56400 </const_code>
+      <teneur> 0,095 </teneur>
+      <min>         0,04 </min>
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 187 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 56500 </const_code>
+      <teneur> 0,33 </teneur>
+      <min>          0,3 </min>
+      <max>          0,4 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 349 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 56600 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 244 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 56700 </const_code>
+      <teneur> 30,5 </teneur>
+      <min>           30 </min>
+      <max>           31 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 349 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 56702 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 56708 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 60000 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 244 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 71010 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 2002 </alim_code>
+      <const_code> 75100 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 244 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 327 </const_code>
+      <teneur> 706 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 328 </const_code>
+      <teneur> 167 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 333 </const_code>
+      <teneur> 164 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 400 </const_code>
+      <teneur> 58,9 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 10110 </const_code>
+      <teneur> 19 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 10120 </const_code>
+      <teneur> 21,9 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 10150 </const_code>
+      <teneur> 72,5 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 10190 </const_code>
+      <teneur> 52,1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 10200 </const_code>
+      <teneur> 18 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 10251 </const_code>
+      <teneur> 0,41 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 10260 </const_code>
+      <teneur> 0,68 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 10290 </const_code>
+      <teneur> 0,15 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 10300 </const_code>
+      <teneur> 0,51 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 10340 </const_code>
+      <teneur> 4,21 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 10530 </const_code>
+      <teneur> &lt; 13 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 25000 </const_code>
+      <teneur> 6,1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 25003 </const_code>
+      <teneur> 6,69 </teneur>
+      <min>          6,1 </min>
+      <max>          6,7 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 31000 </const_code>
+      <teneur> 31,4 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 32000 </const_code>
+      <teneur> 0,87 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 34100 </const_code>
+      <teneur> 2,2 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 40000 </const_code>
+      <teneur> 1,1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 40302 </const_code>
+      <teneur> 0,2 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 40303 </const_code>
+      <teneur> 0,16 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 40304 </const_code>
+      <teneur> 0,48 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 51104 </const_code>
+      <teneur> 1,25 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> B </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 51200 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> C </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 51330 </const_code>
+      <teneur> &lt; 30 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 52100 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> C </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 53100 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 54101 </const_code>
+      <teneur> &lt; 0,8 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 365 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 55100 </const_code>
+      <teneur> &lt; 2 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 56100 </const_code>
+      <teneur> &lt; 0,079 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 56200 </const_code>
+      <teneur> &lt; 0,1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 56310 </const_code>
+      <teneur> &lt; 0,2 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 56400 </const_code>
+      <teneur> 0,1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 56500 </const_code>
+      <teneur> &lt; 0,03 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 56600 </const_code>
+      <teneur> 0,014 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 365 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 56700 </const_code>
+      <teneur> 5,2 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 56702 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 56708 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> B </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 60000 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> C </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 71010 </const_code>
+      <teneur> &lt; 0,08 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 365 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 9811 </alim_code>
+      <const_code> 75100 </const_code>
+      <teneur> &lt; 1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 435 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 327 </const_code>
+      <teneur> 229 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 328 </const_code>
+      <teneur> 54 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 333 </const_code>
+      <teneur> 54 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 400 </const_code>
+      <teneur> 85,4 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 319 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 10110 </const_code>
+      <teneur> 1,5 </teneur>
+      <min>         1,11 </min>
+      <max>         2,09 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 10120 </const_code>
+      <teneur> 6,47 </teneur>
+      <min>         4,97 </min>
+      <max>         9,23 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 10150 </const_code>
+      <teneur> 11,4 </teneur>
+      <min>           10 </min>
+      <max>           13 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 10190 </const_code>
+      <teneur> 119 </teneur>
+      <min>         93,3 </min>
+      <max>          146 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 10200 </const_code>
+      <teneur> 5,34 </teneur>
+      <min>         3,39 </min>
+      <max>         10,7 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 10251 </const_code>
+      <teneur> 0,036 </teneur>
+      <min>        0,022 </min>
+      <max>        0,046 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 10260 </const_code>
+      <teneur> 0,099 </teneur>
+      <min>        0,066 </min>
+      <max>         0,16 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 10290 </const_code>
+      <teneur> 0,041 </teneur>
+      <min>        0,033 </min>
+      <max>        0,054 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 10300 </const_code>
+      <teneur> 0,031 </teneur>
+      <min>         0,01 </min>
+      <max>        0,083 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 10340 </const_code>
+      <teneur> &lt; 10 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 313 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 10530 </const_code>
+      <teneur> 0,37 </teneur>
+      <min>          0,1 </min>
+      <max>            2 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 447 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 25000 </const_code>
+      <teneur> 0,25 </teneur>
+      <min>         0,17 </min>
+      <max>         0,57 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 25003 </const_code>
+      <teneur> 0,25 </teneur>
+      <min>         0,17 </min>
+      <max>         0,57 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 31000 </const_code>
+      <teneur> 11,6 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> B </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 32000 </const_code>
+      <teneur> 10,6 </teneur>
+      <min>         8,77 </min>
+      <max>           12 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 34100 </const_code>
+      <teneur> 1,4 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 319 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 40000 </const_code>
+      <teneur> 0,25 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 319 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 40302 </const_code>
+      <teneur> 0,052 </teneur>
+      <min>        0,051 </min>
+      <max>        0,053 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 320 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 40303 </const_code>
+      <teneur> 0,007 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> C </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 40304 </const_code>
+      <teneur> 0,051 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> C </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 51104 </const_code>
+      <teneur> 1,78 </teneur>
+      <min>         0,92 </min>
+      <max>         6,75 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 51200 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> C </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 51330 </const_code>
+      <teneur> 21,4 </teneur>
+      <min>           11 </min>
+      <max>           81 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 52100 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> C </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 53100 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 54101 </const_code>
+      <teneur> 1,78 </teneur>
+      <min>          0,9 </min>
+      <max>          4,3 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 55100 </const_code>
+      <teneur> 4,6 </teneur>
+      <min>            4 </min>
+      <max>          5,5 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 56100 </const_code>
+      <teneur> 0,016 </teneur>
+      <min>        0,007 </min>
+      <max>         0,03 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 56200 </const_code>
+      <teneur> 0,026 </teneur>
+      <min>        0,015 </min>
+      <max>        0,049 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 56310 </const_code>
+      <teneur> 0,081 </teneur>
+      <min>         0,07 </min>
+      <max>         0,13 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 56400 </const_code>
+      <teneur> 0,058 </teneur>
+      <min>         0,03 </min>
+      <max>         0,13 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 56500 </const_code>
+      <teneur> 0,044 </teneur>
+      <min>        0,028 </min>
+      <max>        0,056 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 56600 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> C </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 56700 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 56702 </const_code>
+      <teneur> 3 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> B </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 56708 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> B </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 60000 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> C </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 71010 </const_code>
+      <teneur> 0,19 </teneur>
+      <min>         0,08 </min>
+      <max>         0,38 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 13039 </alim_code>
+      <const_code> 75100 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> C </code_confiance>
+      <source_code> 361 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 327 </const_code>
+      <teneur> 259 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 328 </const_code>
+      <teneur> 61,8 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 333 </const_code>
+      <teneur> 62,1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 400 </const_code>
+      <teneur> 89,1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 321 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 10110 </const_code>
+      <teneur> 79 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 321 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 10120 </const_code>
+      <teneur> 10,9 </teneur>
+      <min>         10,6 </min>
+      <max>         11,2 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 162 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 10150 </const_code>
+      <teneur> 88 </teneur>
+      <min>           69 </min>
+      <max>          103 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 1222 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 10190 </const_code>
+      <teneur> 140 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 321 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 10200 </const_code>
+      <teneur> 117 </teneur>
+      <min>          116 </min>
+      <max>          118 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 162 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 10251 </const_code>
+      <teneur> 0,002 </teneur>
+      <min>       0,0017 </min>
+      <max>       0,0022 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 162 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 10260 </const_code>
+      <teneur> 0,046 </teneur>
+      <min>        0,012 </min>
+      <max>         0,12 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 724 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 10290 </const_code>
+      <teneur> &lt; 0,1 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 321 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 10300 </const_code>
+      <teneur> 0,37 </teneur>
+      <min>         0,36 </min>
+      <max>         0,38 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 162 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 10340 </const_code>
+      <teneur> &lt; 2,2 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 162 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 10530 </const_code>
+      <teneur> 12,4 </teneur>
+      <min>          3,9 </min>
+      <max>         37,1 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 721 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 25000 </const_code>
+      <teneur> 3,3 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 25003 </const_code>
+      <teneur> 3,23 </teneur>
+      <min missing=" " />
+      <max>          3,3 </max>
+      <code_confiance> A </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 31000 </const_code>
+      <teneur> 4,8 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 32000 </const_code>
+      <teneur> 3,2 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 321 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 34100 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 284 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 40000 </const_code>
+      <teneur> 3,3 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 321 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 40302 </const_code>
+      <teneur> 2,25 </teneur>
+      <min missing=" " />
+      <max>         2,48 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 40303 </const_code>
+      <teneur> 0,94 </teneur>
+      <min>         0,85 </min>
+      <max>          1,1 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 40304 </const_code>
+      <teneur> 0,11 </teneur>
+      <min>          0,1 </min>
+      <max>         0,13 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 51104 </const_code>
+      <teneur> 40,2 </teneur>
+      <min>         38,5 </min>
+      <max>           41 </max>
+      <code_confiance> B </code_confiance>
+      <source_code> 444 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 51200 </const_code>
+      <teneur> 38,5 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 321 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 51330 </const_code>
+      <teneur> 20,2 </teneur>
+      <min>          0,1 </min>
+      <max>           30 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 1280 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 52100 </const_code>
+      <teneur> 0,06 </teneur>
+      <min>         0,03 </min>
+      <max>          0,1 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 730 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 53100 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 54101 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 284 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 55100 </const_code>
+      <teneur> 1,4 </teneur>
+      <min>          0,7 </min>
+      <max>          2,1 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 728 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 56100 </const_code>
+      <teneur> 0,044 </teneur>
+      <min>        0,033 </min>
+      <max>         0,06 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 728 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 56200 </const_code>
+      <teneur> 0,17 </teneur>
+      <min>         0,13 </min>
+      <max>         0,23 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 728 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 56310 </const_code>
+      <teneur> 0,088 </teneur>
+      <min>         0,08 </min>
+      <max>          0,1 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 728 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 56400 </const_code>
+      <teneur> 0,41 </teneur>
+      <min>         0,23 </min>
+      <max>         3,45 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 728 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 56500 </const_code>
+      <teneur> 0,044 </teneur>
+      <min>         0,02 </min>
+      <max>         0,06 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 728 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 56600 </const_code>
+      <teneur> 0,32 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> A </code_confiance>
+      <source_code> 321 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 56700 </const_code>
+      <teneur> 6,09 </teneur>
+      <min>          2,7 </min>
+      <max>           21 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 725 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 56702 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 56708 </const_code>
+      <teneur> - </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance missing=" " />
+      <source_code missing="." />
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 60000 </const_code>
+      <teneur> 0 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 284 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 71010 </const_code>
+      <teneur> 0,089 </teneur>
+      <min missing=" " />
+      <max missing=" " />
+      <code_confiance> D </code_confiance>
+      <source_code> 284 </source_code>
+   </COMPO>
+   <COMPO>
+      <alim_code> 19024 </alim_code>
+      <const_code> 75100 </const_code>
+      <teneur> 13,9 </teneur>
+      <min>         13,5 </min>
+      <max>           14 </max>
+      <code_confiance> D </code_confiance>
+      <source_code> 718 </source_code>
+   </COMPO>
+
+</TABLE>

@@ -1,0 +1,50 @@
+{
+ "foodGroups": [
+  {
+   "foodGroupId": "1",
+   "name": "Dairy products"
+  },
+  {
+   "foodGroupId": "5",
+   "name": "Cereals, bread and cakes"
+  },
+  {
+   "foodGroupId": "10",
+   "name": "Other foods and dishes"
+  },
+  {
+   "foodGroupId": "12",
+   "name": "Legumes"
+  },
+  {
+   "foodGroupId": "13",
+   "name": "Fruit and berries"
+  },
+  {
+   "foodGroupId": "1.1",
+   "name": "Milk",
+   "parentId": "1"
+  },
+  {
+   "foodGroupId": "5.2",
+   "name": "Grain, rice and pasta",
+   "parentId": "5"
+  },
+  {
+   "foodGroupId": "5.3",
+   "name": "Breakfast cereals",
+   "parentId": "5"
+  },
+  {
+   "foodGroupId": "10.10",
+   "name": "Food supplements",
+   "parentId": "10"
+  },
+  {
+   "foodGroupId": "13.2",
+   "name": "Fruit",
+   "parentId": "13"
+  }
+ ],
+ "locale": "en"
+}
