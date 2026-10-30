@@ -469,8 +469,10 @@ service_stop() {
 
 service_start() {
   if test_mode; then
-    as_service "cd '$CURRENT/backend' && exec '$CURRENT/venv/bin/uvicorn' app.main:app --host \"\$MEALPLAN_HOST\" --port \"\$MEALPLAN_PORT\"" \
-      >"$VAR_DIR/test-server.log" 2>&1 9>&- &  # don't let the server inherit the lock
+    # Launched directly (not via a function, which would fork a wrapper) so $! is the server's PID,
+    # and without fd 9 so the server doesn't hold the installer lock.
+    bash -c "set -a; . '$ENV_FILE'; set +a; cd '$CURRENT/backend' && exec '$CURRENT/venv/bin/uvicorn' app.main:app \
+      --host \"\$MEALPLAN_HOST\" --port \"\$MEALPLAN_PORT\"" >"$VAR_DIR/test-server.log" 2>&1 9>&- &
     echo $! >"$VAR_DIR/test-server.pid"
   else
     systemctl enable mealplan >/dev/null 2>&1
