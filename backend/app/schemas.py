@@ -50,6 +50,7 @@ class ProfileIn(BaseModel):
     health_notes: str = Field(default="", max_length=4000)
     target_overrides: dict[str, dict[str, float | None]] = {}
     pinned_nutrients: list[str] = Field(default=[], max_length=40)
+    unit_system: Literal["metric", "imperial"] = "metric"
 
     @field_validator("pinned_nutrients")
     @classmethod
@@ -425,3 +426,14 @@ class SavedMealFromLog(BaseModel):
 class SavedMealLogIn(BaseModel):
     meal: Meal | None = None
     consumed_at: datetime | None = None
+
+
+class BodyIn(BaseModel):
+    weight_kg: float | None = Field(default=None, gt=20, lt=700)
+    body_fat_pct: float | None = Field(default=None, gt=1, lt=75)
+    waist_cm: float | None = Field(default=None, gt=30, lt=300)
+    note: str = Field(default="", max_length=500)
+
+
+class BodyOut(BodyIn, ORM):
+    date: date

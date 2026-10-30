@@ -54,6 +54,7 @@ class Profile(Base):
     target_overrides: Mapped[dict] = mapped_column(JSON, default=dict)
     # Nutrients always shown on the condensed day view, besides energy, macros and anything flagged.
     pinned_nutrients: Mapped[list] = mapped_column(JSON, default=list)
+    unit_system: Mapped[str] = mapped_column(String(10), default="metric")  # metric | imperial (display only)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     user: Mapped[User] = relationship(back_populates="profile")
@@ -328,3 +329,19 @@ class ImportJob(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BodyMeasurement(Base):
+    """One day's body measurements (any subset)."""
+
+    __tablename__ = "body_measurements"
+    __table_args__ = (UniqueConstraint("user_id", "date", name="uq_body_user_date"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    date: Mapped[date] = mapped_column(Date)
+    weight_kg: Mapped[float | None] = mapped_column(Float)
+    body_fat_pct: Mapped[float | None] = mapped_column(Float)
+    waist_cm: Mapped[float | None] = mapped_column(Float)
+    note: Mapped[str] = mapped_column(String(500), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
