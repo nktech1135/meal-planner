@@ -1,0 +1,239 @@
+from datetime import UTC, date, datetime
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    display_name: Mapped[str] = mapped_column(String(120), default="")
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    profile: Mapped["Profile | None"] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+
+class Profile(Base):
+    __tablename__ = "profiles"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    sex: Mapped[str | None] = mapped_column(String(10))  # male | female (used for reference intakes)
+    birth_date: Mapped[date | None] = mapped_column(Date)
+    height_cm: Mapped[float | None] = mapped_column(Float)
+    weight_kg: Mapped[float | None] = mapped_column(Float)
+    activity_level: Mapped[str] = mapped_column(String(20), default="moderate")
+    goal: Mapped[str] = mapped_column(String(20), default="maintain")  # lose | maintain | gain
+    life_stage: Mapped[str] = mapped_column(String(20), default="none")  # none | pregnant | lactating
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    # Free text the advisor sees: conditions, medications, dietary pattern, allergies.
+    health_notes: Mapped[str] = mapped_column(Text, default="")
+    # {nutrient_code: {"min": x, "target": y, "max": z}} — overrides computed targets.
+    target_overrides: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    user: Mapped[User] = relationship(back_populates="profile")
+
+
+class Food(Base):
+    """A food, ingredient, product or supplement with nutrient values on a stated basis.
+
+    ``basis`` is ``100g`` (amounts per 100 g) or ``serving`` (amounts per label serving,
+    typical for supplements, where ``serving_quantity`` × ``serving_unit`` is one serving).
+    Foods with ``owner_id`` NULL are shared (imported from a source); others are private.
+    """
+
+    __tablename__ = "foods"
+    __table_args__ = (
+        UniqueConstraint("source", "source_id", name="uq_food_source"),
+        Index("ix_foods_name", "name"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(300))
+    brand: Mapped[str | None] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(20), default="food")  # food | supplement
+    state: Mapped[str | None] = mapped_column(String(20))  # raw | cooked | prepared | None (n/a)
+    cooking_method: Mapped[str | None] = mapped_column(String(60))
+    basis: Mapped[str] = mapped_column(String(10), default="100g")
+    serving_quantity: Mapped[float | None] = mapped_column(Float)
+    serving_unit: Mapped[str | None] = mapped_column(String(80))
+    serving_size_g: Mapped[float | None] = mapped_column(Float)
+
+    source: Mapped[str] = mapped_column(String(40), default="manual")
+    source_id: Mapped[str | None] = mapped_column(String(120))
+    source_url: Mapped[str | None] = mapped_column(String(500))
+    source_data_type: Mapped[str | None] = mapped_column(String(60))  # e.g. FDC "Foundation", "Branded"
+    trust_level: Mapped[str] = mapped_column(String(20))
+    citation: Mapped[str | None] = mapped_column(Text)
+    # Unmapped label components, e.g. supplement botanicals: [{"name","amount","unit"}]
+    other_components: Mapped[list] = mapped_column(JSON, default=list)
+    source_payload: Mapped[dict | None] = mapped_column(JSON)  # raw upstream record, kept for audit
+
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    nutrients: Mapped[list["FoodNutrient"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
+    portions: Mapped[list["FoodPortion"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
+
+    def nutrient_map(self) -> dict[str, float]:
+        return {n.nutrient_code: n.amount for n in self.nutrients}
+
+
+class FoodNutrient(Base):
+    __tablename__ = "food_nutrients"
+
+    food_id: Mapped[int] = mapped_column(ForeignKey("foods.id", ondelete="CASCADE"), primary_key=True)
+    nutrient_code: Mapped[str] = mapped_column(String(40), primary_key=True)
+    amount: Mapped[float] = mapped_column(Float)
+    derivation: Mapped[str | None] = mapped_column(String(120))  # e.g. FDC "Analytical", "Calculated"
+
+
+class FoodPortion(Base):
+    __tablename__ = "food_portions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    food_id: Mapped[int] = mapped_column(ForeignKey("foods.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(String(200))
+    gram_weight: Mapped[float] = mapped_column(Float)
+
+
+class CookingYield(Base):
+    """Raw → cooked mass conversion: cooked_weight = raw_weight × yield_factor.
+
+    ``retention`` optionally holds per-nutrient retention factors (fraction of the raw
+    nutrient remaining after cooking, e.g. from the USDA Table of Nutrient Retention
+    Factors). Nutrients without a factor are assumed fully retained, and results are
+    marked as such.
+    """
+
+    __tablename__ = "cooking_yields"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    raw_food_id: Mapped[int] = mapped_column(ForeignKey("foods.id", ondelete="CASCADE"), index=True)
+    cooked_food_id: Mapped[int | None] = mapped_column(ForeignKey("foods.id", ondelete="SET NULL"))
+    method: Mapped[str] = mapped_column(String(80))  # e.g. "roasted", "boiled", "pan-fried"
+    yield_factor: Mapped[float] = mapped_column(Float)
+    retention: Mapped[dict] = mapped_column(JSON, default=dict)
+    basis: Mapped[str] = mapped_column(String(20))  # measured | published | derived
+    trust_level: Mapped[str] = mapped_column(String(20))
+    citation: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    raw_food: Mapped[Food] = relationship(foreign_keys=[raw_food_id])
+    cooked_food: Mapped[Food | None] = relationship(foreign_keys=[cooked_food_id])
+
+
+class Recipe(Base):
+    __tablename__ = "recipes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    servings: Mapped[float] = mapped_column(Float, default=1)
+    cooked_weight_g: Mapped[float | None] = mapped_column(Float)  # weigh the finished dish for best accuracy
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    ingredients: Mapped[list["RecipeIngredient"]] = relationship(
+        cascade="all, delete-orphan", order_by="RecipeIngredient.position", lazy="selectin"
+    )
+
+
+class RecipeIngredient(Base):
+    __tablename__ = "recipe_ingredients"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    recipe_id: Mapped[int] = mapped_column(ForeignKey("recipes.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    food_id: Mapped[int] = mapped_column(ForeignKey("foods.id", ondelete="RESTRICT"))
+    grams: Mapped[float] = mapped_column(Float)
+    # "as_is": grams are of the food as described. "cooked": grams were weighed after
+    # cooking a raw food, converted back through ``yield_id``.
+    weighed_state: Mapped[str] = mapped_column(String(10), default="as_is")
+    yield_id: Mapped[int | None] = mapped_column(ForeignKey("cooking_yields.id", ondelete="SET NULL"))
+    note: Mapped[str] = mapped_column(String(200), default="")
+
+    food: Mapped[Food] = relationship(lazy="selectin")
+
+
+class LogEntry(Base):
+    """One thing a user ate or took. Nutrients are snapshotted at logging time so
+    later edits to foods or recipes don't silently rewrite history."""
+
+    __tablename__ = "log_entries"
+    __table_args__ = (Index("ix_log_user_time", "user_id", "consumed_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    consumed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    meal: Mapped[str] = mapped_column(String(20), default="snack")  # breakfast | lunch | dinner | snack | supplement
+    food_id: Mapped[int | None] = mapped_column(ForeignKey("foods.id", ondelete="SET NULL"))
+    recipe_id: Mapped[int | None] = mapped_column(ForeignKey("recipes.id", ondelete="SET NULL"))
+    label: Mapped[str] = mapped_column(String(300))
+    quantity: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(40))  # g | serving | portion:<id>
+    weighed_state: Mapped[str] = mapped_column(String(10), default="as_is")
+    yield_id: Mapped[int | None] = mapped_column(ForeignKey("cooking_yields.id", ondelete="SET NULL"))
+    grams: Mapped[float | None] = mapped_column(Float)  # resolved mass of the food as described, if known
+    is_supplement: Mapped[bool] = mapped_column(Boolean, default=False)
+    nutrients: Mapped[dict] = mapped_column(JSON, default=dict)
+    other_components: Mapped[list] = mapped_column(JSON, default=list)
+    trust_level: Mapped[str] = mapped_column(String(20))  # weakest trust among contributing data
+    calc_notes: Mapped[list] = mapped_column(JSON, default=list)
+    note: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AdvisorConversation(Base):
+    __tablename__ = "advisor_conversations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200), default="New conversation")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    messages: Mapped[list["AdvisorMessage"]] = relationship(
+        cascade="all, delete-orphan", order_by="AdvisorMessage.id", lazy="selectin"
+    )
+
+
+class AdvisorMessage(Base):
+    """A raw Messages-API turn. ``content`` is stored exactly as exchanged (including
+    thinking and tool blocks) so the history can be replayed append-only."""
+
+    __tablename__ = "advisor_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("advisor_conversations.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(20))  # user | assistant
+    content: Mapped[list] = mapped_column(JSON)
+    is_user_prompt: Mapped[bool] = mapped_column(Boolean, default=False)  # a typed message (vs. tool results)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

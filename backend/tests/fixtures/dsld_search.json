@@ -1,0 +1,214 @@
+{
+ "hits": [
+  {
+   "_index": "dsldnxt_labels",
+   "_type": "_doc",
+   "_id": "1225",
+   "_score": 53.49857,
+   "_source": {
+    "userGroups": [
+     {
+      "dailyValueTargetGroupName": "Adults and children 4 or more years of age",
+      "langualCodeDescription": "Adults and Children 4 years and above",
+      "langualCode": "P0250"
+     }
+    ],
+    "brandName": "Vitamin World",
+    "physicalState": {
+     "langualCodeDescription": "Softgel Capsule",
+     "langualCode": "E0161"
+    },
+    "entryDate": "2011-10-26",
+    "allIngredients": [
+     {
+      "ingredientGroup": "Calories",
+      "notes": "",
+      "name": "Calories",
+      "category": "other"
+     },
+     {
+      "ingredientGroup": "Calories",
+      "notes": "",
+      "name": "Calories from Fat",
+      "category": "other"
+     },
+     {
+      "ingredientGroup": "Fat (unspecified)",
+      "notes": "",
+      "name": "Total Fat",
+      "category": "fat"
+     },
+     {
+      "ingredientGroup": "Vitamin D",
+      "notes": "Vitamin D (Form: as D3 (Alt. Name: Cholecalciferol))",
+      "name": "Vitamin D",
+      "category": "vitamin"
+     },
+     {
+      "ingredientGroup": "Calcium",
+      "notes": "Calcium (Form: as Calcium Carbonate) Note: 1.2 g",
+      "name": "Calcium",
+      "category": "mineral"
+     },
+     {
+      "ingredientGroup": "Soybean Oil",
+      "notes": "",
+      "name": "Soybean Oil",
+      "category": "fat"
+     },
+     {
+      "ingredientGroup": "Gelatin",
+      "notes": "",
+      "name": "Gelatin",
+      "category": "protein"
+     },
+     {
+      "ingredientGroup": "Glycerol",
+      "notes": "",
+      "name": "Vegetable Glycerin",
+      "category": "other"
+     },
+     {
+      "ingredientGroup": "lecithin",
+      "notes": "",
+      "name": "Soy Lecithin",
+      "category": "fat"
+     },
+     {
+      "ingredientGroup": "Titanium Dioxide",
+      "notes": "",
+      "name": "Titanium Dioxide color",
+      "category": "other"
+     }
+    ],
+    "claims": [
+     {
+      "langualCodeDescription": "Nutrient ",
+      "langualCode": "P0065"
+     },
+     {
+      "langualCodeDescription": "All Other",
+      "langualCode": "P0115"
+     },
+     {
+      "langualCodeDescription": "Structure/Function",
+      "langualCode": "P0265"
+     }
+    ],
+    "fullName": "Calcium With Vitamin D3",
+    "offMarket": 1,
+    "netContents": [
+     {
+      "unit": "Rapid Release Softgel(s)",
+      "quantity": 200,
+      "display": "200 Rapid Release Softgel(s)",
+      "order": 1
+     }
+    ],
+    "productType": {
+     "langualCodeDescription": "Single Vitamin and Mineral",
+     "langualCode": "A1316"
+    },
+    "events": [
+     {
+      "date": "2012-01-01",
+      "type": "Off Market"
+     },
+     {
+      "date": "2011-10-26",
+      "type": "Date entered into DSLD"
+     }
+    ]
+   }
+  },
+  {
+   "_index": "dsldnxt_labels",
+   "_type": "_doc",
+   "_id": "65059",
+   "_score": 52.96356,
+   "_source": {
+    "userGroups": [
+     {
+      "dailyValueTargetGroupName": "Adults and children 4 or more years of age",
+      "langualCodeDescription": "Adults and Children 4 years and above",
+      "langualCode": "P0250"
+     }
+    ],
+    "brandName": "WeCare Naturally",
+    "physicalState": {
+     "langualCodeDescription": "Capsule",
+     "langualCode": "E0159"
+    },
+    "entryDate": "2016-09-22",
+    "allIngredients": [
+     {
+      "ingredientGroup": "Vitamin D",
+      "notes": "Vitamin D (Form: as Vitamin D3)",
+      "name": "Vitamin D",
+      "category": "vitamin"
+     },
+     {
+      "ingredientGroup": "Cellulose",
+      "notes": "",
+      "name": "Microcrystalline Cellulose",
+      "category": "other"
+     },
+     {
+      "ingredientGroup": "Hypromellose",
+      "notes": "",
+      "name": "Hypromellose (derived from Cellulose) Capsule",
+      "category": "other"
+     },
+     {
+      "ingredientGroup": "Leucine",
+      "notes": "",
+      "name": "Leucine",
+      "category": "amino acid"
+     },
+     {
+      "ingredientGroup": "Silicon",
+      "notes": "",
+      "name": "Silicon Dioxide",
+      "category": "mineral"
+     },
+     {
+      "ingredientGroup": "Vitamin E",
+      "notes": "",
+      "name": "Vitamin E",
+      "category": "vitamin"
+     }
+    ],
+    "claims": [
+     {
+      "langualCodeDescription": "Structure/Function",
+      "langualCode": "P0265"
+     }
+    ],
+    "fullName": "Vitamin D3",
+    "offMarket": 0,
+    "netContents": [
+     {
+      "unit": "Vegetarian Capsule(s)",
+      "quantity": 60,
+      "display": "60 Vegetarian Capsule(s)",
+      "order": 1
+     }
+    ],
+    "productType": {
+     "langualCodeDescription": "Vitamin",
+     "langualCode": "A1302"
+    },
+    "events": [
+     {
+      "date": "2016-09-22",
+      "type": "Date entered into DSLD"
+     }
+    ]
+   }
+  }
+ ],
+ "stats": {
+  "count": 64785,
+  "pct": 0.3016342303752677
+ }
+}
