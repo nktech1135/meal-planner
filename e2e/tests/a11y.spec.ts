@@ -85,44 +85,47 @@ async function audit(page: Page, label: string) {
   expect.soft(violations, `axe violations on ${label}:\n${report}`).toEqual([]);
 }
 
-const pages = (s: Seed): [string, string][] => [
-  ["Today", "/"],
-  ["Add entry", "/log"],
-  ["Plan", "/plan"],
-  ["Shopping list", "/plan/shopping"],
-  ["Trends", "/trends?days=30"],
-  ["Foods", "/foods"],
-  ["Foods (online sources)", "/foods?tab=online"],
-  ["Food detail", `/foods/${s.chicken.id}`],
-  ["Supplement detail", `/foods/${s.supp.id}`],
-  ["New food", "/foods/new"],
-  ["Recipes", "/recipes"],
-  ["Recipe", `/recipes/${s.recipe.id}`],
-  ["New recipe", "/recipes/new"],
-  ["Advisor", "/advisor"],
-  ["Supplement check", "/supplements/check"],
-  ["Supplement check result", `/supplements/check?food=${s.supp.id}`],
-  ["Profile", "/profile"],
-  ["Account", "/account"],
-  ["Settings", "/settings"],
-  ["Settings – Data", "/settings/data"],
-  ["Settings – Users", "/settings/users"],
-  ["Data sources & credits", "/about/data"],
+// [name, path]; paths that need seeded ids are functions of the seed.
+const pages: [string, (s: Seed) => string][] = [
+  ["Today", () => "/"],
+  ["Add entry", () => "/log"],
+  ["Plan", () => "/plan"],
+  ["Shopping list", () => "/plan/shopping"],
+  ["Trends", () => "/trends?days=30"],
+  ["Foods", () => "/foods"],
+  ["Foods (online sources)", () => "/foods?tab=online"],
+  ["Food detail", (s) => `/foods/${s.chicken.id}`],
+  ["Supplement detail", (s) => `/foods/${s.supp.id}`],
+  ["New food", () => "/foods/new"],
+  ["Recipes", () => "/recipes"],
+  ["Recipe", (s) => `/recipes/${s.recipe.id}`],
+  ["New recipe", () => "/recipes/new"],
+  ["Advisor", () => "/advisor"],
+  ["Supplement check", () => "/supplements/check"],
+  ["Supplement check result", (s) => `/supplements/check?food=${s.supp.id}`],
+  ["Profile", () => "/profile"],
+  ["Account", () => "/account"],
+  ["Settings", () => "/settings"],
+  ["Settings – Data", () => "/settings/data"],
+  ["Settings – Users", () => "/settings/users"],
+  ["Data sources & credits", () => "/about/data"],
 ];
 
 for (const scheme of ["light", "dark"] as const) {
   test.describe(`${scheme} scheme`, () => {
     test.use({ colorScheme: scheme });
+    // The multi-step tests below audit several pages each; CI machines are slower than a laptop.
+    test.describe.configure({ timeout: 120_000 });
 
-    test("every signed-in page passes axe", async ({ page }) => {
-      for (const [name, path] of pages(seed)) {
-        await test.step(name, async () => {
-          await page.goto(path);
-          await settle(page);
-          await audit(page, `${name} (${path}, ${scheme})`);
-        });
-      }
-    });
+    // One test per page, so each page has its own time budget and a failure names the page.
+    for (const [name, pathOf] of pages) {
+      test(`${name} passes axe`, async ({ page }) => {
+        const path = pathOf(seed);
+        await page.goto(path);
+        await settle(page);
+        await audit(page, `${name} (${path}, ${scheme})`);
+      });
+    }
 
     test("phone-width layouts pass axe", async ({ page }) => {
       await page.setViewportSize({ width: 412, height: 915 });
@@ -252,7 +255,9 @@ for (const scheme of ["light", "dark"] as const) {
 // Behaviour axe can't check.
 
 test("every page has one h1, landmarks and its own title", async ({ page }) => {
-  for (const [name, path] of pages(seed)) {
+  test.setTimeout(120_000);
+  for (const [name, pathOf] of pages) {
+    const path = pathOf(seed);
     await test.step(name, async () => {
       await page.goto(path);
       await settle(page);
