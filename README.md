@@ -83,6 +83,16 @@ cd backend && uv run pytest && uv run ruff check .
 cd frontend && npm run build
 ```
 
+Browser tests (Playwright) drive the built app on a throwaway database. They
+cover logging, supplement forms, settings and keys, planning, invitations and
+password resets, plus a check that every page renders with no errors or
+sideways scrolling at desktop and phone sizes:
+
+```bash
+cd frontend && npm run build
+cd ../e2e && npm ci && npx playwright install --with-deps chromium && npx playwright test
+```
+
 The backend tests use in-memory SQLite. To run them against PostgreSQL, point
 `TEST_DATABASE_URL` at a scratch database, which is wiped for each test:
 `TEST_DATABASE_URL=postgresql+psycopg://user@localhost/mealplan_test uv run pytest`.
