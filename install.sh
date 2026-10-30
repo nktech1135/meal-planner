@@ -1,18 +1,26 @@
 #!/usr/bin/env bash
-# Mealplan installer, upgrader and uninstaller for Debian/Ubuntu (systemd).
+# Mealplan installer, upgrader and uninstaller (Linux, systemd).
 #
-#   Install:    curl -fsSL https://<host>/<path>/install.sh | sudo bash
-#               curl -fsSL https://<host>/<path>/install.sh | sudo bash -s -- install --domain meals.example.com
-#   From a checkout:  sudo ./install.sh install
-#   Upgrade:    sudo mealplan upgrade [--ref <branch|tag|commit>]
-#   Uninstall:  sudo mealplan uninstall [--purge]
-#   Other:      sudo mealplan status | backup | help
+# Run it as root for a system-wide install, or as a normal user for a per-user
+# install that needs no root at all:
 #
-# Layout:
+#   System-wide:  curl -fsSL https://<host>/<path>/install.sh | sudo bash
+#                 curl -fsSL https://<host>/<path>/install.sh | sudo bash -s -- install --domain meals.example.com
+#   Per-user:     curl -fsSL https://<host>/<path>/install.sh | bash
+#   From a checkout:  ./install.sh install   (or: sudo ./install.sh install)
+#   Afterwards:   [sudo] mealplan upgrade | uninstall [--purge] | status | restart | backup | help
+#
+# System-wide layout (Debian/Ubuntu; PostgreSQL by default, optional Caddy HTTPS):
 #   /opt/mealplan/             code and toolchain (releases/<rev>, current -> releases/<rev>, tools/, repo.git)
 #   /etc/mealplan/mealplan.env configuration (kept on upgrade and plain uninstall)
 #   /var/lib/mealplan/         data: SQLite database (if used) and backups/
 #   mealplan.service           systemd unit, runs as the "mealplan" system user
+#
+# Per-user layout (any distribution; SQLite; systemd user service):
+#   ~/.local/share/mealplan/app/    code and toolchain
+#   ~/.config/mealplan/             configuration
+#   ~/.local/share/mealplan/data/   database and backups/
+#   ~/.config/systemd/user/mealplan.service, ~/.local/bin/mealplan
 #
 # Everything runs inside functions and main() is called on the last line, so a
 # partially downloaded script does nothing.
@@ -34,18 +42,42 @@ NODE_SHA256_x64="48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf7
 NODE_SHA256_arm64="eb187837a2230d4047161ac0be008584e16b46f726e9c9490ee35dc6b17d9ba8"
 KEEP_BACKUPS=10
 
-# --- Paths ---------------------------------------------------------------------
-# MEALPLAN_TEST_ROOT relocates every path under one directory and skips everything
-# that needs root (apt, users, systemd, PostgreSQL, Caddy). For development only.
+# --- Mode and paths -------------------------------------------------------------
+# MODE is "system" when run as root and "user" otherwise. MEALPLAN_TEST_ROOT selects
+# "test": system-style paths relocated under one directory, nothing that needs root,
+# and the server run as a plain background process. For development only.
 TEST_ROOT="${MEALPLAN_TEST_ROOT:-}"
 SERVICE_USER="mealplan"
-PREFIX="$TEST_ROOT/opt/mealplan"
-ETC_DIR="$TEST_ROOT/etc/mealplan"
-VAR_DIR="$TEST_ROOT/var/lib/mealplan"
-BIN_PATH="$TEST_ROOT/usr/local/sbin/mealplan"
-UNIT_PATH="$TEST_ROOT/etc/systemd/system/mealplan.service"
-CADDYFILE="$TEST_ROOT/etc/caddy/Caddyfile"
-CADDY_SITE="$TEST_ROOT/etc/caddy/mealplan.caddy"
+if [[ -n "$TEST_ROOT" ]]; then MODE="test"
+elif [[ $EUID -eq 0 ]]; then MODE=system
+else MODE=user; fi
+
+if [[ "$MODE" == user ]]; then
+  # `su`, `sudo -u` and some SSH setups leave XDG_RUNTIME_DIR pointing elsewhere,
+  # which breaks `systemctl --user`. Use this user's runtime dir when it exists.
+  if [[ ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" && -S "/run/user/$EUID/bus" ]]; then
+    export XDG_RUNTIME_DIR="/run/user/$EUID" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$EUID/bus"
+  fi
+  DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+  CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+  PREFIX="$DATA_HOME/mealplan/app"
+  ETC_DIR="$CONFIG_HOME/mealplan"
+  VAR_DIR="$DATA_HOME/mealplan/data"
+  BIN_PATH="$HOME/.local/bin/mealplan"
+  UNIT_PATH="$CONFIG_HOME/systemd/user/mealplan.service"
+  LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/mealplan-$EUID.lock"
+  SUDO=""
+else
+  PREFIX="$TEST_ROOT/opt/mealplan"
+  ETC_DIR="$TEST_ROOT/etc/mealplan"
+  VAR_DIR="$TEST_ROOT/var/lib/mealplan"
+  BIN_PATH="$TEST_ROOT/usr/local/sbin/mealplan"
+  UNIT_PATH="$TEST_ROOT/etc/systemd/system/mealplan.service"
+  LOCK_FILE="$TEST_ROOT/run/lock/mealplan.lock"
+  SUDO="sudo "
+fi
+CADDYFILE="/etc/caddy/Caddyfile"
+CADDY_SITE="/etc/caddy/mealplan.caddy"
 ENV_FILE="$ETC_DIR/mealplan.env"
 STATE_FILE="$ETC_DIR/install.conf"
 BACKUP_DIR="$VAR_DIR/backups"
@@ -66,21 +98,26 @@ die()  { printf '%serror:%s %s\n' "$C_ERR" "$C_OFF" "$*" >&2; exit 1; }
 on_err() { printf '%serror:%s command failed (line %s): %s\n' "$C_ERR" "$C_OFF" "$1" "$2" >&2; }
 trap 'on_err "$LINENO" "$BASH_COMMAND"' ERR
 
-test_mode() { [[ -n "$TEST_ROOT" ]]; }
+is_system() { [[ "$MODE" == system ]]; }
 git_() { git -c safe.directory='*' "$@"; }
 
 usage() {
   cat <<'EOF'
 Usage: mealplan <command> [options]
 
+Run as root (sudo) for the system-wide install, or as yourself for a per-user install.
+
 Commands:
   install     Install Mealplan (default when no command is given)
-                --domain NAME    serve over HTTPS at NAME via Caddy (DNS must point here)
                 --port N         local port for the app (default 8080)
-                --listen ADDR    bind address when no domain is used (default 0.0.0.0)
-                --db postgres|sqlite   database (default postgres)
+                --listen ADDR    bind address (default: 0.0.0.0 system-wide, 127.0.0.1 per-user)
                 --repo URL|PATH  git repository to install from
                 --branch NAME    branch to track (default main)
+              System-wide only:
+                --domain NAME    serve over HTTPS at NAME via Caddy (DNS must point here)
+                --db postgres|sqlite   database (default postgres; per-user always uses sqlite)
+              Per-user only:
+                --no-linger      don't keep running after you log out / start at boot
   upgrade     Upgrade to the latest commit of the tracked branch
                 --ref REF        a specific branch, tag or commit instead
                 --force          rebuild even if already at that commit
@@ -88,19 +125,23 @@ Commands:
                 --purge          also delete config, data, backups, database and the service user
                 --yes            don't ask for confirmation
   status      Show installed version, service state and URL
-  backup      Back up the database now (to /var/lib/mealplan/backups)
+  restart     Restart the app (e.g. after editing the configuration)
+  backup      Back up the database now
   help        Show this help
 EOF
 }
 
 # --- Checks ----------------------------------------------------------------------
-require_root() {
-  test_mode && return 0
-  [[ $EUID -eq 0 ]] || die "run as root, e.g. with sudo"
+require_commands() {
+  local missing=() cmd
+  for cmd in git curl tar xz sha256sum flock base64 find sed awk; do
+    command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
+  done
+  ((${#missing[@]} == 0)) || die "missing required programs: ${missing[*]} (ask an administrator to install them, e.g. apt install git curl xz-utils)"
 }
 
 require_platform() {
-  test_mode && return 0
+  if ! is_system; then require_commands; return 0; fi
   [[ -r /etc/os-release ]] || die "cannot identify this Linux distribution"
   # shellcheck disable=SC1091
   . /etc/os-release
@@ -118,9 +159,8 @@ detect_arch() {
 }
 
 take_lock() {
-  local lock="$TEST_ROOT/run/lock/mealplan.lock"
-  mkdir -p "$(dirname "$lock")"
-  exec 9>"$lock"
+  mkdir -p "$(dirname "$LOCK_FILE")"
+  exec 9>"$LOCK_FILE"
   flock -n 9 || die "another mealplan install/upgrade is already running"
 }
 
@@ -136,15 +176,21 @@ confirm() {
 save_state() {
   {
     printf '# Written by the mealplan installer. Do not edit.\n'
-    printf 'REPO=%q\nBRANCH=%q\nDB_KIND=%q\nDOMAIN=%q\nCADDY_MANAGED=%q\n' \
-      "$REPO" "$BRANCH" "$DB_KIND" "$DOMAIN" "$CADDY_MANAGED"
+    printf 'REPO=%q\nBRANCH=%q\nDB_KIND=%q\nDOMAIN=%q\nCADDY_MANAGED=%q\nSERVICE_KIND=%q\n' \
+      "$REPO" "$BRANCH" "$DB_KIND" "$DOMAIN" "$CADDY_MANAGED" "$SERVICE_KIND"
   } >"$STATE_FILE"
 }
 
 load_state() {
-  [[ -f "$STATE_FILE" ]] || die "Mealplan is not installed (no $STATE_FILE)"
+  if [[ ! -f "$STATE_FILE" ]]; then
+    if [[ "$MODE" == user && -f /etc/mealplan/install.conf ]]; then
+      die "Mealplan is installed system-wide; use: sudo mealplan ${CMD:-<command>}"
+    fi
+    die "Mealplan is not installed${MODE:+ ($MODE mode: no $STATE_FILE)}"
+  fi
   # shellcheck disable=SC1090
   . "$STATE_FILE"
+  SERVICE_KIND="${SERVICE_KIND:-$(default_service_kind)}"
 }
 
 env_value() {  # env_value KEY -> value from the config file
@@ -153,7 +199,7 @@ env_value() {  # env_value KEY -> value from the config file
 
 # --- System setup ----------------------------------------------------------------
 install_packages() {
-  test_mode && return 0
+  is_system || return 0
   local pkgs=(ca-certificates curl git tar xz-utils util-linux)
   [[ "$DB_KIND" == postgres ]] && pkgs+=(postgresql)
   [[ -n "$DOMAIN" ]] && pkgs+=(caddy)
@@ -164,7 +210,7 @@ install_packages() {
 }
 
 ensure_user() {
-  test_mode && return 0
+  is_system || return 0
   if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
     log "Creating system user $SERVICE_USER"
     useradd --system --user-group --home-dir "$VAR_DIR" --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
@@ -173,18 +219,19 @@ ensure_user() {
 
 make_dirs() {
   mkdir -p "$PREFIX" "$TOOLS" "$CACHE" "$RELEASES" "$(dirname "$BIN_PATH")"
-  if test_mode; then
-    mkdir -p "$ETC_DIR" "$BACKUP_DIR"
-  else
+  if is_system; then
     install -d -m 0750 -o root -g "$SERVICE_USER" "$ETC_DIR"
     install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_USER" "$VAR_DIR" "$BACKUP_DIR"
+  else
+    mkdir -p "$ETC_DIR" "$BACKUP_DIR"
+    chmod 0700 "$ETC_DIR" "$VAR_DIR"
   fi
 }
 
 as_service() {  # run a command as the service user, with the app's configuration loaded
   local script="set -a; . '$ENV_FILE'; set +a; $*"
-  if test_mode; then bash -c "$script"
-  else runuser -u "$SERVICE_USER" -- bash -c "$script"; fi
+  if is_system; then runuser -u "$SERVICE_USER" -- bash -c "$script"
+  else bash -c "$script"; fi
 }
 
 # --- Toolchain (pinned and checksum-verified) ------------------------------------
@@ -261,6 +308,7 @@ build_release() {  # build_release REV -> path of the built release
   log "Building the web interface"
   (
     cd "$rel/frontend"
+    # shellcheck disable=SC2030  # PATH is meant to change only inside this subshell
     export PATH="$TOOLS/node/bin:$PATH" npm_config_cache="$CACHE/npm" npm_config_update_notifier=false
     npm ci --ignore-scripts --no-audit --no-fund --loglevel=error >/dev/null
     npm run --silent build >/dev/null
@@ -311,7 +359,7 @@ write_config() {
   fi
   log "Writing configuration $ENV_FILE"
   cat >"$ENV_FILE" <<EOF
-# Mealplan configuration. After editing, apply with: sudo systemctl restart mealplan
+# Mealplan configuration. After editing, apply with: ${SUDO}mealplan restart
 # Values must not contain spaces or quotes.
 
 MEALPLAN_HOST=$host
@@ -339,13 +387,13 @@ EDAMAM_APP_KEY=
 # Crowdsourced (unverifiable) data; records are always flagged "unverified".
 ENABLE_UNVERIFIED_SOURCES=false
 EOF
-  if test_mode; then chmod 0600 "$ENV_FILE"
-  else chown root:"$SERVICE_USER" "$ENV_FILE" && chmod 0640 "$ENV_FILE"; fi
+  if is_system; then chown root:"$SERVICE_USER" "$ENV_FILE" && chmod 0640 "$ENV_FILE"
+  else chmod 0600 "$ENV_FILE"; fi
 }
 
 setup_postgres() {
   [[ "$DB_KIND" == postgres ]] || return 0
-  test_mode && die "PostgreSQL is not available in test mode; use --db sqlite"
+  is_system || die "PostgreSQL needs the system-wide install; use --db sqlite"
   systemctl enable --now postgresql >/dev/null 2>&1 || systemctl start postgresql
   local psql=(runuser -u postgres -- psql -v ON_ERROR_STOP=1 -qtA)
   if [[ "$("${psql[@]}" -c "SELECT 1 FROM pg_roles WHERE rolname='$SERVICE_USER'")" != 1 ]]; then
@@ -360,7 +408,7 @@ setup_postgres() {
 
 setup_caddy() {
   [[ -n "$DOMAIN" ]] || return 0
-  test_mode && return 0
+  is_system || return 0
   log "Configuring Caddy for https://$DOMAIN"
   cat >"$CADDY_SITE" <<EOF
 # Managed by the mealplan installer.
@@ -378,7 +426,7 @@ EOF
 
 remove_caddy_site() {
   [[ "${CADDY_MANAGED:-0}" == 1 ]] || return 0
-  test_mode && return 0
+  is_system || return 0
   rm -f "$CADDY_SITE"
   if [[ -f "$CADDYFILE" ]]; then
     sed -i "\\|^import $CADDY_SITE\$|d" "$CADDYFILE"
@@ -419,9 +467,60 @@ backup_db() {
 }
 
 # --- Service -------------------------------------------------------------------------
+# SERVICE_KIND: "system" (systemd unit), "user" (systemd user unit), or "process"
+# (plain background process: test mode, or per-user without a systemd user manager).
+default_service_kind() {
+  case "$MODE" in
+    system) echo system ;;
+    test) echo process ;;
+    user) if systemctl --user show-environment >/dev/null 2>&1; then echo user; else echo process; fi ;;
+  esac
+}
+
+systemctl_() {  # systemctl for this install's service manager
+  if [[ "$SERVICE_KIND" == user ]]; then systemctl --user "$@"; else systemctl "$@"; fi
+}
+
+logs_hint() {
+  case "$SERVICE_KIND" in
+    system) echo "journalctl -u mealplan -n 50" ;;
+    user) echo "journalctl --user -u mealplan -n 50" ;;
+    process) echo "$VAR_DIR/server.log" ;;
+  esac
+}
+
+exec_start() {
+  # shellcheck disable=SC2016  # ${MEALPLAN_*} are expanded by systemd from the EnvironmentFile
+  printf '"%s" app.main:app --host ${MEALPLAN_HOST} --port ${MEALPLAN_PORT} --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-server-header' \
+    "$CURRENT/venv/bin/uvicorn"
+}
+
 write_unit() {
-  test_mode && return 0
-  cat >"$UNIT_PATH" <<EOF
+  case "$SERVICE_KIND" in
+    process) return 0 ;;
+    user)
+      mkdir -p "$(dirname "$UNIT_PATH")"
+      cat >"$UNIT_PATH" <<EOF
+# Managed by the mealplan installer.
+[Unit]
+Description=Mealplan meal and supplement tracker
+
+[Service]
+Type=simple
+EnvironmentFile=$ENV_FILE
+WorkingDirectory=$CURRENT/backend
+ExecStart=$(exec_start)
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
+EOF
+      ;;
+    system)
+      cat >"$UNIT_PATH" <<EOF
 # Managed by the mealplan installer.
 [Unit]
 Description=Mealplan meal and supplement tracker
@@ -434,7 +533,7 @@ User=$SERVICE_USER
 Group=$SERVICE_USER
 EnvironmentFile=$ENV_FILE
 WorkingDirectory=$CURRENT/backend
-ExecStart=$CURRENT/venv/bin/uvicorn app.main:app --host \${MEALPLAN_HOST} --port \${MEALPLAN_PORT} --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-server-header
+ExecStart=$(exec_start)
 Restart=on-failure
 RestartSec=3
 UMask=0027
@@ -455,28 +554,64 @@ CapabilityBoundingSet=
 [Install]
 WantedBy=multi-user.target
 EOF
-  systemctl daemon-reload
+      ;;
+  esac
+  systemctl_ daemon-reload
+}
+
+remove_unit() {
+  [[ "$SERVICE_KIND" == process ]] && return 0
+  systemctl_ disable mealplan >/dev/null 2>&1 || true
+  rm -f "$UNIT_PATH"
+  systemctl_ daemon-reload || true
+}
+
+ensure_linger() {
+  # Without "linger", a user's services stop at logout and don't start at boot.
+  [[ "$SERVICE_KIND" == user ]] || return 0
+  local me
+  me="$(id -un)"
+  [[ "$(loginctl show-user "$me" -p Linger --value 2>/dev/null)" == yes ]] && return 0
+  if [[ "${NO_LINGER:-0}" == 1 ]]; then
+    warn "Mealplan will stop when you log out and won't start at boot (--no-linger)."
+    return 0
+  fi
+  if loginctl enable-linger --no-ask-password "$me" 2>/dev/null; then
+    log "Enabled lingering for $me so Mealplan keeps running after logout and starts at boot"
+  else
+    warn "could not enable lingering: Mealplan will stop when you log out and won't start at boot."
+    warn "an administrator can fix that once with: sudo loginctl enable-linger $me"
+  fi
 }
 
 service_stop() {
-  if test_mode; then
-    local pidfile="$VAR_DIR/test-server.pid"
+  if [[ "$SERVICE_KIND" == process ]]; then
+    local pidfile="$VAR_DIR/server.pid"
     if [[ -f "$pidfile" ]]; then kill "$(cat "$pidfile")" 2>/dev/null || true; rm -f "$pidfile"; sleep 1; fi
   else
-    systemctl stop mealplan 2>/dev/null || true
+    systemctl_ stop mealplan 2>/dev/null || true
   fi
 }
 
 service_start() {
-  if test_mode; then
+  if [[ "$SERVICE_KIND" == process ]]; then
     # Launched directly (not via a function, which would fork a wrapper) so $! is the server's PID,
     # and without fd 9 so the server doesn't hold the installer lock.
-    bash -c "set -a; . '$ENV_FILE'; set +a; cd '$CURRENT/backend' && exec '$CURRENT/venv/bin/uvicorn' app.main:app \
-      --host \"\$MEALPLAN_HOST\" --port \"\$MEALPLAN_PORT\"" >"$VAR_DIR/test-server.log" 2>&1 9>&- &
-    echo $! >"$VAR_DIR/test-server.pid"
+    nohup bash -c "set -a; . '$ENV_FILE'; set +a; cd '$CURRENT/backend' && exec '$CURRENT/venv/bin/uvicorn' app.main:app \
+      --host \"\$MEALPLAN_HOST\" --port \"\$MEALPLAN_PORT\"" >>"$VAR_DIR/server.log" 2>&1 9>&- </dev/null &
+    echo $! >"$VAR_DIR/server.pid"
   else
-    systemctl enable mealplan >/dev/null 2>&1
-    systemctl restart mealplan
+    systemctl_ enable mealplan >/dev/null 2>&1
+    systemctl_ restart mealplan
+  fi
+}
+
+service_state() {
+  if [[ "$SERVICE_KIND" == process ]]; then
+    if [[ -f "$VAR_DIR/server.pid" ]] && kill -0 "$(cat "$VAR_DIR/server.pid")" 2>/dev/null; then echo running
+    else echo "not running"; fi
+  else
+    systemctl_ is-active mealplan 2>/dev/null || true
   fi
 }
 
@@ -504,7 +639,7 @@ public_url() {
 
 # --- Commands --------------------------------------------------------------------------
 cmd_install() {
-  REPO="" BRANCH="$DEFAULT_BRANCH" DOMAIN="" PORT="$DEFAULT_PORT" LISTEN="0.0.0.0" DB_KIND="postgres" CADDY_MANAGED=0
+  REPO="" BRANCH="$DEFAULT_BRANCH" DOMAIN="" PORT="$DEFAULT_PORT" LISTEN="" DB_KIND="" CADDY_MANAGED=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --repo) REPO="${2:?--repo needs a value}"; shift 2 ;;
@@ -513,10 +648,18 @@ cmd_install() {
       --port) PORT="${2:?--port needs a value}"; shift 2 ;;
       --listen) LISTEN="${2:?--listen needs a value}"; shift 2 ;;
       --db) DB_KIND="${2:?--db needs a value}"; shift 2 ;;
+      --no-linger) NO_LINGER=1; shift ;;
       --yes|-y) ASSUME_YES=1; shift ;;
       *) die "unknown option for install: $1 (see: mealplan help)" ;;
     esac
   done
+  if is_system; then
+    DB_KIND="${DB_KIND:-postgres}" LISTEN="${LISTEN:-0.0.0.0}"
+  else
+    [[ -z "$DOMAIN" ]] || die "--domain needs the system-wide install (HTTPS on ports 80/443 requires root); run with sudo"
+    [[ "${DB_KIND:-sqlite}" == sqlite ]] || die "--db postgres needs the system-wide install; run with sudo"
+    DB_KIND=sqlite LISTEN="${LISTEN:-127.0.0.1}"
+  fi
   if ! [[ "$PORT" =~ ^[0-9]+$ ]] || ((PORT < 1024 || PORT > 65535)); then die "--port must be 1024-65535"; fi
   [[ "$DB_KIND" == postgres || "$DB_KIND" == sqlite ]] || die "--db must be postgres or sqlite"
   [[ -z "$DOMAIN" || "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || die "invalid --domain"
@@ -524,10 +667,9 @@ cmd_install() {
   [[ -n "$REPO" ]] || REPO="$(default_repo)"
   if [[ -d "$REPO" ]]; then REPO="$(cd "$REPO" && pwd)"; fi
 
-  require_root
   require_platform
   detect_arch
-  if [[ -e "$CURRENT" ]]; then die "Mealplan is already installed; use: sudo mealplan upgrade"; fi
+  if [[ -e "$CURRENT" ]]; then die "Mealplan is already installed; use: ${SUDO}mealplan upgrade"; fi
   if [[ -f "$STATE_FILE" ]]; then
     # Re-installing after a plain uninstall: keep using the same database.
     local keep_db
@@ -539,6 +681,9 @@ cmd_install() {
   fi
 
   take_lock
+  SERVICE_KIND="$(default_service_kind)"
+  [[ "$MODE" == user && "$SERVICE_KIND" == process ]] \
+    && warn "no systemd user manager found; Mealplan will run as a background process and won't restart after a reboot"
   install_packages
   ensure_user
   make_dirs
@@ -559,7 +704,8 @@ cmd_install() {
   save_state
   install_cli "$rel"
   service_start
-  health_check || die "the service did not come up; see: journalctl -u mealplan -n 50"
+  health_check || die "the service did not come up; see: $(logs_hint)"
+  ensure_linger
 
   log "Mealplan ${rev:0:12} is running at $(public_url)"
   cat >&2 <<EOF
@@ -567,13 +713,19 @@ cmd_install() {
   Next steps:
     1. Open $(public_url) and register. The first account becomes the admin.
     2. Add your keys to $ENV_FILE (ANTHROPIC_API_KEY for the advisor, a free
-       USDA_FDC_API_KEY), then run: sudo systemctl restart mealplan
+       USDA_FDC_API_KEY), then run: ${SUDO}mealplan restart
     3. Optionally set ALLOW_REGISTRATION=false once everyone has an account.
 
-  Manage it with:  sudo mealplan status | upgrade | backup | uninstall
+  Manage it with:  ${SUDO}mealplan status | restart | upgrade | backup | uninstall
 EOF
+  # shellcheck disable=SC2031
+  if [[ "$MODE" == user && ":$PATH:" != *":$(dirname "$BIN_PATH"):"* ]]; then
+    warn "$(dirname "$BIN_PATH") is not on your PATH; run $BIN_PATH directly or add it to PATH"
+  fi
   if [[ -z "$DOMAIN" && "$(env_value MEALPLAN_HOST)" != 127.0.0.1 ]]; then
-    warn "traffic is unencrypted HTTP. For use beyond a trusted network, reinstall with --domain to get HTTPS."
+    warn "traffic is unencrypted HTTP. For use beyond a trusted network, use HTTPS (system-wide install with --domain, or your own reverse proxy)."
+  elif [[ "$MODE" == user ]]; then
+    log "Listening on localhost only. To reach it from other machines, reinstall with --listen 0.0.0.0 or put a reverse proxy in front."
   fi
 }
 
@@ -586,7 +738,6 @@ cmd_upgrade() {
       *) die "unknown option for upgrade: $1" ;;
     esac
   done
-  require_root
   load_state
   detect_arch
   take_lock
@@ -622,7 +773,7 @@ cmd_upgrade() {
       switch_to "$old_rel"
       rm -rf "$new_rel"
       service_start
-      health_check || warn "the previous release did not come back up either; see: journalctl -u mealplan -n 50"
+      health_check || warn "the previous release did not come back up either; see: $(logs_hint)"
       die "rolled back to ${old_rev:0:12}. Database backup from before the upgrade: ${backup:-none}"
     fi
     die "upgrade failed. Database backup from before the upgrade: ${backup:-none}"
@@ -648,8 +799,7 @@ cmd_uninstall() {
       *) die "unknown option for uninstall: $1" ;;
     esac
   done
-  require_root
-  if [[ -f "$STATE_FILE" ]]; then load_state; else DB_KIND="" CADDY_MANAGED=0; fi
+  if [[ -f "$STATE_FILE" ]]; then load_state; else DB_KIND="" CADDY_MANAGED=0 SERVICE_KIND="$(default_service_kind)"; fi
   if [[ "$purge" == 1 ]]; then
     confirm "Remove Mealplan AND permanently delete its database, backups and configuration?" || die "aborted"
   else
@@ -659,23 +809,20 @@ cmd_uninstall() {
 
   log "Stopping and removing the service"
   service_stop
-  if ! test_mode; then
-    systemctl disable mealplan >/dev/null 2>&1 || true
-    rm -f "$UNIT_PATH"
-    systemctl daemon-reload
-  fi
+  remove_unit
   remove_caddy_site
   rm -rf "$PREFIX"
   rm -f "$BIN_PATH"
 
   if [[ "$purge" == 1 ]]; then
-    if [[ "$DB_KIND" == postgres ]] && ! test_mode && command -v psql >/dev/null; then
+    if [[ "$DB_KIND" == postgres ]] && is_system && command -v psql >/dev/null; then
       log "Dropping the PostgreSQL database and role"
       runuser -u postgres -- dropdb --if-exists "$SERVICE_USER" || warn "could not drop database $SERVICE_USER"
       runuser -u postgres -- dropuser --if-exists "$SERVICE_USER" || warn "could not drop role $SERVICE_USER"
     fi
     rm -rf "$ETC_DIR" "$VAR_DIR"
-    if ! test_mode && id -u "$SERVICE_USER" >/dev/null 2>&1; then userdel "$SERVICE_USER" 2>/dev/null || true; fi
+    if [[ "$MODE" == user ]]; then rmdir "$(dirname "$VAR_DIR")" 2>/dev/null || true; fi
+    if is_system && id -u "$SERVICE_USER" >/dev/null 2>&1; then userdel "$SERVICE_USER" 2>/dev/null || true; fi
     log "Mealplan and all of its data have been removed"
   else
     log "Mealplan has been removed. Kept: $ETC_DIR, $VAR_DIR${DB_KIND:+ and the $DB_KIND database}"
@@ -688,24 +835,28 @@ EOF
 
 cmd_status() {
   load_state
-  local rel rev state="not running"
+  local rel rev state
   rel="$(current_release)"
   rev=unknown
   if [[ -n "$rel" && -f "$rel/REVISION" ]]; then rev="$(cut -c1-12 "$rel/REVISION")"; fi
-  if test_mode; then
-    [[ -f "$VAR_DIR/test-server.pid" ]] && kill -0 "$(cat "$VAR_DIR/test-server.pid")" 2>/dev/null && state="running"
-  else
-    state="$(systemctl is-active mealplan 2>/dev/null || true)"
-  fi
-  printf 'Version:   %s (branch %s)\nService:   %s\nURL:       %s\nDatabase:  %s\nConfig:    %s\nBackups:   %s\n' \
-    "$rev" "$BRANCH" "$state" "$(public_url)" "$DB_KIND" "$ENV_FILE" "$BACKUP_DIR"
+  state="$(service_state)"
+  printf 'Install:   %s (%s service)\nVersion:   %s (branch %s)\nService:   %s\nURL:       %s\nDatabase:  %s\nConfig:    %s\nBackups:   %s\nLogs:      %s\n' \
+    "$MODE" "$SERVICE_KIND" "$rev" "$BRANCH" "$state" "$(public_url)" "$DB_KIND" "$ENV_FILE" "$BACKUP_DIR" "$(logs_hint)"
   if health_check_once; then echo "Health:    ok"; else echo "Health:    not responding"; fi
 }
 
 health_check_once() { curl -fsS -m 3 "http://127.0.0.1:$(env_value MEALPLAN_PORT)/api/health" >/dev/null 2>&1; }
 
+cmd_restart() {
+  load_state
+  take_lock
+  service_stop
+  service_start
+  health_check || die "the service did not come up; see: $(logs_hint)"
+  log "Restarted; running at $(public_url)"
+}
+
 cmd_backup() {
-  require_root
   load_state
   take_lock
   local out
@@ -716,11 +867,13 @@ cmd_backup() {
 main() {
   local cmd="${1:-install}"
   [[ $# -gt 0 ]] && shift
+  CMD="$cmd"
   case "$cmd" in
     install) cmd_install "$@" ;;
     upgrade|update) cmd_upgrade "$@" ;;
     uninstall|remove) cmd_uninstall "$@" ;;
     status) cmd_status "$@" ;;
+    restart) cmd_restart "$@" ;;
     backup) cmd_backup "$@" ;;
     help|-h|--help) usage ;;
     -*) cmd_install "$cmd" "$@" ;;  # options without a command: install
