@@ -33,6 +33,7 @@ export interface Profile {
   pinned_nutrients: string[]; // nutrient codes always shown on Today
   unit_system: UnitSystem;
   hidden_sources?: string[];
+  preferred_source?: string | null;
 }
 
 export type UnitSystem = "metric" | "imperial";

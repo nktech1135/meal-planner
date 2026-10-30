@@ -52,6 +52,7 @@ class ProfileIn(BaseModel):
     pinned_nutrients: list[str] = Field(default=[], max_length=40)
     unit_system: Literal["metric", "imperial"] = "metric"
     hidden_sources: list[str] = Field(default=[], max_length=30)
+    preferred_source: str | None = Field(default=None, max_length=40)
 
     @field_validator("pinned_nutrients")
     @classmethod

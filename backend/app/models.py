@@ -60,6 +60,8 @@ class Profile(Base):
     unit_system: Mapped[str] = mapped_column(String(10), default="metric")  # metric | imperial (display only)
     # Food databases (Food.source keys) this user doesn't want in search results, e.g. ["ciqual", "bls"].
     hidden_sources: Mapped[list] = mapped_column(JSON, default=list)
+    # Database ranked first among generic search results (None = USDA FoodData Central).
+    preferred_source: Mapped[str | None] = mapped_column(String(40))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     user: Mapped[User] = relationship(back_populates="profile")

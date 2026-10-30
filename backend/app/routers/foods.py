@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
@@ -68,25 +70,35 @@ def search_foods(
     is_branded = Food.source_data_type == "Branded"
     candidates = list(db.scalars(stmt.where(or_(~is_branded, Food.source_data_type.is_(None))).limit(500)))
     candidates += list(db.scalars(stmt.where(is_branded).limit(500)))
-    candidates.sort(key=lambda f: search_rank(f, terms, user.id))
+    preferred = (user.profile.preferred_source if user.profile else None) or "usda_fdc"
+    candidates.sort(key=lambda f: search_rank(f, terms, user.id, preferred))
     return [food_summary(f) for f in candidates[:limit]]
 
 
 _TYPE_RANK = {"Foundation": 0, "SR Legacy": 1, "Survey (FNDDS)": 2}
 
 
-def search_rank(food: Food, terms: list[str], user_id: int) -> tuple:
-    """Lower sorts first: your own foods, generic before branded products, names starting with the
-    query, whole-word matches, lab data before survey data, then shorter (less specific) names."""
+def _stem(word: str) -> str:
+    """Crude plural folding so 'apple' matches 'Apples' ('es' only after s/x/z/ch/sh: 'potatoes' stays)."""
+    if len(word) > 4 and word.endswith("es") and word[-3] in "sxz":
+        return word[:-2]
+    return word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word
+
+
+def search_rank(food: Food, terms: list[str], user_id: int, preferred: str = "usda_fdc") -> tuple:
+    """Lower sorts first: your own foods, generic before branded products, your preferred database,
+    names starting with the query, whole-word matches (plurals folded), lab data before survey
+    data, then shorter (less specific) names."""
     name = food.name.lower()
-    words = set(name.replace(",", " ").split())
+    words = {_stem(w) for w in name.replace(",", " ").replace("(", " ").replace(")", " ").split()}
     return (
         food.owner_id != user_id,
         food.source_data_type == "Branded" or food.brand is not None,
+        food.source != preferred,
         not name.startswith(terms[0]),
-        -sum(t in words for t in terms),
+        -sum(_stem(t) in words for t in terms),
         _TYPE_RANK.get(food.source_data_type or "", 3),
-        len(name),
+        len(re.sub(r"\s*\([^)]*\)", "", name)),  # ignore notes like "(Includes foods for USDA's ...)"
     )
 
 

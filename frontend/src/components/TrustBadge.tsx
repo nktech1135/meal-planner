@@ -4,7 +4,7 @@ export const TRUST_INFO: Record<Trust, { label: string; icon: string; descriptio
   analytical: {
     label: "Analytical",
     icon: "✓",
-    description: "Government lab-analysed or compiled data (USDA Foundation, SR Legacy, FNDDS).",
+    description: "Food composition data analysed or compiled by a government or research institute (USDA and national food tables).",
   },
   label: {
     label: "Label",

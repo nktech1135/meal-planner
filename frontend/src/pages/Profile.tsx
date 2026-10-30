@@ -20,7 +20,17 @@ const MAX_PINNED = 40;
 /** Always shown on Today anyway. */
 const CORE = ["energy_kcal", "protein_g", "fat_g", "carbs_g", "fiber_g"];
 
-function SearchSources({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+function SearchSources({
+  value,
+  onChange,
+  preferred,
+  onPreferred,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  preferred: string | null;
+  onPreferred: (v: string | null) => void;
+}) {
   const dbs = useQuery({ queryKey: ["food-databases"], queryFn: api.foodDatabases });
   const installed = (dbs.data ?? []).filter((d) => d.records > 0);
   if (installed.length < 2) return null; // nothing to choose between
@@ -28,6 +38,15 @@ function SearchSources({ value, onChange }: { value: string[]; onChange: (v: str
     <section className="card stack" id="sources" aria-labelledby="sources-title">
       <h2 id="sources-title">Food databases in search</h2>
       <p className="muted small">Choose which reference databases appear when you search for foods. Your own foods always appear.</p>
+      <Field label="Prefer results from" hint="Its foods are listed first when several databases have a match, e.g. your own country's.">
+        <select value={preferred ?? "usda_fdc"} onChange={(e) => onPreferred(e.target.value === "usda_fdc" ? null : e.target.value)}>
+          {installed.map((d) => (
+            <option key={d.source} value={d.source}>
+              {d.label} ({d.country})
+            </option>
+          ))}
+        </select>
+      </Field>
       <div className="stack-sm">
         {installed.map((d) => (
           <label key={d.source} className="checkbox">
@@ -297,7 +316,12 @@ export default function ProfilePage() {
         </section>
 
         <PinnedNutrients defs={nutrientDefs} value={form.pinned_nutrients} onChange={(v) => set("pinned_nutrients", v)} />
-        <SearchSources value={form.hidden_sources ?? []} onChange={(v) => set("hidden_sources", v)} />
+        <SearchSources
+          value={form.hidden_sources ?? []}
+          onChange={(v) => set("hidden_sources", v)}
+          preferred={form.preferred_source ?? null}
+          onPreferred={(v) => set("preferred_source", v)}
+        />
 
         <ErrorBox error={save.error} />
         <div className="row">

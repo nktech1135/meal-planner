@@ -202,3 +202,21 @@ def test_parsed_import_keeps_extensions_and_skips_optional_files(user_client, db
     job = db_session.get(ImportJob, job["id"])
     assert job.status == "done", job.message
     assert db_session.query(Food).filter_by(source="afcd").count() == 5
+
+
+def test_search_prefers_the_users_database_and_folds_plurals(user_client, db_session):
+    from app.sources.base import ExternalFood
+    from app.sources.registry import bulk_upsert_external_foods
+
+    def food(source, sid, name):
+        return ExternalFood(source=source, source_id=sid, name=name, trust_level="analytical", data_type="SR Legacy",
+                            nutrients={"energy_kcal": (52.0, None)})
+    bulk_upsert_external_foods(db_session, [food("bls", "F1", "Apple raw")])
+    bulk_upsert_external_foods(db_session, [food("usda_fdc", "171688", "Apples, raw, with skin")])
+    bulk_upsert_external_foods(db_session, [food("cofid", "14-319", "Apples, eating, raw, flesh and skin")])
+    db_session.commit()
+    first = lambda: user_client.get("/api/foods", params={"q": "apple raw"}).json()[0]["name"]  # noqa: E731
+    assert first() == "Apples, raw, with skin"  # USDA by default, despite the plural
+    profile = user_client.get("/api/profile").json()
+    user_client.put("/api/profile", json={**profile, "preferred_source": "cofid"})
+    assert first() == "Apples, eating, raw, flesh and skin"
