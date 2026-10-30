@@ -437,3 +437,52 @@ class BodyIn(BaseModel):
 
 class BodyOut(BodyIn, ORM):
     date: date
+
+
+class PlanItemIn(BaseModel):
+    date: date
+    meal: Meal = "dinner"
+    food_id: int | None = None
+    recipe_id: int | None = None
+    quantity: float = Field(gt=0)
+    unit: str = "g"
+    weighed_state: WeighedState = "as_is"
+    yield_id: int | None = None
+    note: str = Field(default="", max_length=500)
+
+
+OptionalDate = date | None  # alias: inside the class below, "date" is the field name
+
+
+class PlanItemUpdate(BaseModel):
+    date: OptionalDate = None
+    meal: Meal | None = None
+    quantity: float | None = Field(default=None, gt=0)
+    unit: str | None = None
+    weighed_state: WeighedState | None = None
+    yield_id: int | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+
+class PlanCopyIn(BaseModel):
+    from_start: date
+    from_end: date
+    to_start: date
+
+
+class PlanFromSavedIn(BaseModel):
+    saved_meal_id: int
+    date: date
+    meal: Meal | None = None
+
+
+class PlanLogIn(BaseModel):
+    date: date
+    meal: Meal | None = None
+
+
+class ShoppingCheckIn(BaseModel):
+    start: date
+    end: date
+    key: str = Field(min_length=1, max_length=80)
+    checked: bool

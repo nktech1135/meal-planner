@@ -345,3 +345,37 @@ class BodyMeasurement(Base):
     waist_cm: Mapped[float | None] = mapped_column(Float)
     note: Mapped[str] = mapped_column(String(500), default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class PlanItem(Base):
+    """Something the user intends to eat or take on a future (or current) day."""
+
+    __tablename__ = "plan_items"
+    __table_args__ = (Index("ix_plan_user_date", "user_id", "date"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    date: Mapped[date] = mapped_column(Date)
+    meal: Mapped[str] = mapped_column(String(20), default="dinner")
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    food_id: Mapped[int | None] = mapped_column(ForeignKey("foods.id", ondelete="CASCADE"))
+    recipe_id: Mapped[int | None] = mapped_column(ForeignKey("recipes.id", ondelete="CASCADE"))
+    label: Mapped[str] = mapped_column(String(300))
+    quantity: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(40))
+    weighed_state: Mapped[str] = mapped_column(String(10), default="as_is")
+    yield_id: Mapped[int | None] = mapped_column(ForeignKey("cooking_yields.id", ondelete="SET NULL"))
+    note: Mapped[str] = mapped_column(String(500), default="")
+    origin: Mapped[str] = mapped_column(String(20), default="manual")  # manual | advisor | copy | saved_meal
+    logged_entry_id: Mapped[int | None] = mapped_column(ForeignKey("log_entries.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ShoppingCheck(Base):
+    """A ticked-off line on a shopping list (key identifies the list's date range and the item)."""
+
+    __tablename__ = "shopping_checks"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
