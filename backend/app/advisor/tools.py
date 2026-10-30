@@ -3,15 +3,19 @@
 import json
 from datetime import date, timedelta
 
+from fastapi import HTTPException
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Food, Recipe, User
+from app.models import BodyMeasurement, Food, PlanProposal, Recipe, User
 from app.nutrients import BY_CODE
+from app.routers.plan import plan_days, validate_item
+from app.schemas import PlanItemIn
 from app.services.access import recipe_yields, visible
 from app.services.nutrition import NutritionError, recipe_nutrition
 from app.services.summary import day_summary, entries_between, local_date, local_today, range_totals
 from app.services.targets import compute_targets
+from app.services.trends import trends
 
 MAX_RESULT_CHARS = 30_000
 
@@ -66,6 +70,41 @@ TOOLS = [
         "description": "The user's recipes with per-serving nutrition.",
         "input_schema": _obj({}),
     },
+    {
+        "name": "get_trends",
+        "description": "Averages over the last N days (logged days only) against every target, how many logged "
+                       "days met each target, the weight trend, and an estimate of maintenance energy from intake "
+                       "and weight change when there is enough data. Prefer this over single days for vitamins and minerals.",
+        "input_schema": _obj({"days": {"type": "integer", "description": "7 to 90"}}),
+    },
+    {
+        "name": "get_body_measurements",
+        "description": "Weight, body fat and waist measurements over a date range (max 365 days).",
+        "input_schema": _obj({"start_date": _DATE, "end_date": _DATE}),
+    },
+    {
+        "name": "get_meal_plan",
+        "description": "Planned items per day with projected nutrient totals (max 31 days).",
+        "input_schema": _obj({"start_date": _DATE, "end_date": _DATE}),
+    },
+    {
+        "name": "propose_plan_items",
+        "description": "Suggest items for the user's meal plan. Nothing is added until the user reviews and accepts "
+                       "the proposal in the app, so explain what you proposed. Use food_id or recipe_id values "
+                       "from search_foods / list_recipes (exactly one per item). unit is 'g' (grams of the food as "
+                       "described), 'serving', or 'unit' for per-serving supplements.",
+        "input_schema": _obj({
+            "rationale": {"type": "string", "description": "One or two sentences on why"},
+            "items": {"type": "array", "items": _obj({
+                "date": _DATE,
+                "meal": {"type": "string", "enum": ["breakfast", "lunch", "dinner", "snack", "supplement"]},
+                "food_id": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
+                "recipe_id": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
+                "quantity": {"type": "number"},
+                "unit": {"type": "string", "enum": ["g", "serving", "unit"]},
+            })},
+        }),
+    },
 ]
 for _t in TOOLS:
     _t["strict"] = True
@@ -102,7 +141,7 @@ def _entry(user: User, e) -> dict:
     }
 
 
-def run_tool(db: Session, user: User, name: str, args: dict) -> str:
+def run_tool(db: Session, user: User, name: str, args: dict, conversation_id: int | None = None) -> str:
     if name == "get_profile_and_targets":
         p = user.profile
         today = local_today(user)
@@ -162,6 +201,33 @@ def run_tool(db: Session, user: User, name: str, args: dict) -> str:
                                "per_serving": _named(info["per_serving"]), "trust_level": info["trust_level"]})
             except NutritionError as exc:
                 result.append({"recipe_id": r.id, "name": r.name, "error": str(exc)})
+    elif name == "get_trends":
+        days = max(7, min(90, int(args["days"])))
+        end = local_today(user)
+        t = trends(db, user, end - timedelta(days=days - 1), end)
+        result = {
+            "start": t["start"], "end": t["end"], "logged_days": t["logged_days"], "of_days": t["days"],
+            "daily_averages_vs_targets": [{k: r.get(k) for k in ("code", "amount", "limit_amount", "status", "min",
+                                                                  "target", "max", "kind", "ul_scope", "days_ok")}
+                                          for r in t["evaluation"]],
+            "weight_trend": (t["weight"][0], t["weight"][-1]) if t["weight"] else None,
+            "energy_estimate": t["energy_estimate"], "warnings": t["warnings"],
+        }
+    elif name == "get_body_measurements":
+        start, end = _span(args, 365)
+        result = [{"date": m.date.isoformat(), "weight_kg": m.weight_kg, "body_fat_pct": m.body_fat_pct,
+                   "waist_cm": m.waist_cm, "note": m.note}
+                  for m in db.scalars(select(BodyMeasurement).where(
+                      BodyMeasurement.user_id == user.id, BodyMeasurement.date >= start, BodyMeasurement.date <= end)
+                      .order_by(BodyMeasurement.date))]
+    elif name == "get_meal_plan":
+        start, end = _span(args, 31)
+        result = [{"date": d["date"], "items": [{k: i[k] for k in ("meal", "label", "quantity", "unit", "food_id",
+                                                                    "recipe_id", "logged_entry_id", "error")}
+                                                 for i in d["items"]],
+                   "totals": _named(d["totals"])} for d in plan_days(db, user, start, end) if d["items"]]
+    elif name == "propose_plan_items":
+        result = _propose(db, user, args, conversation_id)
     else:
         raise ValueError(f"Unknown tool {name}")
 
@@ -169,3 +235,27 @@ def run_tool(db: Session, user: User, name: str, args: dict) -> str:
     if len(text) > MAX_RESULT_CHARS:
         text = text[:MAX_RESULT_CHARS] + ' ... [truncated: narrow the date range or query]'
     return text
+
+
+def _propose(db: Session, user: User, args: dict, conversation_id: int | None) -> dict:
+    """Validate each suggested item and store the valid ones as a pending proposal."""
+    accepted, problems = [], []
+    for i, raw in enumerate(args.get("items") or []):
+        try:
+            item = PlanItemIn(**{k: v for k, v in raw.items() if v is not None})
+            label = validate_item(db, user, item)
+        except HTTPException as exc:
+            problems.append({"index": i, "error": str(exc.detail)})
+            continue
+        except ValueError as exc:
+            problems.append({"index": i, "error": str(exc)})
+            continue
+        accepted.append({**item.model_dump(mode="json"), "label": label})
+    if not accepted:
+        return {"proposal_id": None, "problems": problems, "note": "Nothing valid to propose."}
+    proposal = PlanProposal(user_id=user.id, conversation_id=conversation_id, rationale=args.get("rationale", ""),
+                            items=accepted)
+    db.add(proposal)
+    db.flush()
+    return {"proposal_id": proposal.id, "items_proposed": len(accepted), "problems": problems,
+            "note": "Shown to the user for review; not yet in their plan."}

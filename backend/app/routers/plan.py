@@ -45,7 +45,7 @@ def _own(db: Session, user: User, item_id: int) -> PlanItem:
     return item
 
 
-def _validate(db: Session, user: User, body) -> str:
+def validate_item(db: Session, user: User, body) -> str:
     """Check access, units and yields the same way logging does; returns the item's label."""
     if bool(body.food_id) == bool(body.recipe_id):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Plan exactly one of food_id or recipe_id")
@@ -96,7 +96,7 @@ def add_item(body: PlanItemIn, user: User = Depends(current_user), db: Session =
 
 
 def create_item(db: Session, user: User, body: PlanItemIn, origin: str) -> dict:
-    label = _validate(db, user, body)
+    label = validate_item(db, user, body)
     last = db.scalar(select(PlanItem.position).where(PlanItem.user_id == user.id, PlanItem.date == body.date)
                      .order_by(PlanItem.position.desc()).limit(1))
     item = PlanItem(user_id=user.id, label=label, position=(last or 0) + 1, origin=origin, **body.model_dump())
@@ -110,7 +110,7 @@ def update_item(item_id: int, body: PlanItemUpdate, user: User = Depends(current
     item = _own(db, user, item_id)
     changes = body.model_dump(exclude_unset=True)
     merged = PlanItemIn(**{**{k: getattr(item, k) for k in PlanItemIn.model_fields}, **changes})
-    _validate(db, user, merged)
+    validate_item(db, user, merged)
     for key, value in changes.items():
         setattr(item, key, value)
     db.commit()

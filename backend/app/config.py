@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     advisor_effort: str = "medium"  # low | medium | high | xhigh | max
     advisor_daily_message_limit: int = 50
     advisor_max_tool_rounds: int = 8
+    advisor_web_research: bool = True  # Claude web search/fetch, limited to authoritative health domains
+    advisor_web_max_uses: int = 3
 
     # Data sources. Free, authoritative sources are on by default.
     usda_fdc_api_key: str = "DEMO_KEY"  # get a free key at https://fdc.nal.usda.gov/api-key-signup

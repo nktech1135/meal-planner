@@ -379,3 +379,18 @@ class ShoppingCheck(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     key: Mapped[str] = mapped_column(String(120), primary_key=True)
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PlanProposal(Base):
+    """Plan items suggested by the advisor; nothing is added to the plan until the user accepts."""
+
+    __tablename__ = "plan_proposals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    conversation_id: Mapped[int | None] = mapped_column(ForeignKey("advisor_conversations.id", ondelete="CASCADE"))
+    rationale: Mapped[str] = mapped_column(Text, default="")
+    items: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | accepted | dismissed
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

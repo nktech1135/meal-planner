@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from anthropic.types.beta import BetaMessage
 
@@ -56,7 +56,9 @@ def test_tool_round_trip_and_persistence(user_client):
     first, second = fake.requests
     assert first["model"] == get_settings().advisor_model
     assert first["fallbacks"] == "default" and "server-side-fallback-2026-07-01" in first["betas"]
-    assert all(t["strict"] for t in first["tools"])
+    assert all(t["strict"] for t in first["tools"] if "input_schema" in t)
+    web = {t["name"]: t for t in first["tools"] if "input_schema" not in t}
+    assert set(web) == {"web_search", "web_fetch"} and "ods.od.nih.gov" in web["web_search"]["allowed_domains"]
     assert "<context>Today is" in first["messages"][0]["content"][0]["text"]
     tool_result = second["messages"][-1]["content"][0]
     assert tool_result["type"] == "tool_result" and tool_result["tool_use_id"] == "toolu_1"
@@ -107,3 +109,52 @@ def test_daily_limit_and_privacy(user_client, client, monkeypatch):
     client.post("/api/auth/register", json={"email": "b@example.com", "password": "another long password"})
     assert client.get(f"/api/advisor/conversations/{convo['id']}").status_code == 404
     assert client.get("/api/advisor/conversations").json() == []
+
+
+def test_web_research_can_be_turned_off(user_client):
+    user_client.put("/api/admin/settings", json={"values": {"advisor_web_research": False}})
+    fake = FakeClient([message([{"type": "text", "text": "ok"}], "end_turn")])
+    use(fake)
+    user_client.post("/api/advisor/chat", json={"message": "hi"})
+    assert all("input_schema" in t for t in fake.requests[0]["tools"])
+
+
+def test_cited_sources_are_shown(user_client):
+    use(FakeClient([message([
+        {"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search", "input": {"query": "magnesium UL"}},
+        {"type": "web_search_tool_result", "tool_use_id": "srvtoolu_1", "content": []},
+        {"type": "text", "text": "The UL is 350 mg from supplements.", "citations": [
+            {"type": "web_search_result_location", "url": "https://ods.od.nih.gov/factsheets/Magnesium-HealthProfessional/",
+             "title": "Magnesium - Health Professional Fact Sheet", "cited_text": "350 mg", "encrypted_index": "x"}]},
+    ], "end_turn")]))
+    convo = user_client.post("/api/advisor/chat", json={"message": "Mg UL?"}).json()
+    reply = convo["messages"][-1]
+    assert reply["tools_used"] == ["web_search"]
+    assert reply["sources"] == [{"url": "https://ods.od.nih.gov/factsheets/Magnesium-HealthProfessional/",
+                                 "title": "Magnesium - Health Professional Fact Sheet"}]
+
+
+def test_plan_proposal_review(user_client):
+    food = user_client.post("/api/foods", json={"name": "Greek yogurt", "nutrients": {"protein_g": 10}}).json()
+    tomorrow = (datetime.now(UTC).date() + timedelta(days=1)).isoformat()
+    use(FakeClient([
+        message([{"type": "tool_use", "id": "toolu_1", "name": "propose_plan_items", "input": {
+            "rationale": "More protein at breakfast.",
+            "items": [
+                {"date": tomorrow, "meal": "breakfast", "food_id": food["id"], "recipe_id": None, "quantity": 200, "unit": "g"},
+                {"date": tomorrow, "meal": "breakfast", "food_id": 99999, "recipe_id": None, "quantity": 1, "unit": "g"},
+            ]}}],
+                "tool_use"),
+        message([{"type": "text", "text": "I proposed yogurt for breakfast."}], "end_turn"),
+    ]))
+    convo = user_client.post("/api/advisor/chat", json={"message": "plan breakfast"}).json()
+    [proposal] = convo["proposals"]
+    assert proposal["status"] == "pending" and [i["label"] for i in proposal["items"]] == ["Greek yogurt"]
+    params = {"start": tomorrow, "end": tomorrow}
+    assert user_client.get("/api/plan", params=params).json()[0]["items"] == []  # nothing added yet
+    assert user_client.post(f"/api/advisor/proposals/{proposal['id']}/accept", json={"indexes": [5]}).status_code == 422
+    accepted = user_client.post(f"/api/advisor/proposals/{proposal['id']}/accept", json={}).json()
+    assert accepted["status"] == "accepted"
+    [item] = user_client.get("/api/plan", params=params).json()[0]["items"]
+    assert item["origin"] == "advisor" and item["quantity"] == 200
+    assert user_client.post(f"/api/advisor/proposals/{proposal['id']}/dismiss").status_code == 409

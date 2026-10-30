@@ -50,6 +50,11 @@ DEFS: tuple[SettingDef, ...] = (
                "How hard the model thinks. Higher is slower and costs more.", choices=EFFORTS),
     SettingDef("advisor_daily_message_limit", "Messages per user per day", "AI advisor", "int",
                "Caps cost per user.", minimum=1, maximum=1000),
+    SettingDef("advisor_web_research", "Look up authoritative sources", "AI advisor", "bool",
+               "Lets the advisor search and read NIH, MedlinePlus, FDA, USDA and similar sites (e.g. supplement "
+               "fact sheets and drug interactions) and cite them. Anthropic bills searches separately."),
+    SettingDef("advisor_web_max_uses", "Source look-ups per reply", "AI advisor", "int",
+               "Upper limit on searches and page reads for one reply.", minimum=1, maximum=10),
     SettingDef("usda_fdc_api_key", "USDA FoodData Central API key", "Data sources", "secret",
                "Free. Without one the shared DEMO_KEY is used, which is heavily rate-limited.",
                link="https://fdc.nal.usda.gov/api-key-signup"),

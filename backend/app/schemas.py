@@ -344,7 +344,20 @@ class ChatMessageOut(BaseModel):
     role: str
     text: str
     tools_used: list[str] = []
+    sources: list[dict] = []
     created_at: datetime
+
+
+class ProposalOut(ORM):
+    id: int
+    rationale: str
+    items: list[dict]
+    status: str
+    created_at: datetime
+
+
+class ProposalAccept(BaseModel):
+    indexes: list[int] | None = None  # accept only these items (default: all)
 
 
 class ConversationOut(ORM):
@@ -355,6 +368,7 @@ class ConversationOut(ORM):
 
 class ConversationDetail(ConversationOut):
     messages: list[ChatMessageOut]
+    proposals: list[ProposalOut] = []
 
 
 class LogUpdate(BaseModel):
