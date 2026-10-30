@@ -10,7 +10,11 @@
 #   From a checkout:  ./install.sh install   (or: sudo ./install.sh install)
 #   Afterwards:   [sudo] mealplan upgrade | uninstall [--purge] | status | restart | backup | help
 #
-# System-wide layout (Debian/Ubuntu; PostgreSQL by default, optional Caddy HTTPS):
+# The app itself only ever listens on 127.0.0.1. System-wide, Caddy is installed in
+# front of it: plain HTTP on port 80, or HTTPS with an automatic certificate when
+# --domain is given. Per-user installs (no root, so no ports 80/443) stay local.
+#
+# System-wide layout (Debian/Ubuntu; PostgreSQL by default; Caddy in front):
 #   /opt/mealplan/             code and toolchain (releases/<rev>, current -> releases/<rev>, tools/, repo.git)
 #   /etc/mealplan/mealplan.env configuration (kept on upgrade and plain uninstall)
 #   /var/lib/mealplan/         data: SQLite database (if used) and backups/
@@ -80,6 +84,7 @@ else
 fi
 CADDYFILE="/etc/caddy/Caddyfile"
 CADDY_SITE="/etc/caddy/mealplan.caddy"
+CADDYFILE_ORIG="/etc/caddy/Caddyfile.before-mealplan"  # the packaged Caddyfile, when the installer replaced it
 ENV_FILE="$ETC_DIR/mealplan.env"
 STATE_FILE="$ETC_DIR/install.conf"
 BACKUP_DIR="$VAR_DIR/backups"
@@ -111,12 +116,12 @@ Run as root (sudo) for the system-wide install, or as yourself for a per-user in
 
 Commands:
   install     Install Mealplan (default when no command is given)
-                --port N         local port for the app (default 8080)
-                --listen ADDR    bind address (default: 0.0.0.0 system-wide, 127.0.0.1 per-user)
+                --port N         port the app listens on at 127.0.0.1 (default 8080)
                 --repo URL|PATH  git repository to install from
                 --branch NAME    branch to track (default main)
               System-wide only:
-                --domain NAME    serve over HTTPS at NAME via Caddy (DNS must point here)
+                --domain NAME    serve over HTTPS at NAME (DNS must point here); without it,
+                                 Caddy serves plain HTTP on port 80
                 --db postgres|sqlite   database (default postgres; per-user always uses sqlite)
               Per-user only:
                 --no-linger      don't keep running after you log out / start at boot
@@ -180,8 +185,8 @@ confirm() {
 save_state() {
   {
     printf '# Written by the mealplan installer. Do not edit.\n'
-    printf 'REPO=%q\nBRANCH=%q\nDB_KIND=%q\nDOMAIN=%q\nCADDY_MANAGED=%q\nSERVICE_KIND=%q\n' \
-      "$REPO" "$BRANCH" "$DB_KIND" "$DOMAIN" "$CADDY_MANAGED" "$SERVICE_KIND"
+    printf 'REPO=%q\nBRANCH=%q\nDB_KIND=%q\nDOMAIN=%q\nCADDY_MANAGED=%q\nCADDYFILE_REPLACED=%q\nSERVICE_KIND=%q\n' \
+      "$REPO" "$BRANCH" "$DB_KIND" "$DOMAIN" "$CADDY_MANAGED" "$CADDYFILE_REPLACED" "$SERVICE_KIND"
   } >"$STATE_FILE"
 }
 
@@ -195,6 +200,7 @@ load_state() {
   # shellcheck disable=SC1090
   . "$STATE_FILE"
   SERVICE_KIND="${SERVICE_KIND:-$(default_service_kind)}"
+  CADDY_MANAGED="${CADDY_MANAGED:-0}" CADDYFILE_REPLACED="${CADDYFILE_REPLACED:-0}"
 }
 
 env_value() {  # env_value KEY -> value from the config file
@@ -204,9 +210,8 @@ env_value() {  # env_value KEY -> value from the config file
 # --- System setup ----------------------------------------------------------------
 install_packages() {
   is_system || return 0
-  local pkgs=(ca-certificates curl git tar xz-utils util-linux)
+  local pkgs=(ca-certificates curl git tar xz-utils util-linux caddy)
   [[ "$DB_KIND" == postgres ]] && pkgs+=(postgresql)
-  [[ -n "$DOMAIN" ]] && pkgs+=(caddy)
   log "Installing system packages: ${pkgs[*]}"
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
@@ -354,8 +359,8 @@ write_config() {
     log "Keeping existing configuration $ENV_FILE"
     return 0
   fi
-  local host="$LISTEN" secure=false db_url
-  if [[ -n "$DOMAIN" ]]; then host=127.0.0.1; secure=true; fi
+  local secure=false db_url
+  [[ -n "$DOMAIN" ]] && secure=true
   if [[ "$DB_KIND" == postgres ]]; then
     db_url="postgresql+psycopg://$SERVICE_USER@/$SERVICE_USER?host=/var/run/postgresql"
   else
@@ -372,7 +377,7 @@ write_config() {
 # and don't change it, or stored keys can no longer be read and must be entered again.
 # After editing this file: ${SUDO}mealplan restart
 
-MEALPLAN_HOST=$host
+MEALPLAN_HOST=127.0.0.1
 MEALPLAN_PORT=$PORT
 DATABASE_URL=$db_url
 SECRET_KEY=$(random_secret)
@@ -399,32 +404,72 @@ setup_postgres() {
   fi
 }
 
+caddyfile_is_stock() {  # unchanged from the caddy package?
+  local changed
+  changed="$(dpkg --verify caddy 2>/dev/null || true)"
+  [[ "$changed" != *" $CADDYFILE"* ]]
+}
+
 setup_caddy() {
-  [[ -n "$DOMAIN" ]] || return 0
   is_system || return 0
-  log "Configuring Caddy for https://$DOMAIN"
+  local address
+  if [[ -n "$DOMAIN" ]]; then address="$DOMAIN"; log "Configuring Caddy for https://$DOMAIN"
+  else address=":80"; log "Configuring Caddy for plain HTTP on port 80"; fi
   cat >"$CADDY_SITE" <<EOF
 # Managed by the mealplan installer.
-$DOMAIN {
+$address {
 	encode gzip
 	reverse_proxy 127.0.0.1:$PORT
 }
 EOF
-  grep -qxF "import $CADDY_SITE" "$CADDYFILE" 2>/dev/null || printf '\nimport %s\n' "$CADDY_SITE" >>"$CADDYFILE"
-  caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null 2>&1 || die "Caddy rejected the configuration; check $CADDYFILE"
+  if [[ "${CADDYFILE_REPLACED:-0}" != 1 && -f "$CADDYFILE" ]] && caddyfile_is_stock; then
+    # The packaged Caddyfile only serves a placeholder page on :80, which would clash with ours.
+    # Keep it aside (restored on uninstall) and use our own. An edited Caddyfile is left alone.
+    mv "$CADDYFILE" "$CADDYFILE_ORIG"
+    printf '# Managed by the mealplan installer; the packaged file is in %s.\nimport %s\n' \
+      "$CADDYFILE_ORIG" "$CADDY_SITE" >"$CADDYFILE"
+    CADDYFILE_REPLACED=1
+  elif ! grep -qxF "import $CADDY_SITE" "$CADDYFILE" 2>/dev/null; then
+    printf '\nimport %s\n' "$CADDY_SITE" >>"$CADDYFILE"
+  fi
+  CADDY_MANAGED=1
+  if ! caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null 2>&1; then
+    remove_caddy_site
+    die "Caddy rejected the configuration: your existing $CADDYFILE probably already serves $address. Remove that site, or use --domain."
+  fi
   systemctl enable caddy >/dev/null 2>&1
   systemctl reload caddy 2>/dev/null || systemctl restart caddy
-  CADDY_MANAGED=1
+  systemctl is-active --quiet caddy || die "Caddy did not start; is another web server using port 80 or 443? See: journalctl -u caddy"
 }
 
 remove_caddy_site() {
   [[ "${CADDY_MANAGED:-0}" == 1 ]] || return 0
   is_system || return 0
   rm -f "$CADDY_SITE"
-  if [[ -f "$CADDYFILE" ]]; then
+  if [[ "${CADDYFILE_REPLACED:-0}" == 1 && -f "$CADDYFILE_ORIG" ]]; then
+    mv "$CADDYFILE_ORIG" "$CADDYFILE"
+  elif [[ -f "$CADDYFILE" ]]; then
     sed -i "\\|^import $CADDY_SITE\$|d" "$CADDYFILE"
-    systemctl reload caddy 2>/dev/null || true
   fi
+  systemctl reload caddy 2>/dev/null || true
+  CADDY_MANAGED=0 CADDYFILE_REPLACED=0
+}
+
+# Installs from before the app was always kept on 127.0.0.1 (and, system-wide, behind Caddy).
+ensure_local_only() {
+  local changed=0
+  if [[ "$(env_value MEALPLAN_HOST)" != 127.0.0.1 ]]; then
+    log "The app now listens on 127.0.0.1 only"
+    sed -i 's/^MEALPLAN_HOST=.*/MEALPLAN_HOST=127.0.0.1/' "$ENV_FILE"
+    changed=1
+  fi
+  if is_system && [[ "${CADDY_MANAGED:-0}" != 1 ]]; then
+    install_packages
+    PORT="$(env_value MEALPLAN_PORT)"
+    setup_caddy
+    save_state
+  fi
+  return $((1 - changed))  # success when the running service needs a restart
 }
 
 # --- Database operations -----------------------------------------------------------
@@ -627,23 +672,25 @@ health_check() {
 
 public_url() {
   if [[ -n "${DOMAIN:-}" ]]; then echo "https://$DOMAIN"; return; fi
-  local host ip
-  host="$(env_value MEALPLAN_HOST)"
-  ip="$host"
-  [[ "$host" == 0.0.0.0 ]] && ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  echo "http://${ip:-localhost}:$(env_value MEALPLAN_PORT)"
+  if [[ "${CADDY_MANAGED:-0}" == 1 ]]; then
+    local ip
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    echo "http://${ip:-localhost}"
+    return
+  fi
+  echo "http://127.0.0.1:$(env_value MEALPLAN_PORT)"
 }
 
 # --- Commands --------------------------------------------------------------------------
 cmd_install() {
-  REPO="" BRANCH="$DEFAULT_BRANCH" DOMAIN="" PORT="$DEFAULT_PORT" LISTEN="" DB_KIND="" CADDY_MANAGED=0
+  REPO="" BRANCH="$DEFAULT_BRANCH" DOMAIN="" PORT="$DEFAULT_PORT" DB_KIND="" CADDY_MANAGED=0 CADDYFILE_REPLACED=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --repo) REPO="${2:?--repo needs a value}"; shift 2 ;;
       --branch) BRANCH="${2:?--branch needs a value}"; shift 2 ;;
       --domain) DOMAIN="${2:?--domain needs a value}"; shift 2 ;;
       --port) PORT="${2:?--port needs a value}"; shift 2 ;;
-      --listen) LISTEN="${2:?--listen needs a value}"; shift 2 ;;
+      --listen) die "--listen is no longer supported: the app only listens on 127.0.0.1 (system-wide, Caddy serves it to the network)" ;;
       --db) DB_KIND="${2:?--db needs a value}"; shift 2 ;;
       --no-linger) NO_LINGER=1; shift ;;
       --yes|-y) ASSUME_YES=1; shift ;;
@@ -651,16 +698,15 @@ cmd_install() {
     esac
   done
   if is_system; then
-    DB_KIND="${DB_KIND:-postgres}" LISTEN="${LISTEN:-0.0.0.0}"
+    DB_KIND="${DB_KIND:-postgres}"
   else
     [[ -z "$DOMAIN" ]] || die "--domain needs the system-wide install (HTTPS on ports 80/443 requires root); run with sudo"
     [[ "${DB_KIND:-sqlite}" == sqlite ]] || die "--db postgres needs the system-wide install; run with sudo"
-    DB_KIND=sqlite LISTEN="${LISTEN:-127.0.0.1}"
+    DB_KIND=sqlite
   fi
   if ! [[ "$PORT" =~ ^[0-9]+$ ]] || ((PORT < 1024 || PORT > 65535)); then die "--port must be 1024-65535"; fi
   [[ "$DB_KIND" == postgres || "$DB_KIND" == sqlite ]] || die "--db must be postgres or sqlite"
   [[ -z "$DOMAIN" || "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || die "invalid --domain"
-  [[ "$LISTEN" =~ ^[0-9A-Fa-f.:]+$ ]] || die "invalid --listen address"
   [[ -n "$REPO" ]] || REPO="$(default_repo)"
   if [[ -d "$REPO" ]]; then REPO="$(cd "$REPO" && pwd)"; fi
 
@@ -723,10 +769,10 @@ EOF
   if [[ "$MODE" == user && ":$PATH:" != *":$(dirname "$BIN_PATH"):"* ]]; then
     warn "$(dirname "$BIN_PATH") is not on your PATH; run $BIN_PATH directly or add it to PATH"
   fi
-  if [[ -z "$DOMAIN" && "$(env_value MEALPLAN_HOST)" != 127.0.0.1 ]]; then
-    warn "traffic is unencrypted HTTP. For use beyond a trusted network, use HTTPS (system-wide install with --domain, or your own reverse proxy)."
-  elif [[ "$MODE" == user ]]; then
-    log "Listening on localhost only. To reach it from other machines, reinstall with --listen 0.0.0.0 or put a reverse proxy in front."
+  if is_system && [[ -z "$DOMAIN" ]]; then
+    warn "Caddy serves plain HTTP on port 80. For use beyond a trusted network, reinstall with --domain for HTTPS (the camera barcode scanner also needs HTTPS)."
+  elif ! is_system; then
+    log "Listening on this machine only (127.0.0.1). For access from other machines, use the system-wide install (sudo), which puts Caddy in front."
   fi
 }
 
@@ -742,6 +788,7 @@ cmd_upgrade() {
   load_state
   detect_arch
   take_lock
+  if ensure_local_only; then service_stop; service_start; health_check || die "the service did not come up; see: $(logs_hint)"; fi
   local old_rel old_rev new_rev
   old_rel="$(current_release)"
   [[ -n "$old_rel" ]] || die "no current release found under $PREFIX"
@@ -800,7 +847,8 @@ cmd_uninstall() {
       *) die "unknown option for uninstall: $1" ;;
     esac
   done
-  if [[ -f "$STATE_FILE" ]]; then load_state; else DB_KIND="" CADDY_MANAGED=0 SERVICE_KIND="$(default_service_kind)"; fi
+  if [[ -f "$STATE_FILE" ]]; then load_state
+  else DB_KIND="" CADDY_MANAGED=0 CADDYFILE_REPLACED=0 SERVICE_KIND="$(default_service_kind)"; fi
   if [[ "$purge" == 1 ]]; then
     confirm "Remove Mealplan AND permanently delete its database, backups and configuration?" || die "aborted"
   else

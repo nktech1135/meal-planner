@@ -116,8 +116,8 @@ no Docker.
 | Runs as | `mealplan` system user | you |
 | Database | PostgreSQL (or `--db sqlite`) | SQLite |
 | Service | systemd system unit | systemd user unit (`systemctl --user`) |
-| HTTPS | `--domain` sets up Caddy | not built in; use localhost or an existing reverse proxy |
-| Listens on | `0.0.0.0:8080` | `127.0.0.1:8080` |
+| Reached at | Caddy: `http://<server>` (port 80), or `https://<domain>` with `--domain` | `http://127.0.0.1:8080`, this machine only |
+| App listens on | `127.0.0.1:8080`, behind Caddy | `127.0.0.1:8080` |
 | Distros | Debian 12+/Ubuntu 22.04+ | any systemd distro with git, curl, tar, xz |
 | Files | `/opt/mealplan`, `/etc/mealplan`, `/var/lib/mealplan` | `~/.local/share/mealplan`, `~/.config/mealplan` |
 | Command | `sudo mealplan …` | `mealplan …` (`~/.local/bin`) |
@@ -141,7 +141,7 @@ won't come back after a reboot.
 ### System-wide install
 
 ```bash
-# One line (once install.sh is published; see "Publishing" below):
+# One line:
 curl -fsSL https://raw.githubusercontent.com/nktech1135/meal-planner/main/install.sh | sudo bash
 
 # With HTTPS on your own domain (DNS must already point at this machine):
@@ -152,7 +152,7 @@ sudo ./install.sh install
 ```
 
 The installer:
-- installs PostgreSQL, git, curl and (with `--domain`) Caddy from apt;
+- installs PostgreSQL, Caddy, git and curl from apt;
 - creates a `mealplan` system user and a PostgreSQL database it reaches over the
   local socket, so there's no database password to manage (`--db sqlite` is
   also available);
@@ -165,7 +165,13 @@ The installer:
 - writes a small bootstrap file, `/etc/mealplan/mealplan.env` (per-user:
   `~/.config/mealplan/mealplan.env`), with the database location and a
   generated `SECRET_KEY`. The key also encrypts the API keys stored in
-  Settings, so don't change it.
+  Settings, so don't change it;
+- puts Caddy in front of the app, which itself only listens on 127.0.0.1.
+  Without `--domain`, Caddy serves plain HTTP on port 80. With `--domain`, it
+  serves HTTPS with an automatic certificate (and redirects HTTP to it). If
+  Caddy's own Caddyfile is still the packaged one, the installer sets it aside as
+  `/etc/caddy/Caddyfile.before-mealplan` and puts it back on uninstall; an edited
+  Caddyfile is kept, with one `import` line added.
 
 After installing, everything is done in the browser. Register (the first
 account is the admin), then open **Settings**:
@@ -174,9 +180,11 @@ account is the admin), then open **Settings**:
 - set up email if you want password-reset emails;
 - close sign-ups, or invite people from **Users**.
 
-Without `--domain` the app listens on port 8080 over plain HTTP; use that only
-on a trusted network. Options: `--port`, `--listen`, `--db postgres|sqlite`,
-`--repo`, `--branch`. Open the URL it prints and register. The first account is
+Without `--domain`, traffic is plain HTTP; use that only on a trusted network.
+The camera barcode scanner also needs HTTPS (or localhost). Options: `--domain`,
+`--port` (the app's local port), `--db postgres|sqlite`, `--repo`, `--branch`.
+Upgrading an older install that listened on all addresses moves it to
+127.0.0.1 and, system-wide, sets up Caddy in front of it. Open the URL it prints and register. The first account is
 the admin.
 
 Day-to-day (drop `sudo` for a per-user install):
@@ -215,5 +223,5 @@ carries credentials (e.g. a deploy token).
 | Web UI | Builds with no type errors; Playwright suite (58 tests) on the built app, incl. axe accessibility checks in light and dark; not yet tried with a real screen reader |
 | Nutritionix and Edamam adapters | Written to the vendors' published API docs; need a live check with real keys |
 | AI advisor | Tool loop tested with a fake client; needs a live check with an API key |
-| Installer (`install.sh`) | Tested in unprivileged test mode (SQLite, no root): install (from a file and piped), upgrade, rollback after a failed migration and after a failed start (schema downgraded), uninstall, reinstall reusing data, purge. The generated systemd unit passes `systemd-analyze verify`. Per-user mode run for real without root (in a scratch home, as a background process): install, restart, upgrade, uninstall, purge; its systemd user unit passes `systemd-analyze --user verify` but hasn't been started. Not yet run as root: apt packages, the system user, PostgreSQL setup, starting under systemd, Caddy |
+| Installer (`install.sh`) | Tested in unprivileged test mode (SQLite, no root): install (from a file and piped), upgrade, rollback after a failed migration and after a failed start (schema downgraded), uninstall, reinstall reusing data, purge. The generated systemd unit passes `systemd-analyze verify`. Per-user mode run for real without root (in a scratch home, as a background process): install, restart, upgrade, uninstall, purge; its systemd user unit passes `systemd-analyze --user verify` but hasn't been started. App bound to 127.0.0.1 in test and per-user mode, including the upgrade that moves an older all-addresses install to 127.0.0.1. Not yet run as root: apt packages, the system user, PostgreSQL setup, starting under systemd, Caddy (HTTP on port 80, `--domain` HTTPS, Caddyfile set aside and restored) |
 | Upper limits & reference intakes | Hand-transcribed from the DRI tables; verify before relying on them |
