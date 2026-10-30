@@ -22,12 +22,35 @@ Imported records are stored as shared, read-only foods along with the upstream
 payload (`foods.source_payload`), citation and link. To change an imported food,
 make a copy. The copy becomes `user` data and cites the original.
 
-## Implemented sources
+All keys and source switches below are set in the app (**Settings**, as an admin).
+
+## Local USDA database (recommended)
+
+**Settings → Data** imports USDA's public-domain datasets into the app's own
+database. Search is then instant, works offline and isn't rate-limited:
+
+| Dataset | Foods | Notes |
+|---|---|---|
+| SR Legacy (2018, final release) | ~7,800 | Raw and cooked forms of most basic foods |
+| Foundation Foods (updated twice a year) | ~400 | The most detailed lab analyses |
+| Survey foods / FNDDS | ~5,400 | Mixed dishes as eaten in the U.S. |
+| Nutrient Retention Factors, Release 6 (2007) | 270 profiles | Vitamin/mineral losses by cooking method |
+
+The app checks FDC's download page for newer releases and offers **Update**.
+Imports run in the background with progress shown, and only one runs at a time.
+Re-importing replaces records in place, so log entries that refer to them keep
+working. The retention CSV is pinned by SHA-256. 24 of its rows have no factor,
+because the date was entered in the factor column; those rows are skipped rather
+than guessed. USDA *Branded* foods (hundreds of thousands of products) are left
+to the online search.
+
+## Online sources
 
 ### USDA FoodData Central — free, enabled by default
 - https://fdc.nal.usda.gov/ · API guide: https://fdc.nal.usda.gov/api-guide
 - Public domain (CC0). Get a free API key at https://fdc.nal.usda.gov/api-key-signup
-  and set `USDA_FDC_API_KEY`. The default `DEMO_KEY` is heavily rate-limited.
+  and enter it in Settings. Without one, the shared `DEMO_KEY` is used, which is
+  heavily rate-limited.
 - Values are per 100 g. Portions (household measures with gram weights) are imported.
 - Foundation foods report energy as Atwater factors (nutrient 958/957) rather than
   208; the importer prefers 208, then 958, then 957.
@@ -52,25 +75,41 @@ make a copy. The copy becomes `user` data and cites the original.
   is flagged on the food. This catches DSLD transcription errors seen in real
   records, e.g. "Iodine 109 mg (70% DV)" where the label means 109 mcg. Counted
   as-is, that would trigger a false upper-limit alert.
+- **Chemical forms.** Vitamin A in IU, vitamin E in IU and folate in plain µg
+  only convert once the form is known. If the label names the form ("as
+  retinyl palmitate", "d-alpha tocopheryl", "folic acid"), the amount is
+  converted at import using the NIH ODS factors and the factor is recorded.
+  Otherwise the amount is kept, the day view shows that nutrient as **partly
+  counted**, and the food page lets you choose the form from your label. That
+  choice is recorded as your data and applied to past entries too.
+
+  | Form | Factor (NIH ODS) |
+  |---|---|
+  | Vitamin A, retinol/retinyl esters | 1 IU = 0.3 µg RAE |
+  | Vitamin A, supplemental β-carotene | 1 IU = 0.3 µg RAE |
+  | Vitamin A, carotenoids from food | 1 IU = 0.05 µg RAE |
+  | Vitamin E, natural (d-α, RRR) | 1 IU = 0.67 mg |
+  | Vitamin E, synthetic (dl-α, all-rac) | 1 IU = 0.45 mg |
+  | Folic acid | 1 µg = 1.7 µg DFE (FDA labeling) |
 - Ingredients that aren't standard nutrients (botanicals, creatine, probiotics…)
   are kept as other components and totalled per day.
 
-### Nutritionix — paid, enabled when `NUTRITIONIX_APP_ID`/`NUTRITIONIX_APP_KEY` are set
+### Nutritionix — paid, enabled once its app ID and key are entered in Settings
 - https://www.nutritionix.com/business/api
 - Restaurant, branded and common foods. Per-serving values are converted to
   per 100 g using the serving weight.
 - **Implemented from the published v2 API documentation; not yet run against a
   live account.** Check it with your own key before relying on it.
 
-### Edamam Food Database — paid tiers, enabled when `EDAMAM_APP_ID`/`EDAMAM_APP_KEY` are set
+### Edamam Food Database — paid tiers, enabled once its app ID and key are entered in Settings
 - https://developer.edamam.com/food-database-api
 - **Implemented from the published v2 API documentation; not yet run against a
   live account.**
 
 ### Open Food Facts — free, crowdsourced, OFF by default
 - https://world.openfoodfacts.org/ (ODbL)
-- Only available with `ENABLE_UNVERIFIED_SOURCES=true`. Every record is stored and
-  shown as `unverified`.
+- Only available when "Allow crowdsourced data" is switched on in Settings. Every
+  record is stored and shown as `unverified`.
 
 > **Licensing.** Commercial APIs often restrict caching or sharing records
 > between users. This app stores imported records as shared foods. Read your
@@ -121,9 +160,29 @@ Yields come from three places, in order of preference:
    yield. The dry-matter ratio is shown as a cross-check; it reads low when fat
    renders out. Trust: the weaker of the two foods.
 
-No yield values are pre-loaded. Typing numbers in from memory would defeat the
-point of tracking provenance. Bulk import of the USDA yield and retention tables
-(CSV) is a natural next step.
+   After a USDA import the app does this automatically for every raw/cooked
+   pair it can match, which gives about 1,000 shared yields. To keep the
+   estimates sound, it only matches:
+   - pairs within the lab datasets (Foundation, SR Legacy). Survey dishes
+     include coatings and oil;
+   - foods with at least 5 g protein per 100 g;
+   - yields between 0.3 and 4, with none above 1 for meat, poultry or fish;
+   - descriptions that differ only in preparation words (cooking method,
+     salt, "drained", patty/crumbles/loaf). Dry grains and legumes count as
+     the uncooked form.
+
+   Examples: chicken breast 0.70 braised / 0.74 grilled; ground beef 85% lean
+   0.67–0.76; pasta 2.24; white rice 2.65.
+
+**When a yield has an analysed cooked entry** (all derived yields do), logging
+by cooked weight uses that cooked entry's measured nutrients. It already
+reflects cooking losses, so it's more accurate than applying retention factors
+to the raw values.
+
+**Retention factors** from the USDA table can be attached to any yield you
+create: pick a profile such as "CHICKEN,ROASTED" or "VEG,GREEN,BOILED,DRAINED"
+when adding the yield. The table's total-folate and vitamin A (IU) factors are
+applied to folate (DFE) and vitamin A (RAE).
 
 Without retention factors the app assumes nothing is lost, and says so on the
 entry ("vitamins may be overstated"). This matters most for heat-sensitive

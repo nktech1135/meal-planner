@@ -5,23 +5,37 @@ A web app for tracking meals and supplements, with an AI nutrition advisor.
 - **Track** calories, macros, fiber, sugars, fats, cholesterol, 13 vitamins plus choline, 11
   minerals, water, caffeine and alcohol, plus non-nutrient supplement ingredients
   (botanicals, creatine, …).
-- **Raw ↔ cooked conversions.** Log a raw ingredient by its cooked weight using a
-  measured, published or derived cooking yield, with optional nutrient retention
-  factors. Build recipes from raw ingredient weights and the finished dish weight.
-- **Data you can trace.** Import from USDA FoodData Central and the NIH Dietary
-  Supplement Label Database (free), or Nutritionix and Edamam (paid), or enter
-  values by hand. Every value carries a trust level and citation. Crowdsourced
-  data is off by default and always flagged `unverified`.
-  See [docs/data-sources.md](docs/data-sources.md).
-- **Targets.** DRI-based reference intakes and upper limits by sex and age, with
-  per-user overrides. Supplement-only upper limits (e.g. magnesium) are checked
-  against supplement intake.
-- **AI advisor.** A Claude-powered chat that reads your profile, targets, logs and
-  food database through read-only tools. It reviews your intake, flags upper-limit
-  problems and suggests changes. It is told to cite data quality and to defer to
-  clinicians on medical questions.
-- **Multi-user.** Accounts with private foods, recipes, logs and conversations.
-  Imported reference foods are shared. The first account created is the admin.
+- **Fast logging.** Recent and frequent foods with their last amounts, saved
+  meals, copy a meal or a whole day, and edit any entry.
+- **Raw ↔ cooked conversions.** Log a raw ingredient by its cooked weight. About
+  1,000 cooking yields are derived automatically from USDA raw/cooked pairs, and
+  those use the analysed cooked entry's nutrients. You can also add measured or
+  published yields with USDA nutrient-retention factors. Recipes are built from
+  raw ingredient weights and the finished dish's weight.
+- **Data you can trace.** A local copy of USDA's food databases (about 13,600
+  foods, imported from Settings), the NIH Dietary Supplement Label Database,
+  optional paid sources (Nutritionix, Edamam), or values entered by hand. Every
+  value carries a trust level and citation. Crowdsourced data is off by default
+  and always flagged `unverified`. Supplement label errors, such as an amount
+  that contradicts the label's own %DV, are caught and flagged instead of
+  counted. See [docs/data-sources.md](docs/data-sources.md).
+- **Targets and trends.** DRI-based reference intakes and upper limits by sex and
+  age, with overrides. Supplement-only upper limits (e.g. magnesium) are checked
+  against supplement intake. 7/30/90-day averages show how often you hit each
+  target. A weight log with a smoothed trend estimates your actual maintenance
+  calories.
+- **Meal planning.** Plan days ahead from foods, recipes and saved meals, see
+  projected totals against targets, log a planned day in one click, and get a
+  shopping list with recipes broken down into raw ingredients.
+- **AI advisor.** A Claude-powered chat that reads your profile, targets, logs,
+  trends, plan and food database. It reviews your intake and flags upper-limit
+  problems. It can propose meal-plan items, which you approve before they're
+  added. Optionally it looks up authoritative sources (NIH ODS, MedlinePlus,
+  FDA, …) and cites them.
+- **Multi-user, managed in the browser.** Accounts with private data; admin
+  Settings for every API key and option (keys encrypted at rest); user
+  management, invitations and password resets; data export and account
+  deletion. The first account created is the admin.
 
 > Not medical advice. Reference values are for healthy, non-pregnant adults.
 
@@ -58,9 +72,9 @@ npm install
 npm run dev
 ```
 
-Configuration is read from the environment or `backend/.env`. See
-[.env.example](.env.example) for every setting. For the advisor, set
-`ANTHROPIC_API_KEY`. For better USDA rate limits, set a free `USDA_FDC_API_KEY`.
+Bootstrap configuration (database, `SECRET_KEY`) comes from the environment or
+`backend/.env`; see [.env.example](.env.example). Everything else, including
+API keys, is set in the app under **Settings** once you're signed in as the admin.
 
 Tests and lint:
 
@@ -129,9 +143,17 @@ The installer:
 - builds the app into `/opt/mealplan/releases/<commit>`, runs migrations, and
   starts the `mealplan` systemd service with a hardened unit (read-only system,
   no capabilities);
-- writes `/etc/mealplan/mealplan.env` (per-user: `~/.config/mealplan/mealplan.env`)
-  with a generated `SECRET_KEY`. Add `ANTHROPIC_API_KEY` and a free
-  `USDA_FDC_API_KEY` there, then run `sudo mealplan restart`.
+- writes a small bootstrap file, `/etc/mealplan/mealplan.env` (per-user:
+  `~/.config/mealplan/mealplan.env`), with the database location and a
+  generated `SECRET_KEY`. The key also encrypts the API keys stored in
+  Settings, so don't change it.
+
+After installing, everything is done in the browser. Register (the first
+account is the admin), then open **Settings**:
+- add an Anthropic API key and a free USDA key;
+- under **Data**, import the USDA databases;
+- set up email if you want password-reset emails;
+- close sign-ups, or invite people from **Users**.
 
 Without `--domain` the app listens on port 8080 over plain HTTP; use that only
 on a trusted network. Options: `--port`, `--listen`, `--db postgres|sqlite`,
