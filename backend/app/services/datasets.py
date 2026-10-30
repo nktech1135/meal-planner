@@ -10,6 +10,7 @@ After a food import, cooking yields are derived for raw/cooked pairs (see ``deri
 
 import csv
 import hashlib
+import importlib
 import io
 import logging
 import re
@@ -19,6 +20,7 @@ import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import ijson
@@ -38,6 +40,13 @@ USER_AGENT = "mealplan (dataset import)"
 
 
 @dataclass(frozen=True)
+class RemoteFile:
+    name: str  # the key the parser looks the file up by
+    url: str
+    sha256: str | None = None  # pinned when the publisher's file is a fixed release
+
+
+@dataclass(frozen=True)
 class Dataset:
     key: str
     label: str
@@ -49,6 +58,14 @@ class Dataset:
     url: str | None = None  # non-FDC: fixed URL
     sha256: str | None = None
     release: str | None = None
+    # National databases parsed by app.sources.intl.<parser>:
+    files: tuple[RemoteFile, ...] = ()
+    parser: str | None = None
+    source: str | None = None  # Food.source for its records
+    country: str = "United States"
+    licence: str = "Public domain (U.S. government work)"
+    licence_url: str | None = None
+    attribution: str | None = None
 
 
 DATASETS = (
@@ -71,6 +88,74 @@ DATASETS = (
             "~0.5 MB download", url="https://ndownloader.figshare.com/files/44488754",
             sha256="b863e891989020edf3a429af8060523e5dee275699ae08893a5f91ff9a84b1e5", release="Release 6 (2007)"),
 )
+CC_BY = "https://creativecommons.org/licenses/by/4.0/"
+INTERNATIONAL = (
+    Dataset("intl_afcd", "Australian Food Composition Database (Release 3)",
+            "About 1,600 Australian foods, mostly laboratory-analysed (FSANZ, December 2025).", "~3 MB download",
+            files=(RemoteFile("profiles", "https://www.foodstandards.gov.au/sites/default/files/2025-12/"
+                              "AFCD%20Release%203%20-%20Nutrient%20profiles.xlsx",
+                              "14cb3e73dbf58987b440e6299624c0fefd7a4e61591fc1f753995d9534e0efc9"),
+                   RemoteFile("details", "https://www.foodstandards.gov.au/sites/default/files/2025-12/"
+                              "AFCD%20Release%203%20-%20Food%20Details.xlsx",
+                              "69aa096c45cb0699db60a9c544442312e9ff09af587b99c42dc78bc26f689629")),
+            parser="afcd", source="afcd", country="Australia", release="Release 3 (2025)",
+            licence="CC BY 4.0", licence_url=CC_BY,
+            attribution="© Food Standards Australia New Zealand. Australian Food Composition Database – Release 3. "
+                        "Licensed under CC BY 4.0."),
+    Dataset("intl_cofid", "UK Composition of Foods Integrated Dataset (CoFID 2021)",
+            "About 2,900 foods from McCance and Widdowson's The Composition of Foods, the UK reference.",
+            "~5 MB download",
+            files=(RemoteFile("data", "https://assets.publishing.service.gov.uk/media/60538b91e90e07527df82ae4/"
+                              "McCance_Widdowsons_Composition_of_Foods_Integrated_Dataset_2021..xlsx",
+                              "436e9445ef2adb2a75f3d7edd51302de3adad25385f9795fc94ba58bd030e97d"),),
+            parser="cofid", source="cofid", country="United Kingdom", release="2021",
+            licence="Open Government Licence v3.0",
+            licence_url="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+            attribution="Contains public sector information licensed under the Open Government Licence v3.0. "
+                        "Public Health England (2021) McCance and Widdowson's The Composition of Foods Integrated "
+                        "Dataset."),
+    Dataset("intl_bls", "German Nutrient Database (BLS 4.0)",
+            "About 7,100 foods and dishes with English names (Max Rubner-Institut, 2025). Many values are "
+            "recipe calculations.", "~14 MB download",
+            files=(RemoteFile("zip", "https://www.blsdb.de/assets/uploads/BLS_4_0_2025_DE.zip",
+                              "12b7a6ba62807ec9b301eb276f897dc85f99b2292311618dec3749a12d984c91"),),
+            parser="bls", source="bls", country="Germany", release="4.0 (2025)",
+            licence="CC BY 4.0", licence_url=CC_BY,
+            attribution="Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0 – Deutsche "
+                        "Nährstoffdatenbank. Karlsruhe. DOI: 10.25826/Data20251217-134202-0. Licensed under CC BY 4.0."),
+    Dataset("intl_cnf", "Canadian Nutrient File (2026)",
+            "Foods specific to Canada (Health Canada). Entries copied unchanged from USDA are skipped, since the "
+            "USDA databases already cover them.", "~27 MB download",
+            files=(RemoteFile("zip", "https://open.canada.ca/data/dataset/1b6139bd-ed7e-4043-bc28-ff00e10f3109/"
+                              "resource/019f2a90-e3a9-489d-b6e1-f74f4ba1d006/download/cnf_fcen_all-files-data_2026.zip",
+                              "f5faad8977ee6bbdd9d69c8649077cacd87d8658ad200509a4047db1e29edcdd"),),
+            parser="cnf", source="cnf", country="Canada", release="2026",
+            licence="Open Government Licence – Canada", licence_url="https://open.canada.ca/en/open-government-licence-canada",
+            attribution="Contains information licensed under the Open Government Licence – Canada. Health Canada, "
+                        "Canadian Nutrient File 2026."),
+    Dataset("intl_ciqual", "French Food Composition Table (Ciqual 2025)",
+            "About 3,500 foods with English names (ANSES, 2025).", "~72 MB download",
+            files=(RemoteFile("alim", "https://entrepot.recherche.data.gouv.fr/api/access/datafile/666252",
+                              "e0b1de25b3039028205e9d54a96892e403e1b313c2efeb41180fabe132627478"),
+                   RemoteFile("compo", "https://entrepot.recherche.data.gouv.fr/api/access/datafile/666249"),
+                   RemoteFile("const", "https://entrepot.recherche.data.gouv.fr/api/access/datafile/666246",
+                              "3a231ea3e9836e4ac0b6ff94511e010210b2523d1b8b486c6b29e211066ba3f3"),
+                   RemoteFile("groups", "https://entrepot.recherche.data.gouv.fr/api/access/datafile/666250")),
+            parser="ciqual", source="ciqual", country="France", release="2025",
+            licence="Etalab Open Licence 2.0", licence_url="https://www.etalab.gouv.fr/licence-ouverte-open-licence/",
+            attribution="Anses. 2025. Table de composition nutritionnelle des aliments Ciqual. "
+                        "https://doi.org/10.57745/RDMHWY"),
+    Dataset("intl_matvaretabellen", "Norwegian Food Composition Table (Matvaretabellen)",
+            "About 2,100 foods with English names (Norwegian Food Safety Authority).", "~15 MB download",
+            files=(RemoteFile("foods", "https://www.matvaretabellen.no/api/en/foods.json"),
+                   RemoteFile("nutrients", "https://www.matvaretabellen.no/api/en/nutrients.json"),
+                   RemoteFile("groups", "https://www.matvaretabellen.no/api/en/food-groups.json")),
+            parser="matvaretabellen", source="matvaretabellen", country="Norway", release="current",
+            licence="CC BY 4.0", licence_url=CC_BY,
+            attribution="Matvaretabellen. Mattilsynet (Norwegian Food Safety Authority). www.matvaretabellen.no. "
+                        "Licensed under CC BY 4.0."),
+)
+DATASETS = DATASETS + INTERNATIONAL
 BY_KEY = {d.key: d for d in DATASETS}
 
 _discovered: dict[str, tuple[datetime, str]] = {}
@@ -160,6 +245,8 @@ def _run_job(factory: sessionmaker, job_id: int, ds: Dataset, client: httpx.Clie
         report("Starting")
         if ds.root_key:
             _import_fdc(db, ds, client, job, report)
+        elif ds.parser:
+            _import_parsed(db, ds, client, job, report)
         else:
             _import_retention(db, ds, client, job, report)
         job.status, job.finished_at = "done", datetime.now(UTC)
@@ -211,6 +298,41 @@ def _import_fdc(db: Session, ds: Dataset, client: httpx.Client, job: ImportJob, 
     pairs = derive_usda_yields(db)
     report(f"Imported {count:,} foods ({ds.label}, {job.release} release). {pairs:,} cooking yields from USDA "
            "raw/cooked pairs are now available.", progress=count, total=count)
+
+
+def _import_parsed(db: Session, ds: Dataset, client: httpx.Client, job: ImportJob, report: _Progress) -> None:
+    """Download a national database's files (checking pinned checksums) and import what its parser yields."""
+    job.release = ds.release
+    module = importlib.import_module(f"app.sources.intl.{ds.parser}")
+    with tempfile.TemporaryDirectory() as tmp:
+        paths = {}
+        for remote in ds.files:
+            path = Path(tmp) / remote.name
+            with path.open("wb") as fh:
+                _download(client, remote.url, fh, report)
+            if remote.sha256 and _sha256(path) != remote.sha256:
+                raise ValueError(f"Checksum mismatch for '{remote.name}': the publisher has changed the file, so this "
+                                 "version of the app can't vouch for it. Update the app to import the new release.")
+            paths[remote.name] = path
+        count, batch = 0, []
+        for food in module.parse(paths):
+            batch.append(food)
+            if len(batch) >= BATCH:
+                count += bulk_upsert_external_foods(db, batch)
+                batch = []
+                report(f"Imported {count:,} foods…", progress=count)
+        count += bulk_upsert_external_foods(db, batch)
+    if count == 0:
+        raise ValueError("No foods found — has the file format changed?")
+    report(f"Imported {count:,} foods ({ds.label}).", progress=count, total=count)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 # Nutrient numbers in the retention table that stand in for our canonical forms.

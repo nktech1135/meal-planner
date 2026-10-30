@@ -110,11 +110,15 @@ def list_datasets(_: User = Depends(admin_user), db: Session = Depends(get_db)):
             available = datasets.release_of(datasets.latest_file(ds, client))
             count = db.scalar(select(func.count(Food.id)).where(Food.source == "usda_fdc",
                                                                 Food.source_data_type == data_type[ds.key]))
+        elif ds.source:
+            available = ds.release
+            count = db.scalar(select(func.count(Food.id)).where(Food.source == ds.source))
         else:
             available = ds.release
             count = db.scalar(select(func.count(RetentionProfile.code)))
         out.append({
             "key": ds.key, "label": ds.label, "description": ds.description, "size": ds.size,
+            "country": ds.country, "licence": ds.licence, "licence_url": ds.licence_url, "attribution": ds.attribution,
             "available_release": available, "imported_release": last_done.release if last_done else None,
             "update_available": bool(last_done and last_done.release != available), "records": count,
             "last_job": _job_out(last),
