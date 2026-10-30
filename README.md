@@ -156,10 +156,15 @@ The installer:
 - creates a `mealplan` system user and a PostgreSQL database it reaches over the
   local socket, so there's no database password to manage (`--db sqlite` is
   also available);
-- installs pinned, checksum-verified copies of uv, Python 3.12 and Node.js
-  under `/opt/mealplan/tools`, independent of the OS versions. Node is used only
-  to build the web interface;
-- builds the app into `/opt/mealplan/releases/<commit>`, runs migrations, and
+- installs pinned, checksum-verified copies of uv and Python 3.12 under
+  `/opt/mealplan/tools`, independent of the OS versions;
+- unpacks the web interface that CI built and published to the `web-builds`
+  branch after the tests passed, so the server needs no Node.js and does no
+  building. If the newest commit isn't published yet, it installs the newest
+  one that is. For a commit with no published build (a fork, another branch,
+  `upgrade --ref`), it downloads a pinned Node.js and builds the interface
+  itself, which needs about 500 MB of memory;
+- puts the app in `/opt/mealplan/releases/<commit>`, runs migrations, and
   starts the `mealplan` systemd service with a hardened unit (read-only system,
   no capabilities);
 - writes a small bootstrap file, `/etc/mealplan/mealplan.env` (per-user:

@@ -10,7 +10,7 @@ sha="${GITHUB_SHA:?}"
 repo="$(git rev-parse --absolute-git-dir)"
 work="$(mktemp -d)"
 
-if git fetch --quiet --depth=1 origin "$BRANCH"; then
+if git fetch --quiet --depth=1 origin "$BRANCH" 2>/dev/null; then
   git archive FETCH_HEAD | tar -x -C "$work"
 fi
 rm -rf "${work:?}/$sha"
