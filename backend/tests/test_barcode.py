@@ -46,7 +46,7 @@ def test_local_barcode_lookup_matches_any_gtin_form(user_client, db_session):
 def test_barcode_falls_back_to_usda_online_and_saves(user_client, db_session):
     app.dependency_overrides[get_sources] = lambda: build_sources(
         Settings(usda_fdc_api_key="K", _env_file=None), httpx.Client())
-    respx.get("https://api.nal.usda.gov/fdc/v1/foods/search").respond(json={"foods": [
+    respx.post("https://api.nal.usda.gov/fdc/v1/foods/search").respond(json={"foods": [
         {"fdcId": 1, "gtinUpc": "099999999999"}, {"fdcId": 777, "gtinUpc": "0041196910759"}]})
     respx.get("https://api.nal.usda.gov/fdc/v1/food/777").respond(json=branded(777, "0041196910759", "Peanut butter"))
     found = user_client.get("/api/sources/barcode/041196910759").json()

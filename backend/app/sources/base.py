@@ -91,7 +91,7 @@ class DataSource(ABC):
         if resp.status_code == 429:
             raise SourceError(f"{self.name}: rate limited, try again later")
         if resp.status_code >= 400:
-            raise SourceError(f"{self.name} returned HTTP {resp.status_code}{_upstream_message(resp)}")
+            raise SourceError(f"{self.name} returned HTTP {resp.status_code}{_upstream_message(resp) or _body_excerpt(resp)}")
         try:
             return resp.json()
         except ValueError as exc:
@@ -109,6 +109,13 @@ def _upstream_message(resp: httpx.Response) -> str:
         err = body.get("error")
         msg = body.get("message") or (err.get("message") if isinstance(err, dict) else err)
     return f": {str(msg)[:200]}" if msg else ""
+
+
+def _body_excerpt(resp: httpx.Response) -> str:
+    """The start of an error body that has no recognised message field, as plain text."""
+    text = re.sub(r"<[^>]+>", " ", resp.text or "")
+    text = " ".join(text.split())
+    return f": {text[:200]}" if text else ""
 
 
 _COOK_METHODS = (

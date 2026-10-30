@@ -38,12 +38,14 @@ class UsdaFdc(DataSource):
     def enabled(self) -> bool:
         return bool(self.settings.usda_fdc_api_key)
 
+    def _search(self, criteria: dict) -> dict:
+        # POST with a JSON body is FDC's documented form for a list of data types; packing
+        # "Survey (FNDDS)" etc. into one comma-separated query parameter isn't.
+        return self._request("POST", f"{BASE}/foods/search", params={"api_key": self.settings.usda_fdc_api_key},
+                             json=criteria)
+
     def search(self, query: str, limit: int = 20) -> list[SearchHit]:
-        data = self._get(
-            f"{BASE}/foods/search",
-            params={"api_key": self.settings.usda_fdc_api_key, "query": query, "pageSize": limit,
-                    "dataType": ",".join(DATA_TYPES)},
-        )
+        data = self._search({"query": query, "pageSize": limit, "dataType": DATA_TYPES})
         hits = []
         for f in data.get("foods", []):
             rows = [(n.get("nutrientNumber"), n.get("unitName"), n.get("value"), None) for n in f.get("foodNutrients", [])]
@@ -108,8 +110,7 @@ def parse_fdc_food(f: dict, release: str | None = None, keep_payload: bool = Tru
 
 def find_barcode(source: UsdaFdc, code: str) -> ExternalFood | None:
     """Look a barcode up in FDC's Branded foods (online)."""
-    data = source._get(f"{BASE}/foods/search", params={"api_key": source.settings.usda_fdc_api_key, "query": code,
-                                                       "dataType": "Branded", "pageSize": 10})
+    data = source._search({"query": code, "dataType": ["Branded"], "pageSize": 10})
     for f in data.get("foods", []):
         if normalize_barcode(f.get("gtinUpc")) == code:
             return source.fetch(str(f["fdcId"]))

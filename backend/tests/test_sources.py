@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 import respx
@@ -37,9 +39,12 @@ def test_fdc_foundation_food(sources):
 
 @respx.mock
 def test_fdc_search(sources):
-    route = respx.get("https://api.nal.usda.gov/fdc/v1/foods/search").respond(json=load_fixture("fdc_search.json"))
+    route = respx.post("https://api.nal.usda.gov/fdc/v1/foods/search").respond(json=load_fixture("fdc_search.json"))
     hits = sources["usda_fdc"].search("chicken breast raw", 2)
     assert route.calls.last.request.url.params["api_key"] == "TESTKEY"
+    body = json.loads(route.calls.last.request.content)
+    assert body == {"query": "chicken breast raw", "pageSize": 2,
+                    "dataType": ["Foundation", "SR Legacy", "Survey (FNDDS)", "Branded"]}
     assert hits[0].source_id == "2646170"
     assert hits[0].trust_level == "analytical"
     assert "protein_g" in hits[0].summary
@@ -193,7 +198,15 @@ def test_plain_microgram_folate_is_refused_from_labels():
 
 @respx.mock
 def test_upstream_error_message_is_surfaced(sources):
-    respx.get("https://api.nal.usda.gov/fdc/v1/foods/search").respond(
+    respx.post("https://api.nal.usda.gov/fdc/v1/foods/search").respond(
         status_code=400, json={"error": "Invalid dataType value"})
     with pytest.raises(SourceError, match="HTTP 400: Invalid dataType value"):
+        sources["usda_fdc"].search("oats")
+
+
+@respx.mock
+def test_error_body_without_message_is_excerpted(sources):
+    respx.post("https://api.nal.usda.gov/fdc/v1/foods/search").respond(
+        status_code=400, html="<html><body><h1>Bad Request</h1><p>Malformed criteria</p></body></html>")
+    with pytest.raises(SourceError, match="HTTP 400: Bad Request Malformed criteria$"):
         sources["usda_fdc"].search("oats")
