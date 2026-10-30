@@ -470,7 +470,7 @@ service_stop() {
 service_start() {
   if test_mode; then
     as_service "cd '$CURRENT/backend' && exec '$CURRENT/venv/bin/uvicorn' app.main:app --host \"\$MEALPLAN_HOST\" --port \"\$MEALPLAN_PORT\"" \
-      >"$VAR_DIR/test-server.log" 2>&1 &
+      >"$VAR_DIR/test-server.log" 2>&1 9>&- &  # don't let the server inherit the lock
     echo $! >"$VAR_DIR/test-server.pid"
   else
     systemctl enable mealplan >/dev/null 2>&1
