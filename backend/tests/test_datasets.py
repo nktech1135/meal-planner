@@ -220,3 +220,43 @@ def test_search_prefers_the_users_database_and_folds_plurals(user_client, db_ses
     profile = user_client.get("/api/profile").json()
     user_client.put("/api/profile", json={**profile, "preferred_source": "cofid"})
     assert first() == "Apples, eating, raw, flesh and skin"
+
+
+def _run_inline(monkeypatch, client=None):
+    monkeypatch.setattr("app.routers.admin.http_client",
+                        lambda: client or httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(404))))
+    app.dependency_overrides[run_in_thread] = lambda: (lambda fn: fn())
+
+
+def test_vendored_dataset_imports_offline_with_checksum(user_client, db_session, monkeypatch):
+    _run_inline(monkeypatch)  # any network use would 404
+    job = user_client.post("/api/admin/datasets/intl_fineli/import").json()
+    db_session.expire_all()
+    job = db_session.get(ImportJob, job["id"])
+    assert job.status == "done", job.message
+    assert db_session.query(Food).filter_by(source="fineli").count() == 4232
+
+
+def test_assembled_dataset_records_publisher_version(user_client, db_session, monkeypatch):
+    import json
+    from pathlib import Path
+
+    from app.sources.intl import se_livsmedel
+
+    excerpt = json.loads((Path(__file__).parent / "fixtures" / "intl" / "se_livsmedel" / "livsmedel_excerpt.json").read_text())
+    calls = []
+
+    def fake_fetch_all(client, progress):
+        calls.append(client)
+        progress("Fetching foods…", 1, 2)
+        return excerpt
+
+    monkeypatch.setattr(se_livsmedel, "fetch_all", fake_fetch_all)
+    _run_inline(monkeypatch)
+    job = user_client.post("/api/admin/datasets/intl_se_livsmedel/import").json()
+    db_session.expire_all()
+    job = db_session.get(ImportJob, job["id"])
+    assert job.status == "done", job.message
+    assert len(calls) == 1
+    assert job.release == excerpt["version"]
+    assert db_session.query(Food).filter_by(source="se_livsmedel").count() == len(excerpt["foods"])

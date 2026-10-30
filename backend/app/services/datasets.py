@@ -171,6 +171,23 @@ INTERNATIONAL = (
             licence_url="https://naehrwertdaten.ch/en/downloads/",
             attribution="Swiss Food Composition Database V 7.1 (01.07.2026), Federal Food Safety and Veterinary Office "
                         "FSVO, www.naehrwertdaten.ch"),
+    Dataset("intl_se_livsmedel", "Swedish Food Composition Database (Livsmedelsdatabasen)",
+            "About 2,600 foods with English names (Swedish Food Agency). No bulk file is published, so the import "
+            "asks the agency's API for each food in turn: about 2,600 requests, roughly 10 minutes.",
+            "~2,600 API requests (~10 min)",
+            parser="se_livsmedel", source="se_livsmedel", country="Sweden", release="current", assembled=True,
+            licence="CC BY 4.0", licence_url=CC_BY,
+            attribution="The Swedish Food Agency food database (Livsmedelsverket). Licensed under CC BY 4.0."),
+    Dataset("intl_fineli", "Finnish Food Composition Database (Fineli, Release 20)",
+            "4,232 foods with English names (Finnish Institute for Health and Welfare, 2019 open-data release). "
+            "Fineli's site blocks automated downloads, so the official package ships with this app.",
+            "bundled (~2 MB)",
+            files=(RemoteFile("zip", "vendored:fineli/fineli_rel20_74_components.zip",
+                              "e7e6bd8d4b9261d751229e763dad436b297d36d48fe853faf49e1fd2a116d262"),),
+            parser="fineli", source="fineli", country="Finland", release="Release 20 (2019)",
+            licence="CC BY 4.0", licence_url=CC_BY,
+            attribution="Finnish Institute for Health and Welfare, Fineli. Finnish food composition database, "
+                        "Release 20 (2019). Licensed under CC BY 4.0."),
     Dataset("intl_matvaretabellen", "Norwegian Food Composition Table (Matvaretabellen)",
             "About 2,100 foods with English names (Norwegian Food Safety Authority).", "~15 MB download",
             files=(RemoteFile("foods", "https://www.matvaretabellen.no/api/en/foods.json"),
@@ -337,6 +354,8 @@ def _import_parsed(db: Session, ds: Dataset, client: httpx.Client, job: ImportJo
         paths = {}
         if ds.assembled:
             data = module.fetch_all(client, lambda message, done=None, total=None: report(message, done, total))
+            if isinstance(data, dict) and data.get("version"):
+                job.release = str(data["version"])  # the publisher's own version, e.g. "2026-07-01"
             paths["data"] = Path(tmp) / "data.json"
             paths["data"].write_text(json.dumps(data))
         for remote in ds.files:
