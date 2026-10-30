@@ -2,20 +2,21 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
+from app.config import Settings
 from app.db import get_db
 from app.models import Food, User
 from app.routers.foods import food_out
 from app.schemas import FoodOut, ImportIn, SearchHitOut, SourceOut
 from app.security import current_user
+from app.settings_store import get_runtime
 from app.sources.base import DataSource, SourceError
 from app.sources.registry import build_sources, upsert_external_food
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 
 
-def get_sources() -> dict[str, DataSource]:
-    return build_sources(get_settings())
+def get_sources(settings: Settings = Depends(get_runtime)) -> dict[str, DataSource]:
+    return build_sources(settings)
 
 
 def _source(key: str, sources: dict[str, DataSource]) -> DataSource:

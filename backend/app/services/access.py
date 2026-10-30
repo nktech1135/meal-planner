@@ -2,7 +2,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models import CookingYield, Food, Recipe, User
+from app.models import CookingYield, Food, FormChoice, Recipe, User
+from app.services.forms import option
 
 
 def visible(model, user: User):
@@ -37,3 +38,17 @@ def recipe_yields(db: Session, user: User, recipe: Recipe) -> dict[int, CookingY
         return {}
     rows = db.scalars(select(CookingYield).where(CookingYield.id.in_(ids), visible(CookingYield, user)))
     return {y.id: y for y in rows}
+
+
+def form_factors(db: Session, user: User, food: Food) -> dict[str, tuple[str, float, str]]:
+    """The user's chosen conversions for this food's unconverted components."""
+    components = {c["name"]: c for c in food.other_components or [] if c.get("nutrient_code")}
+    if not components:
+        return {}
+    out = {}
+    for choice in db.scalars(select(FormChoice).where(FormChoice.user_id == user.id, FormChoice.food_id == food.id)):
+        comp = components.get(choice.component_name)
+        opt = option(choice.nutrient_code, comp.get("unit") or "", choice.option_key) if comp else None
+        if opt:
+            out[choice.component_name] = (choice.nutrient_code, opt.factor, opt.label.lower())
+    return out

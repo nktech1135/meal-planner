@@ -4,21 +4,21 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.advisor.agent import AdvisorError, messages_today, render, run_turn
-from app.config import get_settings
+from app.config import Settings
 from app.db import get_db
 from app.models import AdvisorConversation, User
 from app.schemas import ChatIn, ConversationDetail, ConversationOut
 from app.security import current_user
+from app.settings_store import get_runtime
 
 router = APIRouter(prefix="/api/advisor", tags=["advisor"])
 
 
-def get_anthropic_client() -> anthropic.Anthropic:
-    key = get_settings().anthropic_api_key  # from ANTHROPIC_API_KEY in the environment or .env
-    if not key:
+def get_anthropic_client(settings: Settings = Depends(get_runtime)) -> anthropic.Anthropic:
+    if not settings.anthropic_api_key:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
-                            "The advisor isn't configured: set ANTHROPIC_API_KEY on the server")
-    return anthropic.Anthropic(api_key=key)
+                            "The advisor isn't set up yet: an admin can add an Anthropic API key in Settings")
+    return anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
 
 def _conversation(db: Session, user: User, conversation_id: int) -> AdvisorConversation:
@@ -55,8 +55,8 @@ def chat(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
     client: anthropic.Anthropic = Depends(get_anthropic_client),
+    settings: Settings = Depends(get_runtime),
 ):
-    settings = get_settings()
     if messages_today(db, user) >= settings.advisor_daily_message_limit:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Daily advisor message limit reached")
     if body.conversation_id:

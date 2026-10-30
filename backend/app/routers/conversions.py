@@ -7,7 +7,7 @@ from app.models import CookingYield, User
 from app.nutrients import Trust, weakest
 from app.schemas import CalculateIn, DeriveIn, NutritionOut, YieldIn, YieldOut
 from app.security import current_user
-from app.services.access import get_food, get_recipe, get_yield, recipe_yields, visible
+from app.services.access import form_factors, get_food, get_recipe, get_yield, recipe_yields, visible
 from app.services.nutrition import NutritionError, derive_yield, food_nutrition, recipe_portion
 
 router = APIRouter(prefix="/api", tags=["conversions"])
@@ -84,7 +84,7 @@ def calculate_nutrition(db: Session, user: User, body) -> NutritionOut:
         elif body.food_id:
             food = get_food(db, user, body.food_id)
             y = get_yield(db, user, body.yield_id) if body.yield_id else None
-            result = food_nutrition(food, body.quantity, body.unit, body.weighed_state, y)
+            result = food_nutrition(food, body.quantity, body.unit, body.weighed_state, y, form_factors(db, user, food))
         else:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Give a food_id or recipe_id")
     except NutritionError as exc:

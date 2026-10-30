@@ -7,6 +7,7 @@ verify supplement contents before sale, so these are flagged as label data.
 import re
 
 from app.nutrients import BY_CODE, Trust, convert_amount, is_form_ambiguous
+from app.services.forms import auto_resolve, options_for
 from app.sources.base import DataSource, ExternalFood, SearchHit
 
 BASE = "https://api.ods.od.nih.gov/dsld/v9"
@@ -105,17 +106,28 @@ def parse_label(label: dict) -> tuple[dict, list[dict], list[str]]:
         operator = q.get("operator") or "="
         code = _NAME_MAP.get(_key(name))
         value = convert_amount(amount, unit, BY_CODE[code]) if code else None
+        derivation = "Label declaration"
+        if code and value is None and is_form_ambiguous(unit, BY_CODE[code]):
+            # The label may name the form ("as beta-carotene"), which fixes the conversion factor.
+            form = auto_resolve(code, unit, [name] + [f.get("name") for f in row.get("forms") or []])
+            if form:
+                value = amount * form.factor
+                derivation = f"Label declaration: {amount:g} {unit} as {form.label.lower()} (×{form.factor:g}, NIH ODS)"
         mismatch = _dv_mismatch(code, value, q) if code and value is not None else None
         if code and value is not None and not mismatch and code not in nutrients and operator == "=":
-            nutrients[code] = (value, "Label declaration")
+            nutrients[code] = (value, derivation)
             continue
         entry = {"name": name, "amount": amount, "unit": unit}
         if mismatch:
             entry["note"] = mismatch
             notes.append(f"{name}: {mismatch}.")
         elif code and value is None:
-            reason = "depends on the nutrient's chemical form" if is_form_ambiguous(unit, BY_CODE[code]) else "unrecognised unit"
+            form_dependent = is_form_ambiguous(unit, BY_CODE[code])
+            reason = "depends on the nutrient's chemical form" if form_dependent else "unrecognised unit"
             entry["note"] = f"not converted to {BY_CODE[code].unit}: '{unit}' {reason}"
+            # Lets the day view say "partly counted" and lets the user choose the form.
+            entry["nutrient_code"] = code
+            entry["reason"] = "form" if form_dependent and options_for(code, unit) else "unit"
         elif operator != "=":
             entry["note"] = f"declared as '{operator} {amount:g} {unit}'"
         elif code in nutrients:

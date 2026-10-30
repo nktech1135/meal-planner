@@ -52,6 +52,8 @@ class Profile(Base):
     health_notes: Mapped[str] = mapped_column(Text, default="")
     # {nutrient_code: {"min": x, "target": y, "max": z}} — overrides computed targets.
     target_overrides: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Nutrients always shown on the condensed day view, besides energy, macros and anything flagged.
+    pinned_nutrients: Mapped[list] = mapped_column(JSON, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     user: Mapped[User] = relationship(back_populates="profile")
@@ -236,4 +238,60 @@ class AdvisorMessage(Base):
     role: Mapped[str] = mapped_column(String(20))  # user | assistant
     content: Mapped[list] = mapped_column(JSON)
     is_user_prompt: Mapped[bool] = mapped_column(Boolean, default=False)  # a typed message (vs. tool results)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AppSetting(Base):
+    """A UI-managed application setting. Secret values are stored encrypted (see settings_store)."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[object] = mapped_column(JSON, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+
+class SavedMeal(Base):
+    """A named group of items the user logs together (e.g. "usual breakfast")."""
+
+    __tablename__ = "saved_meals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    default_meal: Mapped[str] = mapped_column(String(20), default="snack")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    items: Mapped[list["SavedMealItem"]] = relationship(
+        cascade="all, delete-orphan", order_by="SavedMealItem.position", lazy="selectin")
+
+
+class SavedMealItem(Base):
+    __tablename__ = "saved_meal_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    saved_meal_id: Mapped[int] = mapped_column(ForeignKey("saved_meals.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    food_id: Mapped[int | None] = mapped_column(ForeignKey("foods.id", ondelete="CASCADE"))
+    recipe_id: Mapped[int | None] = mapped_column(ForeignKey("recipes.id", ondelete="CASCADE"))
+    label: Mapped[str] = mapped_column(String(300))
+    quantity: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(40))
+    weighed_state: Mapped[str] = mapped_column(String(10), default="as_is")
+    yield_id: Mapped[int | None] = mapped_column(ForeignKey("cooking_yields.id", ondelete="SET NULL"))
+
+
+class FormChoice(Base):
+    """A user's answer to "which form is this?" for an unconverted label component."""
+
+    __tablename__ = "form_choices"
+    __table_args__ = (UniqueConstraint("user_id", "food_id", "component_name", name="uq_form_choice"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    food_id: Mapped[int] = mapped_column(ForeignKey("foods.id", ondelete="CASCADE"))
+    component_name: Mapped[str] = mapped_column(String(200))
+    nutrient_code: Mapped[str] = mapped_column(String(40))
+    option_key: Mapped[str] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

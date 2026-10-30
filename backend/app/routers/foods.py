@@ -1,14 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Food, FoodNutrient, FoodPortion, User
-from app.nutrients import MACRO_CODES, NUTRIENTS, Trust
+from app.models import Food, FoodNutrient, FoodPortion, FormChoice, LogEntry, User
+from app.nutrients import BY_CODE, MACRO_CODES, NUTRIENTS, Trust
+from app.routers.log import recalculate
 from app.schemas import FoodIn, FoodOut, FoodSummary, NutrientDefOut
 from app.security import current_user
 from app.services.access import get_food, visible
+from app.services.forms import options_for
 
 router = APIRouter(prefix="/api", tags=["foods"])
 
@@ -129,3 +132,58 @@ def delete_food(food_id: int, user: User = Depends(current_user), db: Session = 
     except IntegrityError:
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "Food is used in a recipe; remove it there first") from None
+
+
+class FormChoiceIn(BaseModel):
+    component_name: str
+    option_key: str | None  # None clears the choice
+
+
+def _form_rows(db: Session, user: User, food: Food) -> list[dict]:
+    chosen = {c.component_name: c.option_key for c in db.scalars(
+        select(FormChoice).where(FormChoice.user_id == user.id, FormChoice.food_id == food.id))}
+    rows = []
+    for c in food.other_components or []:
+        if c.get("reason") != "form" or c.get("amount") is None:
+            continue
+        rows.append({
+            "component_name": c["name"], "amount": c["amount"], "unit": c.get("unit"), "nutrient_code": c["nutrient_code"],
+            "nutrient_name": BY_CODE[c["nutrient_code"]].name, "chosen": chosen.get(c["name"]),
+            "options": [{"key": o.key, "label": o.label, "factor": o.factor, "result": round(c["amount"] * o.factor, 3),
+                         "unit": BY_CODE[c["nutrient_code"]].unit, "note": o.note, "source": o.source}
+                        for o in options_for(c["nutrient_code"], c.get("unit") or "")],
+        })
+    return rows
+
+
+@router.get("/foods/{food_id}/forms")
+def list_form_choices(food_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Label amounts that need their chemical form to be counted, with the conversion options."""
+    return _form_rows(db, user, get_food(db, user, food_id))
+
+
+@router.put("/foods/{food_id}/forms")
+def set_form_choice(food_id: int, body: FormChoiceIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Choose (or clear) a form, then recalculate this user's log entries for the food."""
+    food = get_food(db, user, food_id)
+    row = next((r for r in _form_rows(db, user, food) if r["component_name"] == body.component_name), None)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such unconverted component on this food")
+    if body.option_key is not None and body.option_key not in {o["key"] for o in row["options"]}:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown option")
+    existing = db.scalar(select(FormChoice).where(FormChoice.user_id == user.id, FormChoice.food_id == food.id,
+                                                   FormChoice.component_name == body.component_name))
+    if body.option_key is None:
+        if existing:
+            db.delete(existing)
+    elif existing:
+        existing.option_key = body.option_key
+    else:
+        db.add(FormChoice(user_id=user.id, food_id=food.id, component_name=body.component_name,
+                          nutrient_code=row["nutrient_code"], option_key=body.option_key))
+    db.flush()
+    entries = list(db.scalars(select(LogEntry).where(LogEntry.user_id == user.id, LogEntry.food_id == food.id)))
+    for entry in entries:
+        recalculate(db, user, entry)
+    db.commit()
+    return {"forms": _form_rows(db, user, food), "recalculated_entries": len(entries)}

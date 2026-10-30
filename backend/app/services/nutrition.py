@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from app.models import CookingYield, Food, Recipe
-from app.nutrients import BY_CODE, weakest
+from app.nutrients import BY_CODE, Trust, weakest
 
 
 class NutritionError(ValueError):
@@ -74,7 +74,10 @@ def food_nutrition(
     unit: str,
     weighed_state: str = "as_is",
     cooking_yield: CookingYield | None = None,
+    form_factors: dict[str, tuple[str, float, str]] | None = None,
 ) -> Nutrition:
+    """``form_factors`` maps an unconverted component's name to (nutrient code, factor, form label),
+    from the user's own choice of form; such amounts count toward that nutrient as user data."""
     notes: list[str] = []
     trust = [food.trust_level]
 
@@ -110,7 +113,18 @@ def food_nutrition(
         factor, grams = _basis_factor(food, quantity, unit)
         nutrients = scale(food.nutrient_map(), factor)
 
-    others = [{**c, "amount": c["amount"] * factor} for c in (food.other_components or []) if c.get("amount") is not None]
+    others = []
+    for c in food.other_components or []:
+        if c.get("amount") is None:
+            continue
+        choice = (form_factors or {}).get(c["name"])
+        if choice and c.get("nutrient_code") == choice[0]:
+            code, conv, form = choice
+            nutrients[code] = nutrients.get(code, 0.0) + c["amount"] * conv * factor
+            trust.append(Trust.USER)
+            notes.append(f"{c['name']}: {c['amount']:g} {c.get('unit') or ''} counted as {form} (×{conv:g}, your choice)")
+        else:
+            others.append({**c, "amount": c["amount"] * factor})
     return Nutrition(rounded(nutrients), grams, weakest(trust), others, notes)
 
 

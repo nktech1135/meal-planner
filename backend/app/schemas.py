@@ -49,6 +49,15 @@ class ProfileIn(BaseModel):
     timezone: str | None = None
     health_notes: str = Field(default="", max_length=4000)
     target_overrides: dict[str, dict[str, float | None]] = {}
+    pinned_nutrients: list[str] = Field(default=[], max_length=40)
+
+    @field_validator("pinned_nutrients")
+    @classmethod
+    def _pinned(cls, v: list[str]) -> list[str]:
+        unknown = set(v) - set(BY_CODE)
+        if unknown:
+            raise ValueError(f"Unknown nutrient codes: {sorted(unknown)}")
+        return list(dict.fromkeys(v))
 
     @field_validator("timezone")
     @classmethod
@@ -342,3 +351,74 @@ class ConversationOut(ORM):
 
 class ConversationDetail(ConversationOut):
     messages: list[ChatMessageOut]
+
+
+class LogUpdate(BaseModel):
+    consumed_at: datetime | None = None
+    meal: Meal | None = None
+    quantity: float | None = Field(default=None, gt=0)
+    unit: str | None = None
+    weighed_state: WeighedState | None = None
+    yield_id: int | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+
+class CopyIn(BaseModel):
+    from_date: date
+    to_date: date
+    meal: Meal | None = None  # copy just this meal (default: the whole day)
+    to_meal: Meal | None = None
+
+
+class SuggestionOut(BaseModel):
+    food_id: int | None
+    recipe_id: int | None
+    label: str
+    kind: str
+    trust_level: str
+    quantity: float
+    unit: str
+    weighed_state: str
+    yield_id: int | None
+    meal: str
+    times: int
+    last_used: datetime
+    energy_kcal: float | None
+
+
+class SavedMealItemIn(BaseModel):
+    food_id: int | None = None
+    recipe_id: int | None = None
+    quantity: float = Field(gt=0)
+    unit: str = "g"
+    weighed_state: WeighedState = "as_is"
+    yield_id: int | None = None
+
+
+class SavedMealIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    default_meal: Meal = "snack"
+    items: list[SavedMealItemIn] = Field(min_length=1)
+
+
+class SavedMealItemOut(SavedMealItemIn, ORM):
+    id: int
+    label: str
+
+
+class SavedMealOut(ORM):
+    id: int
+    name: str
+    default_meal: str
+    items: list[SavedMealItemOut]
+
+
+class SavedMealFromLog(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    date: date
+    meal: Meal
+
+
+class SavedMealLogIn(BaseModel):
+    meal: Meal | None = None
+    consumed_at: datetime | None = None

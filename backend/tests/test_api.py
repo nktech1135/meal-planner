@@ -187,7 +187,7 @@ def test_advisor_without_api_key_is_503(user_client, monkeypatch):
 
     monkeypatch.setattr(get_settings(), "anthropic_api_key", None)
     resp = user_client.post("/api/advisor/chat", json={"message": "hi"})
-    assert resp.status_code == 503 and "ANTHROPIC_API_KEY" in resp.json()["detail"]
+    assert resp.status_code == 503 and "Settings" in resp.json()["detail"]
 
 
 def test_timezone_unset_until_chosen(user_client):

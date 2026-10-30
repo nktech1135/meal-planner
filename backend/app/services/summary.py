@@ -39,8 +39,13 @@ def local_date(user: User, dt: datetime) -> date:
     return dt.astimezone(user_tz(user)).date()
 
 
-def evaluate(totals: dict, supplement_totals: dict, targets: dict) -> list[dict]:
-    """Compare intake to each target; upper limits with supplemental scope use supplement intake only."""
+def evaluate(totals: dict, supplement_totals: dict, targets: dict, uncounted: dict | None = None) -> list[dict]:
+    """Compare intake to each target; upper limits with supplemental scope use supplement intake only.
+
+    ``uncounted`` lists label amounts per nutrient that couldn't be converted; a nutrient that
+    looks low but has such amounts is reported as "partial" rather than "below".
+    """
+    uncounted = uncounted or {}
     rows = []
     for code, t in targets.items():
         amount = totals.get(code, 0.0)
@@ -52,8 +57,10 @@ def evaluate(totals: dict, supplement_totals: dict, targets: dict) -> list[dict]
         limit_amount = supplement_totals.get(code, 0.0) if t.get("ul_scope") == "supplemental" else amount
         if t.get("max") is not None and limit_amount > t["max"]:
             status = "above_max"
+        if status == "below" and uncounted.get(code):
+            status = "partial"
         rows.append({"code": code, "amount": round(amount, 3), "limit_amount": round(limit_amount, 3), "status": status,
-                     **t})
+                     "uncounted": uncounted.get(code, []), **t})
     return rows
 
 
@@ -62,6 +69,7 @@ def day_summary(db: Session, user: User, day: date) -> dict:
     totals: dict[str, float] = {}
     supplement_totals: dict[str, float] = {}
     others: dict[tuple[str, str], float] = {}
+    uncounted: dict[str, list[dict]] = {}
     energy_by_trust: dict[str, float] = {}
     for e in entries:
         add_into(totals, e.nutrients)
@@ -69,11 +77,15 @@ def day_summary(db: Session, user: User, day: date) -> dict:
             add_into(supplement_totals, e.nutrients)
         energy_by_trust[e.trust_level] = energy_by_trust.get(e.trust_level, 0) + e.nutrients.get("energy_kcal", 0)
         for c in e.other_components or []:
+            if c.get("nutrient_code") and c.get("amount") is not None:
+                uncounted.setdefault(c["nutrient_code"], []).append({
+                    "name": c["name"], "amount": round(c["amount"], 3), "unit": c.get("unit"), "item": e.label,
+                    "entry_id": e.id, "food_id": e.food_id, "resolvable": c.get("reason") == "form"})
             if c.get("amount") is not None:
                 key = (c["name"], c.get("unit") or "")
                 others[key] = others.get(key, 0) + c["amount"]
     target_info = compute_targets(user.profile, day)
-    evaluation = evaluate(totals, supplement_totals, target_info["targets"])
+    evaluation = evaluate(totals, supplement_totals, target_info["targets"], uncounted)
     alerts = [
         f"{r['code']}: {r['limit_amount']:g} exceeds the upper limit {r['max']:g}"
         + (" (from supplements)" if r.get("ul_scope") == "supplemental" else "")

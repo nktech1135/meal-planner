@@ -3,20 +3,20 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.db import get_db
 from app.models import Profile, User
 from app.schemas import LoginIn, RegisterIn, UserOut
 from app.security import clear_session, current_user, hash_password, issue_session, verify_password
+from app.settings_store import runtime_settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserOut, status_code=201)
 def register(body: RegisterIn, response: Response, db: Session = Depends(get_db)):
-    if not get_settings().allow_registration:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Registration is closed")
     first_user = db.scalar(select(func.count(User.id))) == 0
+    if not first_user and not runtime_settings(db).allow_registration:  # the first (admin) account is always allowed
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Sign-ups are closed; ask an admin for an account")
     user = User(email=body.email.lower(), password_hash=hash_password(body.password),
                 display_name=body.display_name, is_admin=first_user)
     user.profile = Profile()
