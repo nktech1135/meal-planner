@@ -5,7 +5,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.config import DEV_SECRET_KEY, get_settings
-from app.routers import account, admin, advisor, auth, body, conversions, foods, log, plan, profile, recipes, saved_meals, sources
+from app.routers import (
+    account,
+    admin,
+    advisor,
+    auth,
+    body,
+    conversions,
+    foods,
+    log,
+    plan,
+    profile,
+    recipes,
+    saved_meals,
+    sources,
+    supplements,
+)
 
 CSP = ("default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; "
        "frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
@@ -54,7 +69,8 @@ def create_app() -> FastAPI:
             response.headers.setdefault("Content-Security-Policy", CSP)
         return response
 
-    for module in (auth, account, profile, foods, sources, conversions, recipes, log, saved_meals, body, plan, advisor, admin):
+    for module in (auth, account, profile, foods, sources, conversions, recipes, log, saved_meals, body, plan, supplements,
+                   advisor, admin):
         app.include_router(module.router)
 
     @app.get("/api/health")

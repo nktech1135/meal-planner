@@ -11,7 +11,8 @@ from app.models import BodyMeasurement, Food, PlanProposal, Recipe, User
 from app.nutrients import BY_CODE
 from app.routers.plan import plan_days, validate_item
 from app.schemas import PlanItemIn
-from app.services.access import recipe_yields, visible
+from app.services import supplement_check
+from app.services.access import get_food, recipe_yields, visible
 from app.services.nutrition import NutritionError, recipe_nutrition
 from app.services.summary import day_summary, entries_between, local_date, local_today, range_totals
 from app.services.targets import compute_targets
@@ -59,6 +60,17 @@ TOOLS = [
             "query": {"type": "string"},
             "kind": {"type": "string", "enum": ["food", "supplement", "any"]},
         }),
+    },
+    {
+        "name": "check_supplement",
+        "description": "Whether a supplement product is needed. Compares its daily dose, nutrient by nutrient, with the "
+                       "user's average intake from food and from their other supplements over recent logged days, "
+                       "against their reference intakes and upper limits (supplement-only limits use supplement intake). "
+                       "Also lists ingredients with no reference intake (e.g. botanicals) and which of the user's other "
+                       "supplements contain them. Get food_id from search_foods. servings_per_day 0 means the user's "
+                       "usual dose if they already take it, otherwise 1. days is the look-back (3-90, usually 14).",
+        "input_schema": _obj({"food_id": {"type": "integer"}, "servings_per_day": {"type": "number"},
+                              "days": {"type": "integer"}}),
     },
     {
         "name": "get_food_details",
@@ -229,6 +241,15 @@ def run_tool(db: Session, user: User, name: str, args: dict, conversation_id: in
                                                                     "recipe_id", "logged_entry_id", "error")}
                                                  for i in d["items"]],
                    "totals": _named(d["totals"])} for d in plan_days(db, user, start, end) if d["items"]]
+    elif name == "check_supplement":
+        try:
+            food = get_food(db, user, int(args["food_id"]))
+            result = supplement_check.check(db, user, food, args.get("servings_per_day") or None,
+                                            max(3, min(90, int(args.get("days") or 14))))
+        except HTTPException as exc:
+            result = {"error": exc.detail}
+        except ValueError as exc:
+            result = {"error": str(exc)}
     elif name == "propose_plan_items":
         result = _propose(db, user, args, conversation_id)
     else:
