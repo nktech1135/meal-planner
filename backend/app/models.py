@@ -395,6 +395,7 @@ class PlanProposal(Base):
     rationale: Mapped[str] = mapped_column(Text, default="")
     items: Mapped[list] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | accepted | dismissed
+    accepted_indexes: Mapped[list | None] = mapped_column(JSON)  # which items were added to the plan
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

@@ -137,3 +137,13 @@ def test_overrides_win():
                              date(2026, 10, 30))
     assert result["targets"]["protein_g"]["target"] == 160
     assert result["targets"]["protein_g"]["kind"] == "override"
+
+
+def test_macro_range_ceiling_is_not_an_upper_limit():
+    from app.services.summary import evaluate
+
+    targets = compute_targets(profile(), date(2026, 10, 30))["targets"]
+    assert targets["protein_g"]["max_is_limit"] is False and targets["iron_mg"]["max_is_limit"] is True
+    rows = {r["code"]: r for r in evaluate({"protein_g": 400, "iron_mg": 60}, {}, targets)}
+    assert rows["protein_g"]["status"] == "above_range"
+    assert rows["iron_mg"]["status"] == "above_max"

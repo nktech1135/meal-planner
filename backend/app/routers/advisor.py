@@ -100,6 +100,7 @@ def accept_proposal(proposal_id: int, body: ProposalAccept, user: User = Depends
         item = {k: v for k, v in proposal.items[i].items() if k in PlanItemIn.model_fields}
         create_item(db, user, PlanItemIn(**item), "advisor")
     proposal.status, proposal.resolved_at = "accepted", datetime.now(UTC)
+    proposal.accepted_indexes = sorted(set(chosen))
     db.commit()
     return proposal
 

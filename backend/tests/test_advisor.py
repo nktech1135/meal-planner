@@ -154,7 +154,7 @@ def test_plan_proposal_review(user_client):
     assert user_client.get("/api/plan", params=params).json()[0]["items"] == []  # nothing added yet
     assert user_client.post(f"/api/advisor/proposals/{proposal['id']}/accept", json={"indexes": [5]}).status_code == 422
     accepted = user_client.post(f"/api/advisor/proposals/{proposal['id']}/accept", json={}).json()
-    assert accepted["status"] == "accepted"
+    assert accepted["status"] == "accepted" and accepted["accepted_indexes"] == [0]
     [item] = user_client.get("/api/plan", params=params).json()[0]["items"]
     assert item["origin"] == "advisor" and item["quantity"] == 200
     assert user_client.post(f"/api/advisor/proposals/{proposal['id']}/dismiss").status_code == 409

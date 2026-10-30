@@ -111,7 +111,7 @@ def compute_targets(profile, today: date) -> dict:
             )
         for code, ref in REFERENCES.items():
             entry = {"min": None, "target": None, "max": None, "kind": ref.kind, "source": DRI_SOURCE,
-                     "ul_scope": None, "note": ref.note}
+                     "ul_scope": None, "note": ref.note, "max_is_limit": True}
             if dri_ok:
                 entry["target"] = _band(ref.male if sex == "male" else ref.female, age)
             if ref.ul:
@@ -122,6 +122,7 @@ def compute_targets(profile, today: date) -> dict:
         targets["sodium_mg"] = {
             "min": None, "target": 1500 if dri_ok else None, "max": 2300, "kind": "AI/CDRR", "source": DRI_SOURCE,
             "ul_scope": "total", "note": "Max is the Chronic Disease Risk Reduction intake, not a UL.",
+            "max_is_limit": True,
         }
 
         if weight and height:
@@ -134,24 +135,27 @@ def compute_targets(profile, today: date) -> dict:
             amdr = "DRI Acceptable Macronutrient Distribution Range"
             targets["protein_g"] = {
                 "min": round(0.8 * weight, 1) if dri_ok else None, "target": None, "max": round(kcal * 0.35 / 4),
-                "kind": "RDA/AMDR", "source": amdr, "ul_scope": None,
+                "kind": "RDA/AMDR", "source": amdr, "ul_scope": None, "max_is_limit": False,
                 "note": "Min is the RDA (0.8 g/kg); max is 35% of energy.",
             }
             targets["fat_g"] = {"min": round(kcal * 0.20 / 9), "target": None, "max": round(kcal * 0.35 / 9),
-                                "kind": "AMDR", "source": amdr, "ul_scope": None, "note": "20–35% of energy."}
+                                "kind": "AMDR", "source": amdr, "ul_scope": None, "note": "20–35% of energy.",
+                                "max_is_limit": False}
             targets["carbs_g"] = {"min": round(kcal * 0.45 / 4), "target": None, "max": round(kcal * 0.65 / 4),
-                                  "kind": "AMDR", "source": amdr, "ul_scope": None, "note": "45–65% of energy."}
+                                  "kind": "AMDR", "source": amdr, "ul_scope": None, "note": "45–65% of energy.",
+                                  "max_is_limit": False}
             dga = "Dietary Guidelines for Americans 2020–2025"
             targets["sat_fat_g"] = {"min": None, "target": None, "max": round(kcal * 0.10 / 9), "kind": "limit",
-                                    "source": dga, "ul_scope": None, "note": "<10% of energy."}
+                                    "max_is_limit": True, "source": dga, "ul_scope": None, "note": "<10% of energy."}
             targets["added_sugars_g"] = {"min": None, "target": None, "max": round(kcal * 0.10 / 4), "kind": "limit",
-                                         "source": dga, "ul_scope": None, "note": "<10% of energy."}
+                                         "max_is_limit": True, "source": dga, "ul_scope": None, "note": "<10% of energy."}
         else:
             warnings.append("Add height and weight to estimate energy and macronutrient targets.")
 
     for code, override in ((getattr(profile, "target_overrides", None) or {}).items()):
         base = targets.get(code, {"ul_scope": None, "note": ""})
         targets[code] = {**base, **{k: override.get(k) for k in ("min", "target", "max")},
-                         "kind": "override", "source": "Your override"}
+                         "kind": "override", "source": "Your override",
+                         "max_is_limit": True if override.get("max") is not None else base.get("max_is_limit", True)}
 
     return {"targets": targets, "warnings": warnings}

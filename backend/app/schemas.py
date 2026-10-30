@@ -363,6 +363,7 @@ class ProposalOut(ORM):
     rationale: str
     items: list[dict]
     status: str
+    accepted_indexes: list[int] | None = None
     created_at: datetime
 
 

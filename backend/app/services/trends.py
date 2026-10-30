@@ -54,7 +54,7 @@ def trends(db: Session, user: User, start: date, end: date) -> dict:
         met = 0
         for d in logged:
             day_eval = evaluate(daily[d], supplements.get(d, {}), {row["code"]: {k: t.get(k) for k in (
-                "min", "target", "max", "ul_scope")}})[0]
+                "min", "target", "max", "ul_scope", "max_is_limit")}})[0]
             met += day_eval["status"] == "ok"
         row["days_ok"] = met
         row["amount"] = round(row["amount"], 3)

@@ -56,7 +56,8 @@ def evaluate(totals: dict, supplement_totals: dict, targets: dict, uncounted: di
             status = "below"
         limit_amount = supplement_totals.get(code, 0.0) if t.get("ul_scope") == "supplemental" else amount
         if t.get("max") is not None and limit_amount > t["max"]:
-            status = "above_max"
+            # Upper limits (ULs, CDRR, DGA caps) alert; exceeding a macronutrient range doesn't.
+            status = "above_max" if t.get("max_is_limit", True) else "above_range"
         if status == "below" and uncounted.get(code):
             status = "partial"
         rows.append({"code": code, "amount": round(amount, 3), "limit_amount": round(limit_amount, 3), "status": status,
