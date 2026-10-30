@@ -219,9 +219,9 @@ install_node() {
 
 # --- Source and releases -----------------------------------------------------------
 default_repo() {
-  # Running from inside a checkout: install from it.
-  local here
-  here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+  # Run as a file from inside a checkout: install from it. (Piped through bash, there's no file.)
+  local src="${BASH_SOURCE[0]:-}" here=""
+  [[ -f "$src" ]] && here="$(cd "$(dirname "$src")" && pwd)"
   if [[ -n "$here" && -d "$here/.git" && -d "$here/backend" && -d "$here/frontend" ]]; then
     echo "$here"
   else
