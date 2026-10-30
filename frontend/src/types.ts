@@ -90,6 +90,7 @@ export interface FoodSummary {
   trust_level: Trust;
   owner_id: number | null;
   macros: NutrientMap;
+  barcode?: string | null;
 }
 
 export interface Food extends FoodSummary {
@@ -102,6 +103,7 @@ export interface Food extends FoodSummary {
   derivations: Record<string, string | null>;
   portions: Portion[];
   other_components: Component[];
+  ingredients?: string | null;
 }
 
 export interface FoodInput {
@@ -118,6 +120,8 @@ export interface FoodInput {
   nutrients: NutrientMap;
   portions: { label: string; gram_weight: number }[];
   other_components: Component[];
+  barcode?: string | null;
+  ingredients?: string | null;
 }
 
 export interface Source {
@@ -667,4 +671,11 @@ export interface ShoppingList {
   start: string;
   end: string;
   items: ShoppingItem[];
+}
+
+export interface BarcodeResult {
+  barcode: string;
+  found_in: "local" | "usda_fdc" | "open_food_facts" | null;
+  foods: FoodSummary[];
+  errors: string[];
 }

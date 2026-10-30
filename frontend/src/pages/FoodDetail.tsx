@@ -572,7 +572,19 @@ export default function FoodDetailPage() {
               <dd>{new Date(f.fetched_at).toLocaleString()}</dd>
             </>
           )}
+          {f.barcode && (
+            <>
+              <dt>Barcode</dt>
+              <dd>{f.barcode}</dd>
+            </>
+          )}
         </dl>
+        {f.ingredients && (
+          <details className="ingredients">
+            <summary>Ingredients (from the label)</summary>
+            <p className="small">{f.ingredients}</p>
+          </details>
+        )}
       </section>
 
       <section className="card">

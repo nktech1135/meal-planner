@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { ErrorBox, Field, Loading } from "../components/common";
@@ -27,6 +27,8 @@ interface FormState {
   serving_unit: string;
   serving_size_g: string;
   citation: string;
+  barcode: string;
+  ingredients: string;
   nutrients: Record<string, string>;
   portions: { label: string; gram_weight: string }[];
   other_components: { name: string; amount: string; unit: string }[];
@@ -43,6 +45,8 @@ const EMPTY: FormState = {
   serving_unit: "",
   serving_size_g: "",
   citation: "",
+  barcode: "",
+  ingredients: "",
   nutrients: {},
   portions: [],
   other_components: [],
@@ -61,6 +65,8 @@ function fromFood(f: Food): FormState {
     serving_unit: f.serving_unit ?? "",
     serving_size_g: s(f.serving_size_g),
     citation: f.citation ?? "",
+    barcode: f.barcode ?? "",
+    ingredients: f.ingredients ?? "",
     nutrients: Object.fromEntries(Object.entries(f.nutrients).map(([k, v]) => [k, String(v)])),
     portions: f.portions.map((p) => ({ label: p.label, gram_weight: String(p.gram_weight) })),
     other_components: f.other_components.map((c) => ({ name: c.name, amount: s(c.amount), unit: c.unit ?? "" })),
@@ -84,6 +90,8 @@ function toInput(s: FormState): FoodInput {
     serving_unit: s.serving_unit.trim() || null,
     serving_size_g: parseNum(s.serving_size_g),
     citation: s.citation.trim() || null,
+    barcode: s.barcode.trim() || null,
+    ingredients: s.ingredients.trim() || null,
     nutrients,
     portions: s.portions
       .map((p) => ({ label: p.label.trim(), gram_weight: parseNum(p.gram_weight) ?? 0 }))
@@ -101,7 +109,9 @@ export default function FoodFormPage() {
   const qc = useQueryClient();
   const { list: nutrientDefs } = useNutrients();
   const existing = useQuery({ queryKey: ["food", editing], queryFn: () => api.food(editing!), enabled: !!editing });
-  const [form, setForm] = useState<FormState>(EMPTY);
+  const [params] = useSearchParams();
+  // Arriving from a barcode scan that found nothing: start with the scanned barcode filled in.
+  const [form, setForm] = useState<FormState>(() => ({ ...EMPTY, barcode: params.get("barcode") ?? "" }));
 
   useEffect(() => {
     if (existing.data) setForm(fromFood(existing.data));
@@ -187,6 +197,14 @@ export default function FoodFormPage() {
         <Field label="Where do these values come from?" hint="e.g. 'Package label, photographed 2026-10-30'. Manual entries are marked as user data.">
           <input maxLength={1000} value={form.citation} onChange={(e) => set("citation", e.target.value)} />
         </Field>
+        <div className="grid-2">
+          <Field label="Barcode" hint="Optional. Scanning this barcode later finds this food.">
+            <input inputMode="numeric" maxLength={32} value={form.barcode} onChange={(e) => set("barcode", e.target.value)} />
+          </Field>
+          <Field label="Ingredients" hint="Optional, from the label.">
+            <textarea rows={2} maxLength={5000} value={form.ingredients} onChange={(e) => set("ingredients", e.target.value)} />
+          </Field>
+        </div>
       </section>
 
       <section className="card stack">

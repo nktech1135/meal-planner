@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { FoodSummary } from "../types";
 import { basisLabel } from "../lib";
+import { BarcodeScanner } from "./BarcodeScanner";
 import { MacroLine } from "./common";
 import { TrustBadge } from "./TrustBadge";
 
@@ -34,6 +35,7 @@ export function FoodPicker({
   beforeResults?: ReactNode;
 }) {
   const [q, setQ] = useState("");
+  const [scanning, setScanning] = useState(false);
   const dq = useDebounced(q);
   useEffect(() => {
     onQueryChange?.(dq.trim());
@@ -46,7 +48,21 @@ export function FoodPicker({
   const items = (results.data ?? []).filter((f) => f.id !== excludeId);
   return (
     <div className="picker">
-      <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label="Search foods" />
+      <div className="picker-search">
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label="Search foods" />
+        <button type="button" className="btn btn-sm" aria-expanded={scanning} onClick={() => setScanning((s) => !s)}>
+          Scan barcode
+        </button>
+      </div>
+      {scanning && (
+        <BarcodeScanner
+          onClose={() => setScanning(false)}
+          onPick={(f) => {
+            setScanning(false);
+            onPick(f);
+          }}
+        />
+      )}
       {dq.trim() && beforeResults}
       {dq.trim() && (
         <ul className="pick-list" aria-label="Food database results">

@@ -1,4 +1,5 @@
 import type {
+  BarcodeResult,
   AccountUpdate,
   AdminUser,
   BodyInput,
@@ -174,6 +175,7 @@ export const api = {
 
   // sources
   sources: () => get<Source[]>("/api/sources"),
+  lookupBarcode: (code: string) => get<BarcodeResult>(`/api/sources/barcode/${encodeURIComponent(code)}`),
   searchSource: (key: string, q: string) => get<SearchHit[]>(`/api/sources/${key}/search${qs({ q })}`),
   importFood: (key: string, source_id: string, name_hint?: string) =>
     post<Food>(`/api/sources/${key}/import`, { source_id, name_hint }),

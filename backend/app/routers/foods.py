@@ -12,6 +12,7 @@ from app.schemas import FoodIn, FoodOut, FoodSummary, NutrientDefOut
 from app.security import current_user
 from app.services.access import get_food, visible
 from app.services.forms import options_for
+from app.sources.base import normalize_barcode
 
 router = APIRouter(prefix="/api", tags=["foods"])
 
@@ -99,8 +100,9 @@ def _component(c) -> dict:
 
 def _apply(food: Food, body: FoodIn, db: Session) -> None:
     for key in ("name", "brand", "kind", "state", "cooking_method", "basis", "serving_quantity",
-                "serving_unit", "serving_size_g", "citation"):
+                "serving_unit", "serving_size_g", "citation", "ingredients"):
         setattr(food, key, getattr(body, key))
+    food.barcode = normalize_barcode(body.barcode)
     food.other_components = [_component(c) for c in body.other_components]
     food.nutrients.clear()
     food.portions.clear()

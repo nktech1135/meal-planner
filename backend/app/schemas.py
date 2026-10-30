@@ -127,6 +127,8 @@ class FoodIn(BaseModel):
     serving_unit: str | None = None
     serving_size_g: float | None = Field(default=None, gt=0)
     citation: str | None = Field(default=None, max_length=1000, description="Where the values came from, e.g. 'package label'")
+    barcode: str | None = Field(default=None, max_length=32)
+    ingredients: str | None = Field(default=None, max_length=5000)
     nutrients: dict[str, float] = {}
     portions: list[PortionIn] = []
     other_components: list[ComponentIn] = []

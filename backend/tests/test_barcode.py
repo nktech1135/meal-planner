@@ -74,3 +74,11 @@ def test_bulk_upsert_keeps_ids_and_replaces_children(db_session):
     again = db_session.query(Food).filter_by(source="test").one()
     assert again.id == first.id and again.name == "Second"
     assert again.nutrient_map() == {"energy_kcal": 200} and len(again.portions) == 1
+
+
+def test_manual_food_with_barcode_is_found_by_scan(user_client):
+    food = user_client.post("/api/foods", json={"name": "Local bakery bread", "barcode": "0 12345 67890 5",
+                                                "ingredients": "Flour, water, salt", "nutrients": {"energy_kcal": 250}}).json()
+    assert food["barcode"] == "12345678905" and food["ingredients"] == "Flour, water, salt"
+    found = user_client.get("/api/sources/barcode/012345678905").json()
+    assert found["found_in"] == "local" and found["foods"][0]["id"] == food["id"]
