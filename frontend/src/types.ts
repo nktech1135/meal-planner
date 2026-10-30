@@ -31,7 +31,10 @@ export interface Profile {
   health_notes: string;
   target_overrides: Record<string, TargetBound>;
   pinned_nutrients: string[]; // nutrient codes always shown on Today
+  unit_system: UnitSystem;
 }
+
+export type UnitSystem = "metric" | "imperial";
 
 export interface Target {
   min: number | null;
@@ -41,6 +44,8 @@ export interface Target {
   source: string;
   ul_scope: "total" | "supplemental" | null;
   note: string;
+  /** true: max is a safety/health limit (UL, CDRR, DGA cap); false: top of a macronutrient range. */
+  max_is_limit?: boolean;
 }
 
 export interface TargetsResponse {
@@ -81,6 +86,7 @@ export interface FoodSummary {
   serving_size_g: number | null;
   source: string;
   source_data_type: string | null;
+  category: string | null; // e.g. USDA food group "Vegetables and Vegetable Products"
   trust_level: Trust;
   owner_id: number | null;
   macros: NutrientMap;
@@ -143,6 +149,7 @@ export interface CookingYield {
   id: number;
   raw_food_id: number;
   cooked_food_id: number | null;
+  generated_by: string | null; // "usda-pairs": derived automatically from USDA raw/cooked entries
   method: string;
   yield_factor: number;
   retention: NutrientMap;
@@ -161,9 +168,23 @@ export interface YieldInput {
   raw_weight_g?: number | null;
   cooked_weight_g?: number | null;
   retention?: NutrientMap;
+  retention_profile_code?: number | null; // USDA retention table profile; fills `retention` server-side
   basis: "measured" | "published" | "derived";
   citation?: string | null;
   notes?: string | null;
+}
+
+export interface RetentionProfile {
+  code: number;
+  description: string;
+  food_group: string | null;
+  factors: NutrientMap; // nutrient code -> fraction retained
+  release: string;
+}
+
+export interface RetentionProfiles {
+  food_group: string | null; // the raw food's group the list was narrowed to, if known
+  profiles: RetentionProfile[];
 }
 
 export interface DerivedYield {
@@ -270,7 +291,7 @@ export interface Uncounted {
   resolvable: boolean; // the user can pick the chemical form on the food page
 }
 
-export type EvaluationStatus = "ok" | "below" | "above_max" | "partial";
+export type EvaluationStatus = "ok" | "below" | "above_max" | "above_range" | "partial";
 
 export interface Evaluation extends Target {
   code: string;
@@ -304,15 +325,44 @@ export interface Conversation {
   updated_at: string;
 }
 
+export interface ChatSource {
+  url: string;
+  title: string;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   tools_used: string[];
+  sources: ChatSource[];
   created_at: string;
+}
+
+export interface ProposalItem {
+  date: string;
+  meal: Meal;
+  food_id: number | null;
+  recipe_id: number | null;
+  quantity: number;
+  unit: string;
+  label: string;
+  weighed_state?: WeighedState;
+  yield_id?: number | null;
+  note?: string;
+}
+
+export interface Proposal {
+  id: number;
+  rationale: string;
+  items: ProposalItem[];
+  status: "pending" | "accepted" | "dismissed";
+  created_at: string;
+  accepted_indexes?: number[] | null;
 }
 
 export interface ConversationDetail extends Conversation {
   messages: ChatMessage[];
+  proposals: Proposal[];
 }
 
 export interface LogUpdate {
@@ -408,6 +458,7 @@ export interface AppInfo {
   allow_registration: boolean;
   advisor_configured: boolean;
   usda_demo_key: boolean;
+  email_enabled: boolean;
 }
 
 export type SettingKind = "secret" | "string" | "bool" | "int" | "choice";
@@ -433,4 +484,187 @@ export type Integration = "anthropic" | "usda_fdc" | "nutritionix" | "edamam";
 export interface TestResult {
   ok: boolean;
   message: string;
+}
+
+// --- reference datasets (admin) ---------------------------------------------------
+
+export type JobStatus = "queued" | "running" | "done" | "failed";
+
+export interface ImportJob {
+  id: number;
+  dataset: string;
+  release: string | null;
+  status: JobStatus;
+  progress: number;
+  total: number | null;
+  message: string;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export interface Dataset {
+  key: string;
+  label: string;
+  description: string;
+  size: string;
+  available_release: string | null;
+  imported_release: string | null;
+  update_available: boolean;
+  records: number;
+  last_job: ImportJob | null;
+}
+
+// --- users (admin) and the signed-in account -------------------------------------
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  display_name: string;
+  is_admin: boolean;
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+  log_entries: number;
+}
+
+export interface InviteResult {
+  user: AdminUser;
+  link: string;
+  emailed: boolean;
+}
+
+export interface ResetLink {
+  link: string;
+  expires_in_hours: number;
+}
+
+export interface AccountUpdate {
+  display_name: string;
+  email: string;
+  current_password?: string | null;
+}
+
+// --- trends & body measurements ---------------------------------------------------
+
+export interface BodyMeasurement {
+  date: string;
+  weight_kg: number | null;
+  body_fat_pct: number | null;
+  waist_cm: number | null;
+  note: string;
+}
+
+export type BodyInput = Omit<BodyMeasurement, "date">;
+
+export interface TrendEvaluation extends Evaluation {
+  days_ok: number; // logged days on which this nutrient was on target
+}
+
+export interface WeightPoint {
+  date: string;
+  weight_kg: number;
+  trend_kg: number;
+}
+
+export interface EnergyEstimate {
+  available: boolean;
+  reason?: string;
+  maintenance_kcal?: number;
+  average_intake_kcal?: number;
+  trend_change_kg?: number;
+  days?: number;
+  logged_fraction?: number;
+  method: string;
+}
+
+export interface TrendDay {
+  date: string;
+  logged: boolean;
+  totals: NutrientMap;
+}
+
+export interface Trends {
+  start: string;
+  end: string;
+  days: number;
+  logged_days: number;
+  daily: TrendDay[];
+  averages: NutrientMap;
+  evaluation: TrendEvaluation[];
+  weight: WeightPoint[];
+  body: Omit<BodyMeasurement, "note">[];
+  energy_estimate: EnergyEstimate;
+  warnings: string[];
+}
+
+// --- meal plan --------------------------------------------------------------------
+
+export type PlanOrigin = "manual" | "advisor" | "copy" | "saved_meal";
+
+export interface PlanItemInput {
+  date: string;
+  meal: Meal;
+  food_id?: number | null;
+  recipe_id?: number | null;
+  quantity: number;
+  unit: string;
+  weighed_state?: WeighedState;
+  yield_id?: number | null;
+  note?: string;
+}
+
+export interface PlanItemUpdate {
+  date?: string;
+  meal?: Meal;
+  quantity?: number;
+  unit?: string;
+  weighed_state?: WeighedState;
+  yield_id?: number | null;
+  note?: string;
+}
+
+export interface PlanItem {
+  id: number;
+  date: string;
+  meal: Meal;
+  position: number;
+  label: string;
+  quantity: number;
+  unit: string;
+  weighed_state: WeighedState;
+  yield_id: number | null;
+  food_id: number | null;
+  recipe_id: number | null;
+  note: string;
+  origin: PlanOrigin;
+  logged_entry_id: number | null;
+  nutrients: NutrientMap;
+  trust_level: Trust | null;
+  grams: number | null;
+  error: string | null;
+}
+
+export interface PlanDay {
+  date: string;
+  items: PlanItem[];
+  totals: NutrientMap;
+  evaluation: Evaluation[];
+}
+
+export interface ShoppingItem {
+  key: string;
+  food_id: number;
+  name: string;
+  brand: string | null;
+  category: string;
+  unit: string;
+  amount: number;
+  used_for: string[];
+  checked: boolean;
+}
+
+export interface ShoppingList {
+  start: string;
+  end: string;
+  items: ShoppingItem[];
 }

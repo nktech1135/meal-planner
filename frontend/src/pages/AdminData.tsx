@@ -1,0 +1,174 @@
+import { useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, errorMessage } from "../api";
+import { useAuth } from "../auth";
+import { AdminFrame } from "../components/AdminTabs";
+import { ErrorBox, Loading, ResultNote } from "../components/common";
+import type { Dataset, ImportJob } from "../types";
+
+const ORDER = ["fdc_sr_legacy", "fdc_foundation", "fdc_survey", "usda_retention"];
+const active = (j: ImportJob | null | undefined) => !!j && (j.status === "queued" || j.status === "running");
+
+/** Polls a queued/running job every 1.5 s until it finishes. */
+function JobProgress({ job: initial }: { job: ImportJob }) {
+  const qc = useQueryClient();
+  const job = useQuery({
+    queryKey: ["job", initial.id],
+    queryFn: () => api.job(initial.id),
+    initialData: initial,
+    refetchInterval: (q) => (active(q.state.data) ? 1500 : false),
+  });
+  const j = job.data;
+  const finished = !active(j);
+  useEffect(() => {
+    if (finished) {
+      qc.invalidateQueries({ queryKey: ["datasets"] });
+      qc.invalidateQueries({ queryKey: ["foods"] });
+    }
+  }, [finished, qc]);
+
+  if (j.status === "failed") return <ResultNote ok={false}>{j.message || "The import failed."}</ResultNote>;
+  if (j.status === "done") return <ResultNote ok>{j.message || "Import finished."}</ResultNote>;
+  const pct = j.total ? Math.min(100, Math.round((j.progress / j.total) * 100)) : null;
+  return (
+    <div className="job" role="status" aria-live="polite">
+      <div className="row between wrap small">
+        <span>
+          <span className="spinner" aria-hidden="true" /> {j.status === "queued" ? "Queued" : "Importing"}: {j.message || "working…"}
+        </span>
+        {j.total ? (
+          <span className="muted nowrap">
+            {j.progress.toLocaleString()} of {j.total.toLocaleString()} ({pct}%)
+          </span>
+        ) : null}
+      </div>
+      {pct !== null && (
+        <div className="bar job-bar" aria-hidden="true">
+          <div className="bar-fill" style={{ width: `${pct}%` }} />
+        </div>
+      )}
+      <ErrorBox error={job.error} />
+    </div>
+  );
+}
+
+function DatasetCard({ ds, busy }: { ds: Dataset; busy: boolean }) {
+  const qc = useQueryClient();
+  const start = useMutation({
+    mutationFn: () => api.importDataset(ds.key),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["datasets"] }),
+  });
+  const running = active(ds.last_job);
+  const action = !ds.imported_release
+    ? "Import"
+    : ds.update_available && ds.available_release
+      ? `Update to ${ds.available_release}`
+      : "Re-import";
+  const lastFinished = ds.last_job && !running ? ds.last_job : null;
+
+  return (
+    <li className="card stack-sm dataset">
+      <div className="row between wrap">
+        <h2 className="h-card">{ds.label}</h2>
+        {ds.imported_release ? (
+          ds.update_available ? (
+            <span className="chip chip-warn">Update available</span>
+          ) : (
+            <span className="chip chip-ok">✓ Up to date</span>
+          )
+        ) : (
+          <span className="chip chip-off">Not imported</span>
+        )}
+      </div>
+      <p className="small">{ds.description}</p>
+      <dl className="kv small">
+        <dt>Records on file</dt>
+        <dd>{ds.records.toLocaleString()}</dd>
+        <dt>Imported release</dt>
+        <dd>{ds.imported_release ?? "—"}</dd>
+        <dt>Available release</dt>
+        <dd>{ds.available_release ?? "unknown"}</dd>
+        <dt>Download</dt>
+        <dd>{ds.size}</dd>
+      </dl>
+      {running && ds.last_job && <JobProgress job={ds.last_job} />}
+      {start.data && !running && start.data.id !== ds.last_job?.id && <JobProgress job={start.data} />}
+      {lastFinished?.status === "failed" && <ResultNote ok={false}>Last import failed: {lastFinished.message}</ResultNote>}
+      {lastFinished?.status === "done" && lastFinished.finished_at && (
+        <p className="muted small">
+          Last import finished {new Date(lastFinished.finished_at).toLocaleString()}
+          {lastFinished.message ? ` — ${lastFinished.message}` : ""}
+        </p>
+      )}
+      {start.error && <ResultNote ok={false}>{errorMessage(start.error)}</ResultNote>}
+      <div>
+        <button
+          type="button"
+          className={`btn ${ds.imported_release && !ds.update_available ? "" : "btn-primary"}`}
+          disabled={running || busy || start.isPending}
+          onClick={() => {
+            if (ds.imported_release && !ds.update_available && !confirm(`Re-import ${ds.label}? Existing records are updated in place.`)) return;
+            start.mutate();
+          }}
+        >
+          {start.isPending ? "Starting…" : running ? "Importing…" : action}
+        </button>
+      </div>
+    </li>
+  );
+}
+
+export default function AdminDataPage() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const datasets = useQuery({
+    queryKey: ["datasets"],
+    queryFn: api.datasets,
+    enabled: !!user?.is_admin,
+    staleTime: 0,
+  });
+  const derive = useMutation({
+    mutationFn: api.deriveYields,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["yields"] }),
+  });
+  const list = [...(datasets.data ?? [])].sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
+  const anyRunning = list.some((d) => active(d.last_job));
+
+  return (
+    <AdminFrame
+      intro={
+        <p className="muted">
+          Public-domain reference data from the USDA, imported into this server's food database so everyone can search it offline. Imports run in
+          the background; you can leave this page.
+        </p>
+      }
+    >
+      <div className="alert alert-info small">
+        <strong>Suggested order:</strong> SR Legacy, then Foundation, then Survey (FNDDS), then Retention factors. After each food import about
+        1,000 cooking yields are derived automatically from USDA raw/cooked pairs (e.g. “Beef, raw” and “Beef, roasted”), so people can log food
+        weighed after cooking.
+      </div>
+      {datasets.isLoading && <Loading what="Checking datasets" />}
+      <ErrorBox error={datasets.error} />
+      <ul className="plain-list cards dataset-grid">
+        {list.map((d) => (
+          <DatasetCard key={d.key} ds={d} busy={anyRunning} />
+        ))}
+      </ul>
+      <section className="card stack-sm" aria-labelledby="derive-title">
+        <h2 id="derive-title">Cooking yields from USDA pairs</h2>
+        <p className="muted small">
+          Matches raw and cooked USDA entries of the same food and derives a yield for each pair. This runs after every food import; run it again
+          if yields were deleted or after changing data by hand.
+        </p>
+        <div>
+          <button type="button" className="btn" onClick={() => derive.mutate()} disabled={derive.isPending || anyRunning}>
+            {derive.isPending ? "Deriving…" : "Re-derive cooking yields"}
+          </button>
+        </div>
+        {derive.data && <ResultNote ok>{derive.data.yields.toLocaleString()} cooking yields derived.</ResultNote>}
+        {derive.error && <ResultNote ok={false}>{errorMessage(derive.error)}</ResultNote>}
+      </section>
+    </AdminFrame>
+  );
+}

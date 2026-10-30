@@ -66,6 +66,7 @@ export function FoodPicker({
                   {f.state && <span className="chip">{f.state}</span>}
                   {f.kind === "supplement" && <span className="chip">supplement</span>}
                   <span className="muted small">{basisLabel(f)}</span>
+                  {f.category && <span className="muted small food-category">{f.category}</span>}
                 </span>
                 <MacroLine values={f.macros} />
               </button>

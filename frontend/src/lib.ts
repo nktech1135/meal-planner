@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
-import type { AppInfo, Food, Meal, NutrientDef, Recipe, WeighedState } from "./types";
+import type { AppInfo, Food, Meal, NutrientDef, Recipe, UnitSystem, WeighedState } from "./types";
 
 export function useNutrients() {
   const q = useQuery({ queryKey: ["nutrients"], queryFn: api.nutrients, staleTime: Infinity });
@@ -166,3 +167,78 @@ export const parseNum = (s: string): number | null => {
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 };
+
+export function useDebounced<T>(value: T, ms = 250): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
+/** The signed-in user's unit preference (metric until the profile says otherwise). */
+export function useUnitSystem(): UnitSystem {
+  const q = useQuery({ queryKey: ["profile"], queryFn: api.profile });
+  return q.data?.unit_system ?? "metric";
+}
+
+// --- units: the API is always metric; imperial is display/entry only -------------
+
+export const LB_PER_KG = 2.20462;
+export const CM_PER_IN = 2.54;
+const G_PER_OZ = 28.3495;
+
+export const weightUnit = (u: UnitSystem) => (u === "imperial" ? "lb" : "kg");
+export const lengthUnit = (u: UnitSystem) => (u === "imperial" ? "in" : "cm");
+
+/** kg -> the user's unit. */
+export const toWeight = (kg: number, u: UnitSystem) => (u === "imperial" ? kg * LB_PER_KG : kg);
+/** The user's unit -> kg. */
+export const fromWeight = (v: number, u: UnitSystem) => (u === "imperial" ? v / LB_PER_KG : v);
+export const toLength = (cm: number, u: UnitSystem) => (u === "imperial" ? cm / CM_PER_IN : cm);
+export const fromLength = (v: number, u: UnitSystem) => (u === "imperial" ? v * CM_PER_IN : v);
+
+/** One decimal, trailing zero dropped: 72.0 -> "72", 158.73 -> "158.7". */
+export const fmt1 = (v: number) => (Math.round(v * 10) / 10).toLocaleString();
+
+export function fmtWeight(kg: number | null | undefined, u: UnitSystem): string {
+  if (kg === null || kg === undefined) return "—";
+  return `${fmt1(toWeight(kg, u))} ${weightUnit(u)}`;
+}
+
+/** Shopping amounts: "350 g", "1.2 kg"; imperial users also get "(12.3 oz)" / "(2.6 lb)". */
+export function fmtGrams(g: number, u: UnitSystem): string {
+  const metric = g >= 1000 ? `${fmt1(g / 1000)} kg` : `${Math.round(g).toLocaleString()} g`;
+  if (u !== "imperial") return metric;
+  const oz = g / G_PER_OZ;
+  return `${metric} (${oz >= 16 ? `${fmt1(oz / 16)} lb` : `${fmt1(oz)} oz`})`;
+}
+
+/** Monday of the week containing ``day`` (YYYY-MM-DD). */
+export function mondayOf(day: string): string {
+  const d = new Date(`${day}T12:00:00`);
+  return addDays(day, -((d.getDay() + 6) % 7));
+}
+
+export function fmtShortDate(day: string): string {
+  return new Date(`${day}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+export function weekdayShort(day: string): string {
+  return new Date(`${day}T12:00:00`).toLocaleDateString([], { weekday: "short" });
+}
+
+/** Tracks a CSS media query (e.g. phone width). */
+export function useMedia(query: string): boolean {
+  const get = () => (typeof window !== "undefined" && window.matchMedia ? window.matchMedia(query).matches : false);
+  const [matches, setMatches] = useState(get);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setMatches(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [query]);
+  return matches;
+}

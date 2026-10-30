@@ -6,8 +6,108 @@ import { useAuth } from "../auth";
 import { ComponentList, ErrorBox, Field, Loading, NutrientTable, ResultNote } from "../components/common";
 import { FoodPicker } from "../components/FoodPicker";
 import { TrustBadge, TRUST_INFO } from "../components/TrustBadge";
-import { basisLabel, fmtNum, parseNum, SOURCE_NAMES, useNutrients } from "../lib";
-import type { DerivedYield, Food, FoodSummary, FormRow, YieldInput } from "../types";
+import { basisLabel, fmtNum, nutrientName, parseNum, SOURCE_NAMES, useDebounced, useNutrients } from "../lib";
+import type { DerivedYield, Food, FoodSummary, FormRow, RetentionProfile, YieldInput } from "../types";
+
+/** "Vitamin C 75% · Thiamin 80% …" for a retention profile, in catalog order. */
+function RetentionFactors({ factors }: { factors: Record<string, number> }) {
+  const { list, byCode } = useNutrients();
+  const order = (c: string) => {
+    const i = list.findIndex((n) => n.code === c);
+    return i === -1 ? 999 : i;
+  };
+  const codes = Object.keys(factors).sort((a, b) => order(a) - order(b));
+  if (!codes.length) return <p className="muted small">No factors in this profile.</p>;
+  return (
+    <ul className="plain-list factor-list small" aria-label="Share of each nutrient retained">
+      {codes.map((c) => (
+        <li key={c}>
+          <span>{nutrientName(byCode, c)}</span> <strong className="nowrap">{Math.round(factors[c] * 100)}%</strong>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Searchable USDA Table of Nutrient Retention Factors, narrowed to the raw food's food group. */
+function RetentionPicker({ food, value, onChange }: { food: Food; value: RetentionProfile | null; onChange: (p: RetentionProfile | null) => void }) {
+  const { user } = useAuth();
+  const [q, setQ] = useState("");
+  const dq = useDebounced(q.trim());
+  const profiles = useQuery({
+    queryKey: ["retention-profiles", food.id, dq],
+    queryFn: () => api.retentionProfiles(food.id, dq),
+    placeholderData: (prev) => prev,
+  });
+  const data = profiles.data;
+  const noneImported = !!data && data.profiles.length === 0 && dq === "";
+
+  return (
+    <fieldset className="fieldset stack-sm">
+      <legend>Nutrient retention (USDA table, optional)</legend>
+      <p className="muted small">
+        How much of each vitamin and mineral survives the cooking method, from the USDA Table of Nutrient Retention Factors. Nutrients not
+        listed are treated as fully retained.
+      </p>
+      {noneImported ? (
+        <p className="alert alert-info small">
+          The USDA retention table isn't imported on this server yet.{" "}
+          {user?.is_admin ? (
+            <>
+              Import “USDA Nutrient Retention Factors” under <Link to="/settings/data">Settings → Data</Link>.
+            </>
+          ) : (
+            <>Ask an admin to import “USDA Nutrient Retention Factors” (Settings → Data).</>
+          )}
+        </p>
+      ) : value ? (
+        <div className="selected stack-sm">
+          <div className="row between wrap">
+            <strong className="min-0">{value.description}</strong>
+            <button type="button" className="btn-link" onClick={() => onChange(null)}>
+              Change
+            </button>
+          </div>
+          <span className="muted small">
+            {value.food_group} · {value.release}
+          </span>
+          <RetentionFactors factors={value.factors} />
+        </div>
+      ) : (
+        <div className="picker">
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search cooking methods, e.g. boiled, roasted…"
+            aria-label="Search retention profiles"
+          />
+          {data?.food_group && <span className="muted small">Showing profiles for {data.food_group}.</span>}
+          <ErrorBox error={profiles.error} />
+          <ul className="pick-list" aria-label="Retention profiles">
+            {profiles.isLoading && <li className="muted">Loading…</li>}
+            {data && data.profiles.length === 0 && <li className="muted">No profiles match “{dq}”.</li>}
+            {data?.profiles.map((p) => (
+              <li key={p.code}>
+                <button type="button" className="pick-item" onClick={() => onChange(p)}>
+                  <span className="pick-name">{p.description}</span>
+                  <span className="muted small">
+                    {p.food_group ?? "Other"} · {Object.keys(p.factors).length} nutrients
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+function CookedFoodLink({ id }: { id: number }) {
+  const food = useQuery({ queryKey: ["food", id], queryFn: () => api.food(id) });
+  return <Link to={`/foods/${id}`}>{food.data?.name ?? "the cooked entry"}</Link>;
+}
 
 type YieldMode = "measured" | "published" | "derived";
 
@@ -23,6 +123,7 @@ function AddYield({ food, onDone }: { food: Food; onDone: () => void }) {
   const [cooked, setCooked] = useState<FoodSummary | null>(null);
   const [derived, setDerived] = useState<DerivedYield | null>(null);
   const [retention, setRetention] = useState<{ code: string; value: string }[]>([]);
+  const [profile, setProfile] = useState<RetentionProfile | null>(null);
 
   const derive = useMutation({
     mutationFn: (c: FoodSummary) => api.deriveYield(food.id, c.id),
@@ -37,7 +138,14 @@ function AddYield({ food, onDone }: { food: Food; onDone: () => void }) {
       const v = parseNum(r.value);
       if (r.code && v !== null) ret[r.code] = v;
     }
-    const body: YieldInput = { raw_food_id: food.id, method: method.trim(), basis: mode, retention: ret, notes: notes.trim() || null };
+    const body: YieldInput = {
+      raw_food_id: food.id,
+      method: method.trim(),
+      basis: mode,
+      retention: profile ? {} : ret,
+      retention_profile_code: profile?.code ?? null,
+      notes: notes.trim() || null,
+    };
     if (mode === "measured") {
       body.raw_weight_g = parseNum(rawG);
       body.cooked_weight_g = parseNum(cookedG);
@@ -131,46 +239,49 @@ function AddYield({ food, onDone }: { food: Food; onDone: () => void }) {
           )}
         </div>
       )}
-      <details>
-        <summary>Nutrient retention factors (optional)</summary>
-        <p className="muted small">
-          Fraction of each nutrient left after cooking (e.g. from the USDA Table of Nutrient Retention Factors). Unlisted nutrients are assumed fully
-          retained.
-        </p>
-        {retention.map((r, i) => (
-          <div key={i} className="row">
-            <select
-              value={r.code}
-              onChange={(e) => setRetention(retention.map((x, j) => (j === i ? { ...x, code: e.target.value } : x)))}
-              aria-label="Nutrient"
-            >
-              <option value="">Nutrient…</option>
-              {nutrientDefs.map((n) => (
-                <option key={n.code} value={n.code}>
-                  {n.name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              step="any"
-              min="0"
-              max="1.5"
-              className="w-sm"
-              placeholder="0.85"
-              value={r.value}
-              onChange={(e) => setRetention(retention.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
-              aria-label="Retention factor"
-            />
-            <button type="button" className="btn-link danger" onClick={() => setRetention(retention.filter((_, j) => j !== i))}>
-              Remove
-            </button>
-          </div>
-        ))}
-        <button type="button" className="btn" onClick={() => setRetention([...retention, { code: "", value: "" }])}>
-          + Add factor
-        </button>
-      </details>
+      <RetentionPicker food={food} value={profile} onChange={setProfile} />
+      {!profile && (
+        <details>
+          <summary>Or enter retention factors by hand</summary>
+          <p className="muted small">
+            Fraction of each nutrient left after cooking (e.g. from the USDA Table of Nutrient Retention Factors). Unlisted nutrients are assumed fully
+            retained.
+          </p>
+          {retention.map((r, i) => (
+            <div key={i} className="row">
+              <select
+                value={r.code}
+                onChange={(e) => setRetention(retention.map((x, j) => (j === i ? { ...x, code: e.target.value } : x)))}
+                aria-label="Nutrient"
+              >
+                <option value="">Nutrient…</option>
+                {nutrientDefs.map((n) => (
+                  <option key={n.code} value={n.code}>
+                    {n.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                max="1.5"
+                className="w-sm"
+                placeholder="0.85"
+                value={r.value}
+                onChange={(e) => setRetention(retention.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))}
+                aria-label="Retention factor"
+              />
+              <button type="button" className="btn-link danger" onClick={() => setRetention(retention.filter((_, j) => j !== i))}>
+                Remove
+              </button>
+            </div>
+          ))}
+          <button type="button" className="btn" onClick={() => setRetention([...retention, { code: "", value: "" }])}>
+            + Add factor
+          </button>
+        </details>
+      )}
       <Field label="Notes">
         <input maxLength={1000} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </Field>
@@ -217,15 +328,33 @@ function Yields({ food }: { food: Food }) {
                 )}
               </div>
             </div>
-            {y.citation && <div className="small muted">{y.citation}</div>}
-            {y.notes && <div className="small muted">{y.notes}</div>}
-            {Object.keys(y.retention).length > 0 && (
-              <div className="small muted">Retention factors: {Object.entries(y.retention).map(([k, v]) => `${k} ${v}`).join(", ")}</div>
+            {y.generated_by === "usda-pairs" && y.cooked_food_id ? (
+              <div className="small stack-xs">
+                <span>
+                  Derived from USDA raw/cooked entries: <CookedFoodLink id={y.cooked_food_id} />
+                </span>
+                <span className="muted">
+                  When you log this food by cooked weight with this yield, the cooked entry's analysed nutrients are used, so vitamin and mineral
+                  losses in cooking are already reflected.
+                </span>
+                {y.citation && <span className="muted">{y.citation}</span>}
+              </div>
+            ) : (
+              <>
+                {y.citation && <div className="small muted">{y.citation}</div>}
+                {y.notes && <div className="small muted">{y.notes}</div>}
+                {y.cooked_food_id && (
+                  <Link className="small" to={`/foods/${y.cooked_food_id}`}>
+                    Paired cooked entry
+                  </Link>
+                )}
+              </>
             )}
-            {y.cooked_food_id && (
-              <Link className="small" to={`/foods/${y.cooked_food_id}`}>
-                Paired cooked entry
-              </Link>
+            {Object.keys(y.retention).length > 0 && (
+              <details className="small">
+                <summary>Retention factors ({Object.keys(y.retention).length})</summary>
+                <RetentionFactors factors={y.retention} />
+              </details>
             )}
           </li>
         ))}
@@ -365,6 +494,7 @@ export default function FoodDetailPage() {
         <div>
           <h1>{f.name}</h1>
           {f.brand && <p className="muted">{f.brand}</p>}
+          {f.category && <p className="muted small">{f.category}</p>}
           <div className="row wrap">
             <TrustBadge level={f.trust_level} />
             <span className="chip">{f.kind}</span>

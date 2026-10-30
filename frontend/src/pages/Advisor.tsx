@@ -5,10 +5,13 @@ import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Loading } from "../components/common";
 import { RichText } from "../components/RichText";
-import { useAppInfo } from "../lib";
-import type { ChatMessage } from "../types";
+import { fmtDay, fmtNum, mealLabel, unitText, useAppInfo } from "../lib";
+import type { ChatMessage, ChatSource, ConversationDetail, Proposal } from "../types";
 
 const QUICK_PROMPTS = [
+  "Review my last 7 days",
+  "Plan tomorrow's meals to hit my targets",
+  "Is my supplement stack safe? Check upper limits and interactions",
   "Review today's intake and tell me what to adjust.",
   "Check my supplements against the upper limits.",
   "Suggest meals for the rest of today to hit my protein target.",
@@ -16,14 +19,134 @@ const QUICK_PROMPTS = [
 ];
 
 const TOOL_LABELS: Record<string, string> = {
-  get_profile_and_targets: "profile & targets",
-  get_day_summary: "day summary",
-  get_daily_totals: "daily totals",
-  get_log_entries: "log entries",
-  search_foods: "food search",
-  get_food_details: "food details",
-  list_recipes: "recipes",
+  get_profile_and_targets: "read your profile & targets",
+  get_day_summary: "checked a day's summary",
+  get_daily_totals: "looked at daily totals",
+  get_log_entries: "read log entries",
+  search_foods: "searched foods",
+  get_food_details: "looked up food details",
+  list_recipes: "looked at recipes",
+  get_trends: "looked at trends",
+  get_body_measurements: "checked body measurements",
+  get_meal_plan: "read your meal plan",
+  propose_plan_items: "proposed plan items",
+  web_search: "searched trusted sources",
+  web_fetch: "read a source page",
 };
+
+function hostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function Sources({ sources }: { sources: ChatSource[] }) {
+  if (!sources.length) return null;
+  return (
+    <div className="sources small">
+      <h3 className="h-xs">Sources</h3>
+      <ol>
+        {sources.map((s) => (
+          <li key={s.url}>
+            <a href={s.url} target="_blank" rel="noopener noreferrer">
+              {s.title || hostname(s.url)}
+            </a>{" "}
+            <span className="muted">({hostname(s.url)}) ↗</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function ProposalCard({ p, conversationId }: { p: Proposal; conversationId: number }) {
+  const qc = useQueryClient();
+  const [chosen, setChosen] = useState<boolean[]>(() => p.items.map(() => true));
+  const update = (next: Proposal) => {
+    qc.setQueryData<ConversationDetail>(["conversation", conversationId], (old) =>
+      old ? { ...old, proposals: old.proposals.map((x) => (x.id === next.id ? next : x)) } : old,
+    );
+  };
+  const [added, setAdded] = useState<number | null>(null);
+  const accept = useMutation({
+    mutationFn: () => {
+      const indexes = chosen.flatMap((c, i) => (c ? [i] : []));
+      return api.acceptProposal(p.id, indexes.length === p.items.length ? null : indexes);
+    },
+    onSuccess: (next) => {
+      setAdded(chosen.filter(Boolean).length);
+      update(next);
+      qc.invalidateQueries({ queryKey: ["plan"] });
+      qc.invalidateQueries({ queryKey: ["shopping"] });
+    },
+  });
+  const dismiss = useMutation({ mutationFn: () => api.dismissProposal(p.id), onSuccess: update });
+  const count = chosen.filter(Boolean).length;
+  const firstDate = [...p.items].map((i) => i.date).sort()[0];
+  const planLink = firstDate ? `/plan?date=${firstDate}` : "/plan";
+
+  return (
+    <section className={`proposal card stack-sm proposal-${p.status}`} aria-label="Meal plan proposal">
+      <div className="row between wrap">
+        <h3 className="h-card">Proposed for your meal plan</h3>
+        {p.status === "accepted" && <span className="chip chip-ok">✓ Accepted</span>}
+        {p.status === "dismissed" && <span className="chip chip-off">Dismissed</span>}
+      </div>
+      {p.rationale && <p className="small">{p.rationale}</p>}
+      {p.status === "pending" ? (
+        <fieldset className="proposal-items" disabled={accept.isPending || dismiss.isPending}>
+          <legend className="sr-only">Items to add</legend>
+          {p.items.map((it, i) => (
+            <label key={i} className="checkbox proposal-item">
+              <input type="checkbox" checked={chosen[i]} onChange={(e) => setChosen(chosen.map((c, j) => (j === i ? e.target.checked : c)))} />
+              <span className="min-0">
+                <strong>{it.label}</strong>{" "}
+                <span className="muted">
+                  {fmtNum(it.quantity)} {unitText(it.unit)} · {mealLabel(it.meal)}, {fmtDay(it.date)}
+                </span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      ) : (
+        <ul className="plain-list small proposal-items">
+          {p.items.map((it, i) => (
+            <li key={i}>
+              {p.status === "accepted" && p.accepted_indexes && (
+                <span aria-label={p.accepted_indexes.includes(i) ? "added" : "not added"}>
+                  {p.accepted_indexes.includes(i) ? "✓ " : "– "}
+                </span>
+              )}
+              {it.label}{" "}
+              <span className="muted">
+                {fmtNum(it.quantity)} {unitText(it.unit)} · {mealLabel(it.meal)}, {fmtDay(it.date)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {p.status === "pending" && (
+        <div className="row wrap">
+          <button type="button" className="btn btn-primary btn-sm" disabled={!count || accept.isPending} onClick={() => accept.mutate()}>
+            {accept.isPending ? "Adding…" : `Add ${count === p.items.length ? "all" : count} to plan`}
+          </button>
+          <button type="button" className="btn btn-sm" disabled={dismiss.isPending} onClick={() => dismiss.mutate()}>
+            Dismiss
+          </button>
+        </div>
+      )}
+      {p.status === "accepted" && (
+        <p className="small" role="status">
+          {added !== null && <>Added {added} item{added === 1 ? "" : "s"}. </>}
+          <Link to={planLink}>View plan →</Link>
+        </p>
+      )}
+      <ErrorBox error={accept.error || dismiss.error} />
+    </section>
+  );
+}
 
 function friendlyError(err: unknown): string | null {
   if (!err) return null;
@@ -39,9 +162,10 @@ function Bubble({ m }: { m: ChatMessage }) {
   return (
     <div className={`bubble bubble-${m.role}`}>
       {m.role === "assistant" ? <RichText text={m.text || "(no text)"} /> : <p className="pre">{m.text}</p>}
+      {m.role === "assistant" && <Sources sources={m.sources ?? []} />}
       {tools.length > 0 && (
         <div className="row wrap small">
-          <span className="muted">Looked at:</span>
+          <span className="muted">The advisor</span>
           {tools.map((t) => (
             <span key={t} className="chip">
               {TOOL_LABELS[t] ?? t}
@@ -126,7 +250,7 @@ export default function AdvisorPage() {
   return (
     <div className="advisor">
       <aside className="convo-list card">
-        <div className="row between">
+        <div className="row between wrap">
           <h2>Conversations</h2>
           <Link to="/advisor" className="btn">
             New
@@ -173,6 +297,8 @@ export default function AdvisorPage() {
           {messages.map((m, i) => (
             <Bubble key={i} m={m} />
           ))}
+          {conversationId &&
+            convo.data?.proposals.map((p) => <ProposalCard key={p.id} p={p} conversationId={conversationId} />)}
           {pending && (
             <>
               <div className="bubble bubble-user">

@@ -1,4 +1,20 @@
 import type {
+  AccountUpdate,
+  AdminUser,
+  BodyInput,
+  BodyMeasurement,
+  Dataset,
+  ImportJob,
+  InviteResult,
+  PlanDay,
+  PlanItem,
+  PlanItemInput,
+  PlanItemUpdate,
+  Proposal,
+  ResetLink,
+  RetentionProfiles,
+  ShoppingList,
+  Trends,
   AppInfo,
   CalculateInput,
   CopyInput,
@@ -91,7 +107,7 @@ const get = <T>(path: string) => request<T>("GET", path);
 const post = <T>(path: string, body?: unknown) => request<T>("POST", path, body ?? {});
 const put = <T>(path: string, body: unknown) => request<T>("PUT", path, body);
 const patch = <T>(path: string, body: unknown) => request<T>("PATCH", path, body);
-const del = (path: string) => request<void>("DELETE", path);
+const del = (path: string, body?: unknown) => request<void>("DELETE", path, body);
 
 const qs = (params: Record<string, string | number | boolean | undefined | null>) => {
   const s = new URLSearchParams();
@@ -107,12 +123,36 @@ export const api = {
   register: (email: string, password: string, display_name: string) =>
     post<User>("/api/auth/register", { email, password, display_name }),
   logout: () => post<void>("/api/auth/logout"),
+  forgotPassword: (email: string) => post<{ email_enabled: boolean }>("/api/auth/forgot", { email }),
+  resetPassword: (token: string, new_password: string) => post<User>("/api/auth/reset", { token, new_password }),
   appInfo: () => get<AppInfo>("/api/app-info"),
+
+  // own account
+  updateAccount: (a: AccountUpdate) => put<User>("/api/account", a),
+  changePassword: (current_password: string, new_password: string) =>
+    put<void>("/api/account/password", { current_password, new_password }),
+  deleteAccount: (password: string) => del("/api/account", { password }),
+  exportData: () => download("/api/account/export", "mealplan-export.json"),
 
   // admin settings
   adminSettings: () => get<SettingRow[]>("/api/admin/settings"),
   saveAdminSettings: (values: Record<string, SettingValue>) => put<SettingRow[]>("/api/admin/settings", { values }),
   testIntegration: (integration: Integration) => post<TestResult>(`/api/admin/settings/test/${integration}`),
+  testEmail: () => post<TestResult>("/api/admin/settings/test-email"),
+
+  // admin: reference datasets
+  datasets: () => get<Dataset[]>("/api/admin/datasets"),
+  importDataset: (key: string) => post<ImportJob>(`/api/admin/datasets/${key}/import`),
+  job: (id: number) => get<ImportJob>(`/api/admin/jobs/${id}`),
+  deriveYields: () => post<{ yields: number }>("/api/admin/derive-yields"),
+
+  // admin: users
+  adminUsers: () => get<AdminUser[]>("/api/admin/users"),
+  inviteUser: (email: string, display_name: string) => post<InviteResult>("/api/admin/users", { email, display_name }),
+  updateUser: (id: number, changes: { is_admin?: boolean; is_active?: boolean }) => patch<AdminUser>(`/api/admin/users/${id}`, changes),
+  userResetLink: (id: number) => post<ResetLink>(`/api/admin/users/${id}/reset-link`),
+  signOutUser: (id: number) => post<{ ok: boolean }>(`/api/admin/users/${id}/sign-out`),
+  deleteUser: (id: number) => del(`/api/admin/users/${id}`),
 
   // profile
   profile: () => get<Profile>("/api/profile"),
@@ -142,6 +182,7 @@ export const api = {
   yields: (foodId: number) => get<CookingYield[]>(`/api/foods/${foodId}/yields`),
   createYield: (y: YieldInput) => post<CookingYield>("/api/yields", y),
   deleteYield: (id: number) => del(`/api/yields/${id}`),
+  retentionProfiles: (food_id: number, q = "") => get<RetentionProfiles>(`/api/retention-profiles${qs({ food_id, q })}`),
   deriveYield: (raw_food_id: number, cooked_food_id: number) =>
     post<DerivedYield>("/api/yields/derive", { raw_food_id, cooked_food_id }),
   calculate: (c: CalculateInput) => post<Nutrition>("/api/nutrition/calculate", c),
@@ -170,13 +211,64 @@ export const api = {
   day: (day?: string) => get<DaySummary>(`/api/summary/day${qs({ day })}`),
   range: (days: number) => get<RangeDay[]>(`/api/summary/range${qs({ days })}`),
 
+  // trends & body
+  trends: (days: number) => get<Trends>(`/api/trends${qs({ days })}`),
+  body: (start?: string, end?: string) => get<BodyMeasurement[]>(`/api/body${qs({ start, end })}`),
+  putBody: (date: string, b: BodyInput) => put<BodyMeasurement>(`/api/body/${date}`, b),
+  deleteBody: (date: string) => del(`/api/body/${date}`),
+
+  // meal plan
+  plan: (start: string, end: string) => get<PlanDay[]>(`/api/plan${qs({ start, end })}`),
+  addPlanItem: (p: PlanItemInput) => post<PlanItem>("/api/plan", p),
+  updatePlanItem: (id: number, changes: PlanItemUpdate) => patch<PlanItem>(`/api/plan/${id}`, changes),
+  deletePlanItem: (id: number) => del(`/api/plan/${id}`),
+  logPlanItem: (id: number) => post<LogEntry>(`/api/plan/${id}/log`),
+  logPlanDay: (date: string, meal?: Meal | null) => post<LogEntry[]>("/api/plan/log-day", { date, meal: meal ?? null }),
+  copyPlan: (from_start: string, from_end: string, to_start: string) =>
+    post<{ copied: number }>("/api/plan/copy", { from_start, from_end, to_start }),
+  planSavedMeal: (saved_meal_id: number, date: string, meal?: Meal | null) =>
+    post<PlanItem[]>("/api/plan/from-saved-meal", { saved_meal_id, date, meal: meal ?? null }),
+  shopping: (start: string, end: string) => get<ShoppingList>(`/api/plan/shopping${qs({ start, end })}`),
+  checkShopping: (start: string, end: string, key: string, checked: boolean) =>
+    put<void>("/api/plan/shopping/check", { start, end, key, checked }),
+
   // advisor
   conversations: () => get<Conversation[]>("/api/advisor/conversations"),
   conversation: (id: number) => get<ConversationDetail>(`/api/advisor/conversations/${id}`),
   deleteConversation: (id: number) => del(`/api/advisor/conversations/${id}`),
   chat: (message: string, conversation_id?: number | null) =>
     post<ConversationDetail>("/api/advisor/chat", { message, conversation_id: conversation_id ?? null }),
+  acceptProposal: (id: number, indexes: number[] | null) => post<Proposal>(`/api/advisor/proposals/${id}/accept`, { indexes }),
+  dismissProposal: (id: number) => post<Proposal>(`/api/advisor/proposals/${id}/dismiss`),
 };
+
+/** GET a file and hand it to the browser as a download (keeps the server's filename when given). */
+async function download(path: string, fallbackName: string): Promise<void> {
+  let resp: Response;
+  try {
+    resp = await fetch(path, { credentials: "same-origin" });
+  } catch {
+    throw new ApiError("Could not reach the server", 0);
+  }
+  if (!resp.ok) {
+    let detail: unknown = null;
+    try {
+      detail = ((await resp.json()) as { detail?: unknown }).detail;
+    } catch {
+      // not JSON
+    }
+    throw new ApiError(describeDetail(detail, `Request failed (${resp.status})`), resp.status);
+  }
+  const name = /filename="?([^";]+)"?/.exec(resp.headers.get("Content-Disposition") ?? "")?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await resp.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 export function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
-import { ComponentList, ErrorBox, Field, Loading, MacroLine, Notes } from "../components/common";
+import { ComponentList, ErrorBox, Field, Loading, MacroLine, Notes, StatusPill } from "../components/common";
 import { EntryEditor } from "../components/EntryEditor";
 import { TrustBadge, TrustLegend, TRUST_INFO } from "../components/TrustBadge";
 import { addDays, fmtAmount, fmtDay, fmtNum, mealLabel, nutrientName, readPref, todayISO, unitText, useNutrients, writePref } from "../lib";
@@ -19,36 +19,26 @@ const GROUPS: { title: string; categories: string[] }[] = [
 const CORE = ["energy_kcal", "protein_g", "fat_g", "carbs_g", "fiber_g"];
 const SHOW_ALL_PREF = "today.showAllNutrients";
 
-/** Worth showing even when collapsed: over a limit, well under target, or only partly counted. */
+/**
+ * Worth showing even when collapsed: over a limit, or only partly counted. "Below" alone isn't a flag here:
+ * a day in progress is always low on vitamins and minerals, so those are judged on averages on Trends.
+ */
 function isFlagged(r: Evaluation): boolean {
-  if (r.status === "above_max" || r.status === "partial") return true;
-  const goal = r.target ?? r.min;
-  return r.status === "below" && goal !== null && goal > 0 && r.amount < goal * 0.5;
+  return r.status === "above_max" || r.status === "partial";
 }
-
-const STATUS: Record<Evaluation["status"], { text: string; icon: string }> = {
-  ok: { text: "OK", icon: "" },
-  below: { text: "Below", icon: "" },
-  above_max: { text: "Above limit", icon: "⚠ " },
-  partial: { text: "Partly counted", icon: "◐ " },
-};
 
 function TargetRow({ row, def }: { row: Evaluation; def?: NutrientDef }) {
   const unit = def?.unit ?? "";
   const scale = Math.max(row.amount, row.limit_amount, row.target ?? 0, row.min ?? 0, row.max ?? 0) * 1.08 || 1;
   const pct = (v: number) => `${Math.min(100, (v / scale) * 100)}%`;
   const supplementalUL = row.ul_scope === "supplemental" && row.max !== null;
-  const status = STATUS[row.status] ?? STATUS.ok;
   return (
     <div className={`target-row status-${row.status}`}>
       <div className="target-head">
         <span className="target-name">{def?.name ?? row.code}</span>
         <span className="target-amount">
           {fmtAmount(row.amount, unit)}
-          <span className={`status-pill status-${row.status}`}>
-            {status.icon}
-            {status.text}
-          </span>
+          <StatusPill status={row.status} />
         </span>
       </div>
       <div className="bar" aria-hidden="true">
@@ -293,11 +283,14 @@ function Targets({ s, pinned }: { s: DaySummary; pinned: string[] }) {
           <>All nutrients with a target. </>
         ) : (
           <>
-            Energy, macros, anything flagged and your <Link to="/profile#pinned">pinned nutrients</Link>.{" "}
+            Energy, macros, anything over a limit or only partly counted, and your <Link to="/profile#pinned">pinned nutrients</Link>.{" "}
           </>
         )}
         Ticks mark <span className="key key-min">min</span> <span className="key key-target">target</span>{" "}
         <span className="key key-max">upper limit</span>. Where an upper limit applies only to supplements, the darker bar shows supplement intake.
+      </p>
+      <p className="small">
+        <Link to="/trends?days=7">Check vitamins &amp; minerals over the last 7 days →</Link>
       </p>
       <div id="target-list">
         {GROUPS.map((g) => {

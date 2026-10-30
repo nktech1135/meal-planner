@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { errorMessage } from "../api";
 import { fmtAmount, nutrientName, useNutrients } from "../lib";
-import type { Component, NutrientMap } from "../types";
+import type { Component, EvaluationStatus, NutrientMap } from "../types";
 
 export function ErrorBox({ error }: { error: unknown }) {
   if (!error) return null;
@@ -122,6 +122,57 @@ export function ResultNote({ ok, children }: { ok: boolean; children: ReactNode 
   return (
     <div className={`result ${ok ? "result-ok" : "result-fail"}`} role="status">
       <span aria-hidden="true">{ok ? "✓" : "✗"}</span> <span className="sr-only">{ok ? "Success:" : "Failed:"}</span> {children}
+    </div>
+  );
+}
+
+export const STATUS: Record<EvaluationStatus, { text: string; icon: string }> = {
+  ok: { text: "OK", icon: "" },
+  below: { text: "Below", icon: "" },
+  above_max: { text: "Above limit", icon: "⚠ " },
+  // Over a macronutrient range ceiling (e.g. protein above 35% of energy): worth knowing, not a safety limit.
+  above_range: { text: "Above range", icon: "↑ " },
+  partial: { text: "Partly counted", icon: "◐ " },
+};
+
+/** Target status as words (plus an icon for the ones that need attention), never colour alone. */
+export function StatusPill({ status }: { status: EvaluationStatus }) {
+  const s = STATUS[status] ?? STATUS.ok;
+  return (
+    <span className={`status-pill status-${status}`}>
+      {s.icon}
+      {s.text}
+    </span>
+  );
+}
+
+/** A read-only value with a Copy button (reset/invite links). */
+export function CopyField({ label, value, hint }: { label: string; value: string; hint?: ReactNode }) {
+  const [copied, setCopied] = useState<boolean | null>(null);
+  return (
+    <div className="field">
+      <span className="field-label">{label}</span>
+      <div className="row copy-field">
+        <input readOnly value={value} aria-label={label} className="grow mono" onFocus={(e) => e.target.select()} />
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(value);
+              setCopied(true);
+            } catch {
+              setCopied(false);
+            }
+          }}
+        >
+          Copy
+        </button>
+      </div>
+      <span className="field-hint" role="status">
+        {copied === true ? "✓ Copied. " : copied === false ? "Couldn't copy automatically; select the text and copy it. " : ""}
+        {hint}
+      </span>
     </div>
   );
 }

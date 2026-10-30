@@ -2,7 +2,9 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "../api";
 import { useAuth } from "../auth";
+import { AdminFrame } from "../components/AdminTabs";
 import { ErrorBox, Loading, ResultNote } from "../components/common";
+import { useAppInfo } from "../lib";
 import type { Integration, SettingRow, SettingValue } from "../types";
 
 /** Which integration test sits next to which setting (the last credential of a pair). */
@@ -26,6 +28,29 @@ function TestButton({ integration, label }: { integration: Integration; label: s
       <div>
         <button type="button" className="btn btn-sm" onClick={() => test.mutate()} disabled={test.isPending}>
           {test.isPending ? "Testing…" : label}
+        </button>
+      </div>
+      {test.data && <ResultNote ok={test.data.ok}>{test.data.message}</ResultNote>}
+      {test.error && <ResultNote ok={false}>{errorMessage(test.error)}</ResultNote>}
+    </div>
+  );
+}
+
+function TestEmail() {
+  const { user } = useAuth();
+  const info = useAppInfo();
+  const test = useMutation({ mutationFn: api.testEmail });
+  return (
+    <div className="setting">
+      <strong>Check the email settings</strong>
+      <p className="muted small setting-desc">
+        {info?.email_enabled
+          ? `Sends a test message to your address (${user?.email}).`
+          : "Email isn't fully set up yet (it needs at least the SMTP server and a From address). Until then, password resets work with links you create under Users."}
+      </p>
+      <div>
+        <button type="button" className="btn btn-sm" onClick={() => test.mutate()} disabled={test.isPending}>
+          {test.isPending ? "Sending…" : "Send test email"}
         </button>
       </div>
       {test.data && <ResultNote ok={test.data.ok}>{test.data.message}</ResultNote>}
@@ -194,8 +219,18 @@ function SettingItem({ row }: { row: SettingRow }) {
             save.mutate(num.trim() || null);
           }}
         >
-          <input id={id} className="grow" value={num} onChange={(e) => setNum(e.target.value)} aria-describedby={descId} />
-          <button type="submit" className="btn btn-sm" disabled={save.isPending}>
+          <input
+            id={id}
+            type="text"
+            className="grow"
+            value={num}
+            maxLength={500}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => setNum(e.target.value)}
+            aria-describedby={descId}
+          />
+          <button type="submit" className="btn btn-sm" disabled={save.isPending || num.trim() === String(row.value ?? "")}>
             Save
           </button>
         </form>
@@ -224,39 +259,31 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const settings = useQuery({ queryKey: ["admin-settings"], queryFn: api.adminSettings, enabled: !!user?.is_admin });
 
-  if (!user?.is_admin) {
-    return (
-      <div className="stack">
-        <h1>Settings</h1>
-        <div className="alert alert-info">Only admins can change app settings.</div>
-      </div>
-    );
-  }
-  if (settings.isLoading) return <Loading />;
-  if (!settings.data) return <ErrorBox error={settings.error} />;
-
   const groups: string[] = [];
-  for (const r of settings.data) if (!groups.includes(r.group)) groups.push(r.group);
+  for (const r of settings.data ?? []) if (!groups.includes(r.group)) groups.push(r.group);
 
   return (
-    <div className="stack">
-      <div>
-        <h1>Settings</h1>
+    <AdminFrame
+      intro={
         <p className="muted">
-          App-wide settings and API keys. Values saved here override the server environment. Keys are stored encrypted and only the last four
-          characters are ever shown.
+          App-wide settings and API keys. Values saved here override the server environment. Keys and passwords are stored encrypted and only the
+          last four characters are ever shown.
         </p>
-      </div>
+      }
+    >
+      {settings.isLoading && <Loading />}
+      <ErrorBox error={settings.error} />
       {groups.map((g) => (
         <section key={g} className="card stack" aria-labelledby={`group-${g}`}>
           <h2 id={`group-${g}`}>{g}</h2>
-          {settings.data
+          {settings.data!
             .filter((r) => r.group === g)
             .map((r) => (
               <SettingItem key={r.key} row={r} />
             ))}
+          {g === "Email" && <TestEmail />}
         </section>
       ))}
-    </div>
+    </AdminFrame>
   );
 }

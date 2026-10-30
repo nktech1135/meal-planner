@@ -4,8 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Field, Loading } from "../components/common";
-import { browserTimezone, fmtNum, nutrientName, parseNum, useNutrients } from "../lib";
-import type { NutrientDef, Profile, TargetBound } from "../types";
+import { browserTimezone, fmtNum, fromLength, fromWeight, lengthUnit, nutrientName, parseNum, toLength, toWeight, useNutrients, weightUnit } from "../lib";
+import type { NutrientDef, Profile, TargetBound, UnitSystem } from "../types";
 
 const CATEGORY_LABELS: Record<string, string> = {
   energy: "Energy",
@@ -72,6 +72,9 @@ function timezones(): string[] {
   }
 }
 
+/** A metric value converted for display, rounded to one decimal; "" when unset. */
+const shown = (v: number | null, convert: (v: number) => number) => (v === null ? "" : String(Math.round(convert(v) * 10) / 10));
+
 type OverrideRow = { code: string; min: string; target: string; max: string };
 
 const toRows = (o: Record<string, TargetBound>): OverrideRow[] =>
@@ -90,6 +93,10 @@ export default function ProfilePage() {
   const targets = useQuery({ queryKey: ["targets"], queryFn: api.targets });
   const [form, setForm] = useState<Profile | null>(null);
   const [overrides, setOverrides] = useState<OverrideRow[]>([]);
+  // Height/weight are edited in the chosen units and converted to metric on save.
+  // The metric value is kept alongside, so switching units back and forth doesn't drift.
+  const [height, setHeight] = useState<{ text: string; cm: number | null }>({ text: "", cm: null });
+  const [weight, setWeight] = useState<{ text: string; kg: number | null }>({ text: "", kg: null });
   const tzList = useMemo(timezones, []);
   const browserTz = browserTimezone();
 
@@ -98,6 +105,9 @@ export default function ProfilePage() {
     // A profile that never had a timezone set gets the browser's zone suggested.
     setForm({ ...profile.data, timezone: profile.data.timezone ?? browserTz, pinned_nutrients: profile.data.pinned_nutrients ?? [] });
     setOverrides(toRows(profile.data.target_overrides ?? {}));
+    const u = profile.data.unit_system ?? "metric";
+    setHeight({ text: shown(profile.data.height_cm, (v) => toLength(v, u)), cm: profile.data.height_cm });
+    setWeight({ text: shown(profile.data.weight_kg, (v) => toWeight(v, u)), kg: profile.data.weight_kg });
   }, [profile.data, browserTz]);
 
   const { hash } = useLocation();
@@ -112,12 +122,21 @@ export default function ProfilePage() {
       qc.setQueryData(["profile"], p);
       qc.invalidateQueries({ queryKey: ["targets"] });
       qc.invalidateQueries({ queryKey: ["day"] });
+      qc.invalidateQueries({ queryKey: ["trends"] });
+      qc.invalidateQueries({ queryKey: ["plan"] });
     },
   });
 
   if (profile.isLoading || !form) return profile.error ? <ErrorBox error={profile.error} /> : <Loading />;
 
   const set = <K extends keyof Profile>(k: K, v: Profile[K]) => setForm({ ...form, [k]: v });
+  const units: UnitSystem = form.unit_system ?? "metric";
+
+  function switchUnits(next: UnitSystem) {
+    setHeight({ ...height, text: shown(height.cm, (v) => toLength(v, next)) });
+    setWeight({ ...weight, text: shown(weight.kg, (v) => toWeight(v, next)) });
+    set("unit_system", next);
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -126,7 +145,12 @@ export default function ProfilePage() {
       if (!r.code) continue;
       target_overrides[r.code] = { min: parseNum(r.min), target: parseNum(r.target), max: parseNum(r.max) };
     }
-    save.mutate({ ...form!, target_overrides });
+    save.mutate({
+      ...form!,
+      target_overrides,
+      height_cm: height.cm === null ? null : Math.round(height.cm * 10) / 10,
+      weight_kg: weight.kg === null ? null : Math.round(weight.kg * 100) / 100,
+    });
   }
 
   return (
@@ -156,11 +180,25 @@ export default function ProfilePage() {
                 <option value="lactating">Lactating</option>
               </select>
             </Field>
-            <Field label="Height (cm)">
-              <input type="number" step="any" min="0" value={form.height_cm ?? ""} onChange={(e) => set("height_cm", parseNum(e.target.value))} />
+            <Field label="Units">
+              <select value={units} onChange={(e) => switchUnits(e.target.value as UnitSystem)}>
+                <option value="metric">Metric (kg, cm)</option>
+                <option value="imperial">Imperial (lb, in)</option>
+              </select>
             </Field>
-            <Field label="Weight (kg)">
-              <input type="number" step="any" min="0" value={form.weight_kg ?? ""} onChange={(e) => set("weight_kg", parseNum(e.target.value))} />
+            <Field label={`Height (${lengthUnit(units)})`}>
+              <input type="number" step="any" min="0" value={height.text}
+                onChange={(e) => {
+                  const v = parseNum(e.target.value);
+                  setHeight({ text: e.target.value, cm: v === null ? null : fromLength(v, units) });
+                }} />
+            </Field>
+            <Field label={`Weight (${weightUnit(units)})`} hint="Updated automatically from your latest weigh-in on Trends.">
+              <input type="number" step="any" min="0" value={weight.text}
+                onChange={(e) => {
+                  const v = parseNum(e.target.value);
+                  setWeight({ text: e.target.value, kg: v === null ? null : fromWeight(v, units) });
+                }} />
             </Field>
             <Field label="Activity level">
               <select value={form.activity_level} onChange={(e) => set("activity_level", e.target.value as Profile["activity_level"])}>

@@ -58,6 +58,7 @@ function LocalSearch() {
               <div className="row small muted wrap">
                 <span>{SOURCE_NAMES[f.source] ?? f.source}</span>
                 {f.source_data_type && <span>{f.source_data_type}</span>}
+                {f.category && <span className="food-category">{f.category}</span>}
                 {f.state && <span className="chip">{f.state}</span>}
                 {f.kind === "supplement" && <span className="chip">supplement</span>}
                 <span>{basisLabel(f)}</span>
