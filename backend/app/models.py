@@ -93,6 +93,8 @@ class Food(Base):
     source_url: Mapped[str | None] = mapped_column(String(500))
     source_data_type: Mapped[str | None] = mapped_column(String(60))  # e.g. FDC "Foundation", "Branded"
     category: Mapped[str | None] = mapped_column(String(120))  # e.g. FDC food category "Poultry Products"
+    barcode: Mapped[str | None] = mapped_column(String(32), index=True)  # GTIN/UPC/EAN digits, leading zeros removed
+    ingredients: Mapped[str | None] = mapped_column(Text)  # label ingredient list (branded products)
     trust_level: Mapped[str] = mapped_column(String(20))
     citation: Mapped[str | None] = mapped_column(Text)
     # Unmapped label components, e.g. supplement botanicals: [{"name","amount","unit"}]

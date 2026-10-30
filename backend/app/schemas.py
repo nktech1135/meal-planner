@@ -156,6 +156,7 @@ class FoodSummary(ORM):
     source: str
     source_data_type: str | None
     category: str | None = None
+    barcode: str | None = None
     trust_level: str
     owner_id: int | None
     macros: dict[str, float] = {}
@@ -171,6 +172,7 @@ class FoodOut(FoodSummary):
     derivations: dict[str, str | None] = {}
     portions: list[PortionOut]
     other_components: list[dict]
+    ingredients: str | None = None
 
 
 class NutrientDefOut(BaseModel):

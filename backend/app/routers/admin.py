@@ -99,7 +99,8 @@ def _job_out(job: ImportJob | None) -> dict | None:
 def list_datasets(_: User = Depends(admin_user), db: Session = Depends(get_db)):
     datasets.expire_stale_jobs(db)
     client = http_client()
-    data_type = {"fdc_foundation": "Foundation", "fdc_sr_legacy": "SR Legacy", "fdc_survey": "Survey (FNDDS)"}
+    data_type = {"fdc_foundation": "Foundation", "fdc_sr_legacy": "SR Legacy", "fdc_survey": "Survey (FNDDS)",
+                 "fdc_branded": "Branded"}
     out = []
     for ds in datasets.DATASETS:
         last = db.scalar(select(ImportJob).where(ImportJob.dataset == ds.key).order_by(ImportJob.id.desc()).limit(1))

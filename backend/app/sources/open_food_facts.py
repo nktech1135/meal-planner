@@ -6,10 +6,10 @@ is stored with trust level "unverified".
 """
 
 from app.nutrients import NUTRIENTS, Trust, convert_amount
-from app.sources.base import DataSource, ExternalFood, SearchHit
+from app.sources.base import DataSource, ExternalFood, SearchHit, normalize_barcode
 
 BASE = "https://world.openfoodfacts.org"
-FIELDS = "code,product_name,brands,nutriments,serving_size,serving_quantity"
+FIELDS = "code,product_name,brands,nutriments,serving_size,serving_quantity,ingredients_text"
 
 
 def _map(nutriments: dict) -> dict[str, tuple[float, str | None]]:
@@ -83,5 +83,13 @@ class OpenFoodFacts(DataSource):
             serving_unit="serving" if grams else None, data_type="Crowdsourced product",
             trust_level=Trust.UNVERIFIED, source_url=f"{BASE}/product/{source_id}",
             citation=f"Open Food Facts product {source_id} (crowdsourced, ODbL). Not verified.",
+            barcode=normalize_barcode(source_id), ingredients=p.get("ingredients_text") or None,
             nutrients=_map(p.get("nutriments") or {}), portions=portions, payload=p,
         )
+
+
+def find_barcode(source: OpenFoodFacts, code: str) -> ExternalFood | None:
+    data = source._get(f"{BASE}/api/v2/product/{code}", params={"fields": FIELDS}, headers=source._headers)
+    if data.get("status") != 1 or not (data.get("product") or {}).get("product_name"):
+        return None
+    return source.fetch(code)

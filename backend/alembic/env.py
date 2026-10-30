@@ -15,9 +15,15 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(obj, name, type_, reflected, compare_to):
+    # PostgreSQL-only trigram search indexes are managed by hand in a migration, not by the models.
+    return not (type_ == "index" and name and name.endswith("_trgm"))
+
+
 def run_migrations_offline() -> None:
     context.configure(url=config.get_main_option("sqlalchemy.url"), target_metadata=target_metadata,
-                      literal_binds=True, dialect_opts={"paramstyle": "named"}, render_as_batch=True)
+                      literal_binds=True, dialect_opts={"paramstyle": "named"}, render_as_batch=True,
+                      include_object=include_object)
     with context.begin_transaction():
         context.run_migrations()
 
@@ -27,7 +33,7 @@ def run_migrations_online() -> None:
                                      poolclass=pool.NullPool)
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata,
-                          render_as_batch=connection.dialect.name == "sqlite")
+                          render_as_batch=connection.dialect.name == "sqlite", include_object=include_object)
         with context.begin_transaction():
             context.run_migrations()
 

@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import CookingYield, Food, ImportJob, RetentionProfile
 from app.nutrients import BY_FDC_NUMBER, Trust, weakest
-from app.sources.registry import upsert_external_food
+from app.sources.registry import bulk_upsert_external_foods
 from app.sources.usda_fdc import parse_fdc_food
 
 log = logging.getLogger(__name__)
@@ -62,6 +62,10 @@ DATASETS = (
     Dataset("fdc_survey", "USDA Survey foods (FNDDS)",
             "About 5,400 foods and mixed dishes as eaten in the U.S. (What We Eat in America).", "~4 MB download",
             "FoodData_Central_survey_food_json_", "FoodData_Central_survey_food_json_2024-10-31.zip", "SurveyFoods"),
+    Dataset("fdc_branded", "USDA Branded Foods",
+            "About 430,000 U.S. packaged foods from manufacturer labels, with barcodes and ingredient lists. "
+            "Takes a few minutes and about 1 GB of database space.", "~200 MB download (3 GB of data)",
+            "FoodData_Central_branded_food_json_", "FoodData_Central_branded_food_json_2026-10-29.zip", "BrandedFoods"),
     Dataset("usda_retention", "USDA Nutrient Retention Factors (Release 6, 2007)",
             "How much of each vitamin and mineral survives a cooking method; used with cooking yields.",
             "~0.5 MB download", url="https://ndownloader.figshare.com/files/44488754",
@@ -70,6 +74,7 @@ DATASETS = (
 BY_KEY = {d.key: d for d in DATASETS}
 
 _discovered: dict[str, tuple[datetime, str]] = {}
+BATCH = 1000  # foods per database round
 
 
 def latest_file(ds: Dataset, client: httpx.Client) -> str:
@@ -191,13 +196,15 @@ def _import_fdc(db: Session, ds: Dataset, client: httpx.Client, job: ImportJob, 
             member = next((n for n in zf.namelist() if n.endswith(".json")), None)
             if member is None:
                 raise ValueError("The download contains no JSON file")
-            count = 0
+            count, batch = 0, []
             with zf.open(member) as stream:
                 for record in ijson.items(stream, f"{ds.root_key}.item", use_float=True):
-                    upsert_external_food(db, parse_fdc_food(record, release=job.release, keep_payload=False), commit=False)
-                    count += 1
-                    if count % 250 == 0:
-                        report(f"Imported {count:,} foods…", progress=count)
+                    batch.append(parse_fdc_food(record, release=job.release, keep_payload=False))
+                    if len(batch) >= BATCH:
+                        count += bulk_upsert_external_foods(db, batch)
+                        batch = []
+                        report(f"Imported {count:,} foods…", progress=count)  # commits the batch
+                count += bulk_upsert_external_foods(db, batch)
             if count == 0:
                 raise ValueError(f"No foods found under '{ds.root_key}' — has the file format changed?")
     report(f"Imported {count:,} foods; deriving cooking yields…", progress=count, total=count)

@@ -42,6 +42,8 @@ class ExternalFood:
     serving_size_g: float | None = None
     data_type: str | None = None
     category: str | None = None
+    barcode: str | None = None
+    ingredients: str | None = None
     source_url: str | None = None
     citation: str | None = None
     nutrients: dict[str, tuple[float, str | None]] = field(default_factory=dict)  # code -> (amount, derivation)
@@ -148,3 +150,9 @@ def map_numbered_nutrients(rows) -> dict[str, tuple[float, str | None]]:
         if nutrient.code not in best or rank < best[nutrient.code][0]:
             best[nutrient.code] = (rank, value, derivation)
     return {code: (value, derivation) for code, (_, value, derivation) in best.items()}
+
+
+def normalize_barcode(code: str | None) -> str | None:
+    """GTIN/UPC/EAN as digits without leading zeros, so UPC-A, EAN-13 and GTIN-14 forms match."""
+    digits = "".join(ch for ch in (code or "") if ch.isdigit()).lstrip("0")
+    return digits if len(digits) >= 6 else None

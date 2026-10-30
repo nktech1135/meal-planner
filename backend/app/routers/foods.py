@@ -31,7 +31,7 @@ def food_out(food: Food) -> FoodOut:
         fetched_at=food.fetched_at, created_at=food.created_at,
         nutrients={n.nutrient_code: n.amount for n in food.nutrients},
         derivations={n.nutrient_code: n.derivation for n in food.nutrients},
-        portions=food.portions, other_components=food.other_components or [],
+        portions=food.portions, other_components=food.other_components or [], ingredients=food.ingredients,
     )
 
 
@@ -58,7 +58,11 @@ def search_foods(
         stmt = stmt.where(Food.kind == kind)
     if not terms:
         return [food_summary(f) for f in db.scalars(stmt.order_by(Food.name).limit(limit))]
-    candidates = list(db.scalars(stmt.limit(1000)))
+    # Branded products can outnumber everything else a hundred to one; gather basic foods and
+    # products separately so the basics always reach the ranking.
+    is_branded = Food.source_data_type == "Branded"
+    candidates = list(db.scalars(stmt.where(or_(~is_branded, Food.source_data_type.is_(None))).limit(500)))
+    candidates += list(db.scalars(stmt.where(is_branded).limit(500)))
     candidates.sort(key=lambda f: search_rank(f, terms, user.id))
     return [food_summary(f) for f in candidates[:limit]]
 
@@ -67,15 +71,15 @@ _TYPE_RANK = {"Foundation": 0, "SR Legacy": 1, "Survey (FNDDS)": 2}
 
 
 def search_rank(food: Food, terms: list[str], user_id: int) -> tuple:
-    """Lower sorts first: your own foods, names starting with the query, whole-word matches,
-    generic before branded, lab data before survey data, then shorter (less specific) names."""
+    """Lower sorts first: your own foods, generic before branded products, names starting with the
+    query, whole-word matches, lab data before survey data, then shorter (less specific) names."""
     name = food.name.lower()
     words = set(name.replace(",", " ").split())
     return (
         food.owner_id != user_id,
+        food.source_data_type == "Branded" or food.brand is not None,
         not name.startswith(terms[0]),
         -sum(t in words for t in terms),
-        food.brand is not None,
         _TYPE_RANK.get(food.source_data_type or "", 3),
         len(name),
     )

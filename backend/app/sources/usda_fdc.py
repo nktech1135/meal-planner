@@ -5,7 +5,7 @@ data. Branded records are manufacturer label data submitted to USDA.
 """
 
 from app.nutrients import MACRO_CODES, Trust
-from app.sources.base import DataSource, ExternalFood, SearchHit, guess_state, map_numbered_nutrients
+from app.sources.base import DataSource, ExternalFood, SearchHit, guess_state, map_numbered_nutrients, normalize_barcode
 
 BASE = "https://api.nal.usda.gov/fdc/v1"
 DATA_TYPES = ["Foundation", "SR Legacy", "Survey (FNDDS)", "Branded"]
@@ -64,7 +64,7 @@ class UsdaFdc(DataSource):
 
 
 def category_of(f: dict) -> str | None:
-    cat = f.get("foodCategory") or f.get("wweiaFoodCategory")
+    cat = f.get("foodCategory") or f.get("wweiaFoodCategory") or f.get("brandedFoodCategory")
     if isinstance(cat, dict):
         return cat.get("description") or cat.get("wweiaFoodCategoryDescription")
     return cat if isinstance(cat, str) else None
@@ -98,8 +98,19 @@ def parse_fdc_food(f: dict, release: str | None = None, keep_payload: bool = Tru
         brand=f.get("brandName") or f.get("brandOwner"), kind="food", state=state, cooking_method=method,
         basis="100g", serving_size_g=serving_g, serving_quantity=1 if serving_g else None,
         serving_unit="serving" if serving_g else None, data_type=data_type, category=category_of(f),
+        barcode=normalize_barcode(f.get("gtinUpc")), ingredients=(f.get("ingredients") or None),
         trust_level=trust_for(data_type), source_url=f"https://fdc.nal.usda.gov/food-details/{f['fdcId']}/nutrients",
         citation=f"U.S. Department of Agriculture, Agricultural Research Service. FoodData Central ({edition}), "
                  f"FDC ID {f['fdcId']}.",
         nutrients=map_numbered_nutrients(rows), portions=portions, payload=f if keep_payload else None,
     )
+
+
+def find_barcode(source: UsdaFdc, code: str) -> ExternalFood | None:
+    """Look a barcode up in FDC's Branded foods (online)."""
+    data = source._get(f"{BASE}/foods/search", params={"api_key": source.settings.usda_fdc_api_key, "query": code,
+                                                       "dataType": "Branded", "pageSize": 10})
+    for f in data.get("foods", []):
+        if normalize_barcode(f.get("gtinUpc")) == code:
+            return source.fetch(str(f["fdcId"]))
+    return None
