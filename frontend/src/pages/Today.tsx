@@ -157,6 +157,7 @@ function EntryItem({
           <MacroLine values={e.nutrients} />
           <Notes notes={e.calc_notes} />
           {e.note && <div className="muted small">Note: {e.note}</div>}
+          {e.added_by && <div className="muted small added-by">Added by {e.added_by}</div>}
         </>
       )}
     </li>

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Profile, User
 from app.schemas import LoginIn, RegisterIn, UserOut
-from app.security import clear_session, current_user, hash_password, issue_session, login_throttle, verify_password
+from app.security import clear_session, hash_password, issue_session, login_throttle, signed_in_user, verify_password
 from app.services.accounts import consume_reset_token, end_sessions, new_reset_token, reset_link
 from app.services.mail import MailError, mail_configured, send_mail
 from app.settings_store import runtime_settings
@@ -97,5 +97,5 @@ def logout(response: Response):
 
 
 @router.get("/me", response_model=UserOut)
-def me(user: User = Depends(current_user)):
+def me(user: User = Depends(signed_in_user)):
     return user

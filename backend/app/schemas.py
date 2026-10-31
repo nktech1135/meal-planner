@@ -347,6 +347,7 @@ class LogOut(ORM):
     trust_level: str
     calc_notes: list[str]
     note: str
+    added_by: str | None = None  # someone using this user's profile logged it
 
 
 # --- advisor ----------------------------------------------------------------

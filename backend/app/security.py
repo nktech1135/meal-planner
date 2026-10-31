@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.models import User
+from app.models import ProfileShare, User
 
 _hasher = PasswordHasher()
 _ALGORITHM = "HS256"
@@ -45,7 +45,8 @@ def clear_session(response: Response) -> None:
     response.delete_cookie(get_settings().session_cookie_name, path="/")
 
 
-def current_user(request: Request, db: Session = Depends(get_db)) -> User:
+def signed_in_user(request: Request, db: Session = Depends(get_db)) -> User:
+    """The person signed in. Use for their account, admin rights and who-can-see-what settings."""
     settings = get_settings()
     unauthorized = HTTPException(status.HTTP_401_UNAUTHORIZED, "Not signed in")
     token = request.cookies.get(settings.session_cookie_name)
@@ -62,7 +63,52 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     return user
 
 
-def admin_user(user: User = Depends(current_user)) -> User:
+# The profile a request works on, when it isn't the signed-in user's own (see current_user).
+PROFILE_HEADER = "X-Mealplan-Profile"
+# Set on the refusal when that profile isn't shared with them (any more), so the UI can switch back.
+PROFILE_GONE_HEADER = "X-Mealplan-Profile-Gone"
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def current_user(request: Request, user: User = Depends(signed_in_user), db: Session = Depends(get_db)) -> User:
+    """Whose data the request works on: the signed-in user, or someone who shared their profile with
+    them (named by the profile header). With view-only access, only reads are allowed."""
+    raw = request.headers.get(PROFILE_HEADER)
+    if not raw:
+        return user
+    try:
+        owner_id = int(raw)
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{PROFILE_HEADER} must be a user id") from None
+    if owner_id == user.id:
+        return user
+    share = db.get(ProfileShare, (owner_id, user.id))
+    owner = db.get(User, owner_id) if share else None
+    if share is None or owner is None or not owner.is_active:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "That profile isn't shared with you any more",
+                            headers={PROFILE_GONE_HEADER: "1"})
+    writes = request.method not in _SAFE_METHODS and not getattr(request.scope.get("endpoint"), "reads_only", False)
+    if writes and not share.can_edit:
+        name = owner.display_name or owner.email
+        raise HTTPException(status.HTTP_403_FORBIDDEN, f"{name} shared their profile with you to view only")
+    return owner
+
+
+def reads_only(endpoint):
+    """Mark a POST endpoint that changes nothing (a calculation), so view-only profile access may use it."""
+    endpoint.reads_only = True
+    return endpoint
+
+
+def own_profile_user(user: User = Depends(current_user), me: User = Depends(signed_in_user)) -> User:
+    """The signed-in user, refusing requests made while using someone else's profile: for settings
+    that only the profile's owner may change, such as who can see their plan."""
+    if user.id != me.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, f"Only {user.display_name or user.email} can change this")
+    return me
+
+
+def admin_user(user: User = Depends(signed_in_user)) -> User:
     if not user.is_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin only")
     return user

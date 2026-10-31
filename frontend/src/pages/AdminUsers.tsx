@@ -6,7 +6,7 @@ import { AdminFrame } from "../components/AdminTabs";
 import { CopyField, ErrorBox, Field, Loading, ResultNote } from "../components/common";
 import type { AdminUser, InviteResult } from "../types";
 import { Button, focusSoon, rescueFocus, useAnnounce, VisuallyHidden } from "../components/a11y";
-import { PlanSharing } from "../components/PlanSharing";
+import { Sharing, type ShareScope } from "../components/Sharing";
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" }) : "never");
 
@@ -151,18 +151,19 @@ function AddUserForm() {
   );
 }
 
-/** Who can see or edit this user's plan; loaded when opened. */
-function PlanAccess({ u }: { u: AdminUser }) {
+/** Who can see or edit this user's plan, or use their whole profile; loaded when opened. */
+function Access({ u, scope }: { u: AdminUser; scope: ShareScope }) {
   const [open, setOpen] = useState(false);
   const name = u.display_name || u.email;
   return (
     <details className="plan-access" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
       <summary>
-        Plan access<VisuallyHidden> for {name}</VisuallyHidden>
+        {scope === "plan" ? "Plan access" : "Profile access"}
+        <VisuallyHidden> for {name}</VisuallyHidden>
       </summary>
       {open && (
         <div className="plan-access-body">
-          <PlanSharing target={{ kind: "user", id: u.id, name }} level={4} />
+          <Sharing scope={scope} target={{ kind: "user", id: u.id, name }} level={4} />
         </div>
       )}
     </details>
@@ -271,7 +272,8 @@ function UserRow({ u, me }: { u: AdminUser; me: boolean }) {
           </Button>
         )}
       </div>
-      {u.is_active && <PlanAccess u={u} />}
+      {u.is_active && <Access u={u} scope="profile" />}
+      {u.is_active && <Access u={u} scope="plan" />}
       {link && <CopyField label={`Password reset link for ${u.email}`} value={link} hint="Valid 24 h, one use. Creating another link cancels this one." />}
       {note && <ResultNote ok>{note}</ResultNote>}
       {error && <ResultNote ok={false}>{errorMessage(error)}</ResultNote>}

@@ -59,6 +59,8 @@ import type {
   SupplementStack,
 } from "./types";
 
+import { activeProfile, PROFILE_GONE_HEADER, PROFILE_HEADER, switchProfile } from "./profile";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -84,18 +86,33 @@ function describeDetail(detail: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Headers every request carries: which profile it works on, when that isn't your own. */
+function baseHeaders(): Record<string, string> {
+  const profile = activeProfile();
+  return profile ? { [PROFILE_HEADER]: String(profile.id) } : {};
+}
+
+/** The profile in use was unshared (or its owner deactivated): go back to your own. */
+function checkProfile(resp: Response): void {
+  const profile = activeProfile();
+  if (profile && resp.headers.get(PROFILE_GONE_HEADER)) {
+    switchProfile(null, `${profile.name}'s profile isn't shared with you any more, so you're back on your own.`);
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let resp: Response;
   try {
     resp = await fetch(path, {
       method,
       credentials: "same-origin",
-      headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+      headers: { ...baseHeaders(), ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
     throw new ApiError("Could not reach the server", 0);
   }
+  checkProfile(resp);
   if (resp.status === 204) return undefined as T;
   let data: unknown = null;
   try {
@@ -164,6 +181,10 @@ export const api = {
   userPlanShares: (id: number) => get<PlanShares>(`/api/admin/users/${id}/plan-shares`),
   shareUserPlan: (id: number, email: string, can_edit: boolean) => put<PlanShares>(`/api/admin/users/${id}/plan-shares`, { email, can_edit }),
   unshareUserPlan: (id: number, memberId: number) => del(`/api/admin/users/${id}/plan-shares/${memberId}`),
+  userProfileAccess: (id: number) => get<PlanShares>(`/api/admin/users/${id}/profile-access`),
+  shareUserProfile: (id: number, email: string, can_edit: boolean) =>
+    put<PlanShares>(`/api/admin/users/${id}/profile-access`, { email, can_edit }),
+  unshareUserProfile: (id: number, memberId: number) => del(`/api/admin/users/${id}/profile-access/${memberId}`),
 
   // profile
   profile: () => get<Profile>("/api/profile"),
@@ -252,6 +273,10 @@ export const api = {
   sharePlan: (email: string, can_edit: boolean) => put<PlanShares>("/api/plan-shares", { email, can_edit }),
   unsharePlan: (memberId: number) => del(`/api/plan-shares/${memberId}`),
   leaveSharedPlan: (ownerId: number) => del(`/api/plan-shares/from/${ownerId}`),
+  profileAccess: () => get<PlanShares>("/api/profile-access"),
+  shareProfile: (email: string, can_edit: boolean) => put<PlanShares>("/api/profile-access", { email, can_edit }),
+  unshareProfile: (memberId: number) => del(`/api/profile-access/${memberId}`),
+  leaveSharedProfile: (ownerId: number) => del(`/api/profile-access/from/${ownerId}`),
 
   // supplement check
   checkSupplement: (c: CheckInput) => post<SupplementCheck>("/api/supplements/check", c),
@@ -271,10 +296,11 @@ export const api = {
 async function download(path: string, fallbackName: string): Promise<void> {
   let resp: Response;
   try {
-    resp = await fetch(path, { credentials: "same-origin" });
+    resp = await fetch(path, { credentials: "same-origin", headers: baseHeaders() });
   } catch {
     throw new ApiError("Could not reach the server", 0);
   }
+  checkProfile(resp);
   if (!resp.ok) {
     let detail: unknown = null;
     try {

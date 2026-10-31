@@ -11,7 +11,7 @@ from app.db import get_db
 from app.models import AdvisorConversation, PlanProposal, User
 from app.routers.plan import create_item
 from app.schemas import ChatIn, ConversationDetail, ConversationOut, PlanItemIn, ProposalAccept, ProposalOut
-from app.security import current_user
+from app.security import current_user, signed_in_user
 from app.settings_store import get_runtime
 
 router = APIRouter(prefix="/api/advisor", tags=["advisor"])
@@ -90,7 +90,7 @@ def _proposal(db: Session, user: User, proposal_id: int) -> PlanProposal:
 
 @router.post("/proposals/{proposal_id}/accept", response_model=ProposalOut)
 def accept_proposal(proposal_id: int, body: ProposalAccept, user: User = Depends(current_user),
-                    db: Session = Depends(get_db)):
+                    me: User = Depends(signed_in_user), db: Session = Depends(get_db)):
     """Add the proposal's items (or the chosen ones) to the user's meal plan."""
     proposal = _proposal(db, user, proposal_id)
     chosen = range(len(proposal.items)) if body.indexes is None else body.indexes
@@ -98,7 +98,7 @@ def accept_proposal(proposal_id: int, body: ProposalAccept, user: User = Depends
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Unknown item index")
     for i in chosen:
         item = {k: v for k, v in proposal.items[i].items() if k in PlanItemIn.model_fields}
-        create_item(db, user, PlanItemIn(**item), "advisor")
+        create_item(db, user, PlanItemIn(**item), "advisor", added_by=me)
     proposal.status, proposal.resolved_at = "accepted", datetime.now(UTC)
     proposal.accepted_indexes = sorted(set(chosen))
     db.commit()

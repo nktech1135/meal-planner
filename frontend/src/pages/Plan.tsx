@@ -10,7 +10,8 @@ import { addDays, basisLabel, fmtDay, fmtNum, fmtShortDate, mealLabel, mondayOf,
 import { MEALS, type FoodSummary, type Meal, type PlanDay, type PlanItem, type PlanItemUpdate, type PlanPerson, type WeighedState } from "../types";
 import { Button, focusSoon, rescueFocus, tabPanelProps, TabList, titleText, useAnnounce, useAnnounceText, useReturnFocus, VisuallyHidden } from "../components/a11y";
 import { ActingForProvider, useActingFor } from "../components/actingFor";
-import { PlanSharing } from "../components/PlanSharing";
+import { Sharing } from "../components/Sharing";
+import { activeProfile } from "../profile";
 import { useAuth } from "../auth";
 
 const ORIGIN: Record<string, string | null> = { manual: null, advisor: "from advisor", copy: "copied", saved_meal: "saved meal" };
@@ -695,7 +696,7 @@ function ShareMyPlan() {
           <p className="muted small">
             Let someone you live or cook with see your plan and shopping list, or plan meals with you. You can change or remove access at any time.
           </p>
-          <PlanSharing target={{ kind: "mine" }} level={2} />
+          <Sharing scope="plan" target={{ kind: "mine" }} level={2} />
         </div>
       )}
     </details>
@@ -886,7 +887,8 @@ export default function PlanPage() {
               )}
             </>
           )}
-          {of === null && <ShareMyPlan />}
+          {/* Who sees a plan is its owner's call, not of someone using their profile. */}
+          {of === null && !activeProfile() && <ShareMyPlan />}
         </div>
       </ActingForProvider>
     </PlanAccessContext.Provider>

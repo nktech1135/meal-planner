@@ -5,6 +5,8 @@ import { api, errorMessage } from "../api";
 import { useAuth } from "../auth";
 import { Field, ResultNote } from "../components/common";
 import { Button, focusSoon, useReturnFocus } from "../components/a11y";
+import { Sharing } from "../components/Sharing";
+import { activeProfile, clearProfile } from "../profile";
 
 function DetailsForm() {
   const { user } = useAuth();
@@ -140,6 +142,7 @@ function DeleteAccount() {
   const remove = useMutation({
     mutationFn: () => api.deleteAccount(password),
     onSuccess: () => {
+      clearProfile();
       qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "me" });
       qc.setQueryData(["me"], null);
       navigate("/", { replace: true });
@@ -181,8 +184,24 @@ function DeleteAccount() {
   );
 }
 
+function ProfileSharing() {
+  return (
+    <section className="card stack" aria-labelledby="profile-sharing-title">
+      <div>
+        <h2 id="profile-sharing-title">Share your profile</h2>
+        <p className="muted small">
+          Give someone you trust, such as a partner, carer or coach, access to all of your data, or see only. People
+          who share theirs with you appear under the Me menu, where you can switch to their profile.
+        </p>
+      </div>
+      <Sharing scope="profile" target={{ kind: "mine" }} level={3} />
+    </section>
+  );
+}
+
 export default function AccountPage() {
   const { user } = useAuth();
+  const using = activeProfile();
   return (
     <div className="stack">
       <div>
@@ -192,7 +211,13 @@ export default function AccountPage() {
           {user?.is_admin ? " (admin)" : ""}.
         </p>
       </div>
+      {using && (
+        <p className="alert alert-info" role="note">
+          This is your own account. You're using {using.name}'s profile in the rest of the app; their account stays theirs.
+        </p>
+      )}
       <DetailsForm />
+      <ProfileSharing />
       <PasswordForm />
       <ExportData />
       <DeleteAccount />

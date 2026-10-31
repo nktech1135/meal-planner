@@ -4,6 +4,7 @@ import { useAuth } from "./auth";
 import { RouteFocus, SkipLink } from "./components/a11y";
 import { Loading } from "./components/common";
 import { MeMenu } from "./components/MeMenu";
+import { ProfileBanner } from "./components/ProfileBanner";
 import LoginPage from "./pages/Login";
 import ResetPasswordPage from "./pages/ResetPassword";
 import TodayPage from "./pages/Today";
@@ -82,6 +83,7 @@ export default function App() {
         </div>
       </header>
       <main className="container" id="main" tabIndex={-1}>
+        <ProfileBanner />
         <Routes>
           <Route path="/" element={<TodayPage />} />
           <Route path="/log" element={<AddEntryPage />} />

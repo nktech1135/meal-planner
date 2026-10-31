@@ -8,7 +8,7 @@ from app.db import get_db
 from app.models import Food, LogEntry, User
 from app.routers.conversions import calculate_nutrition
 from app.schemas import CopyIn, LogIn, LogOut, LogUpdate, SuggestionOut
-from app.security import current_user
+from app.security import current_user, signed_in_user
 from app.services.access import get_food, get_recipe
 from app.services.summary import day_summary, entries_between, local_today, range_totals, user_tz
 
@@ -22,8 +22,8 @@ def item_label(db: Session, user: User, food_id: int | None, recipe_id: int | No
     return get_recipe(db, user, recipe_id).name, False
 
 
-def create_entry(db: Session, user: User, body: LogIn) -> LogEntry:
-    """Calculate and add (not commit) a log entry."""
+def create_entry(db: Session, user: User, body: LogIn, actor: User | None = None) -> LogEntry:
+    """Calculate and add (not commit) a log entry to ``user``'s log, made by ``actor`` (default: them)."""
     if bool(body.food_id) == bool(body.recipe_id):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Log exactly one of food_id or recipe_id")
     consumed_at = body.consumed_at or datetime.now(UTC)
@@ -36,7 +36,7 @@ def create_entry(db: Session, user: User, body: LogIn) -> LogEntry:
         label=label, quantity=body.quantity, unit=body.unit, weighed_state=body.weighed_state, yield_id=body.yield_id,
         grams=result.grams, is_supplement=is_supplement, nutrients=result.nutrients,
         other_components=result.other_components, trust_level=result.trust_level, calc_notes=result.notes,
-        note=body.note,
+        note=body.note, created_by_id=(actor or user).id,
     )
     db.add(entry)
     return entry
@@ -58,8 +58,9 @@ def _as_input(entry: LogEntry, **changes) -> LogIn:
 
 
 @router.post("/log", response_model=LogOut, status_code=201)
-def add_entry(body: LogIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    entry = create_entry(db, user, body)
+def add_entry(body: LogIn, user: User = Depends(current_user), me: User = Depends(signed_in_user),
+              db: Session = Depends(get_db)):
+    entry = create_entry(db, user, body, me)
     db.commit()
     return entry
 
@@ -93,7 +94,8 @@ def recalculate(db: Session, user: User, entry: LogEntry, **changes) -> None:
 
 
 @router.post("/log/copy", response_model=list[LogOut], status_code=201)
-def copy_entries(body: CopyIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def copy_entries(body: CopyIn, user: User = Depends(current_user), me: User = Depends(signed_in_user),
+                 db: Session = Depends(get_db)):
     """Copy a day's entries (or one meal's) to another day, keeping the time of day."""
     sources = [e for e in entries_between(db, user, body.from_date, body.from_date)
                if body.meal is None or e.meal == body.meal]
@@ -107,7 +109,7 @@ def copy_entries(body: CopyIn, user: User = Depends(current_user), db: Session =
         when = e.consumed_at if e.consumed_at.tzinfo else e.consumed_at.replace(tzinfo=UTC)
         local = when.astimezone(tz)
         moved = datetime.combine(body.to_date, local.timetz())
-        created.append(create_entry(db, user, _as_input(e, consumed_at=moved, meal=body.to_meal or e.meal)))
+        created.append(create_entry(db, user, _as_input(e, consumed_at=moved, meal=body.to_meal or e.meal), me))
     db.commit()
     return created
 

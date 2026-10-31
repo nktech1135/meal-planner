@@ -20,7 +20,7 @@ from app.schemas import (
     PlanLogIn,
     ShoppingCheckIn,
 )
-from app.security import current_user
+from app.security import current_user, signed_in_user
 from app.services.access import get_food, get_recipe, get_yield, recipe_yields
 from app.services.nutrition import NutritionError, add_into, food_nutrition, rounded
 from app.services.sharing import name_of, plan_owner
@@ -97,8 +97,9 @@ def get_plan(start: date, end: date, of: int | None = OF, user: User = Depends(c
 
 
 @router.post("", status_code=201)
-def add_item(body: PlanItemIn, of: int | None = OF, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    return create_item(db, plan_owner(db, user, of, edit=True), body, "manual", added_by=user)
+def add_item(body: PlanItemIn, of: int | None = OF, user: User = Depends(current_user),
+             me: User = Depends(signed_in_user), db: Session = Depends(get_db)):
+    return create_item(db, plan_owner(db, user, of, edit=True), body, "manual", added_by=me)
 
 
 def create_item(db: Session, user: User, body: PlanItemIn, origin: str, added_by: User | None = None) -> dict:
@@ -133,7 +134,7 @@ def delete_item(item_id: int, of: int | None = OF, user: User = Depends(current_
     db.commit()
 
 
-def _log_item(db: Session, user: User, item: PlanItem) -> LogEntry:
+def _log_item(db: Session, user: User, item: PlanItem, actor: User) -> LogEntry:
     tz = user_tz(user)
     now = datetime.now(UTC)
     when = datetime.combine(item.date, MEAL_TIMES.get(item.meal, time(12, 0)), tzinfo=tz)
@@ -141,37 +142,41 @@ def _log_item(db: Session, user: User, item: PlanItem) -> LogEntry:
         when = now  # logging today's plan early: record it now rather than in the future
     entry = create_entry(db, user, LogIn(consumed_at=when, meal=item.meal, food_id=item.food_id,
                                          recipe_id=item.recipe_id, quantity=item.quantity, unit=item.unit,
-                                         weighed_state=item.weighed_state, yield_id=item.yield_id, note=item.note))
+                                         weighed_state=item.weighed_state, yield_id=item.yield_id, note=item.note),
+                         actor)
     db.flush()
     item.logged_entry_id = entry.id
     return entry
 
 
 @router.post("/{item_id}/log", response_model=LogOut, status_code=201)
-def log_item(item_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def log_item(item_id: int, user: User = Depends(current_user), me: User = Depends(signed_in_user),
+             db: Session = Depends(get_db)):
     item = _own(db, user, item_id)
     if item.logged_entry_id and db.get(LogEntry, item.logged_entry_id):
         raise HTTPException(status.HTTP_409_CONFLICT, "Already logged")
-    entry = _log_item(db, user, item)
+    entry = _log_item(db, user, item, me)
     db.commit()
     return entry
 
 
 @router.post("/log-day", response_model=list[LogOut], status_code=201)
-def log_day(body: PlanLogIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def log_day(body: PlanLogIn, user: User = Depends(current_user), me: User = Depends(signed_in_user),
+            db: Session = Depends(get_db)):
     """Log every not-yet-logged item for a day (or one meal of it)."""
     items = [it for it in db.scalars(select(PlanItem).where(PlanItem.user_id == user.id, PlanItem.date == body.date)
                                      .order_by(PlanItem.position))
              if (body.meal is None or it.meal == body.meal)
              and not (it.logged_entry_id and db.get(LogEntry, it.logged_entry_id))]
-    entries = [_log_item(db, user, it) for it in items]
+    entries = [_log_item(db, user, it, me) for it in items]
     db.commit()
     return entries
 
 
 @router.post("/copy", status_code=201)
-def copy_plan(body: PlanCopyIn, of: int | None = OF, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    actor, user = user, plan_owner(db, user, of, edit=True)
+def copy_plan(body: PlanCopyIn, of: int | None = OF, user: User = Depends(current_user),
+              actor: User = Depends(signed_in_user), db: Session = Depends(get_db)):
+    user = plan_owner(db, user, of, edit=True)
     _range(body.from_start, body.from_end)
     shift = body.to_start - body.from_start
     sources = list(db.scalars(select(PlanItem).where(PlanItem.user_id == user.id, PlanItem.date >= body.from_start,
@@ -189,8 +194,8 @@ def copy_plan(body: PlanCopyIn, of: int | None = OF, user: User = Depends(curren
 
 @router.post("/from-saved-meal", status_code=201)
 def plan_saved_meal(body: PlanFromSavedIn, of: int | None = OF, user: User = Depends(current_user),
-                    db: Session = Depends(get_db)):
-    actor, user = user, plan_owner(db, user, of, edit=True)
+                    actor: User = Depends(signed_in_user), db: Session = Depends(get_db)):
+    user = plan_owner(db, user, of, edit=True)
     meal = db.get(SavedMeal, body.saved_meal_id)
     if meal is None or meal.owner_id != user.id:  # the plan owner's saved meals
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Saved meal not found")

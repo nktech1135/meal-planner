@@ -2338,6 +2338,64 @@ textarea {
 .added-by {
   font-style: italic;
 }
+
+/* --- using someone else's profile -------------------------------------------- */
+.profile-banners {
+  margin-bottom: 16px;
+}
+.profile-banner {
+  border-left: 4px solid var(--primary);
+}
+.profile-banner p {
+  margin: 0;
+}
+.profile-banner p + p {
+  margin-top: 4px;
+}
+.profile-notice {
+  align-items: center;
+}
+.me-button.me-button-other {
+  border-color: var(--primary);
+  color: var(--text);
+}
+.me-using {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.me-profiles {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.me-label {
+  margin: 0;
+  padding: 4px 10px 2px;
+}
+.me-profile {
+  display: block;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: var(--text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.me-profile:hover {
+  background: var(--surface-2);
+}
+.me-profile[aria-current="true"] {
+  font-weight: 600;
+  background: var(--surface-2);
+}
+.me-profile[aria-current="true"]::before {
+  content: "✓ " / ""; /* aria-current already says it */
+}
 .share-details > summary,
 .plan-access > summary {
   cursor: pointer;

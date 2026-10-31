@@ -19,13 +19,14 @@ from app.models import (
     FormChoice,
     LogEntry,
     PlanItem,
+    ProfileShare,
     Recipe,
     SavedMeal,
     User,
 )
 from app.routers.foods import food_out
 from app.schemas import BodyOut, LogOut, ProfileOut, SavedMealOut, UserOut
-from app.security import clear_session, current_user, hash_password, issue_session, verify_password
+from app.security import clear_session, hash_password, issue_session, signed_in_user, verify_password
 from app.services.accounts import delete_user, end_sessions
 from app.services.sharing import shares_of
 
@@ -53,7 +54,7 @@ def _check_password(user: User, password: str | None) -> None:
 
 
 @router.put("", response_model=UserOut)
-def update_account(body: AccountUpdate, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def update_account(body: AccountUpdate, user: User = Depends(signed_in_user), db: Session = Depends(get_db)):
     if body.email.lower() != user.email:
         _check_password(user, body.current_password)
         user.email = body.email.lower()
@@ -67,7 +68,7 @@ def update_account(body: AccountUpdate, user: User = Depends(current_user), db: 
 
 
 @router.put("/password", status_code=204)
-def change_password(body: PasswordChange, response: Response, user: User = Depends(current_user),
+def change_password(body: PasswordChange, response: Response, user: User = Depends(signed_in_user),
                     db: Session = Depends(get_db)):
     _check_password(user, body.current_password)
     user.password_hash = hash_password(body.new_password)
@@ -77,7 +78,7 @@ def change_password(body: PasswordChange, response: Response, user: User = Depen
 
 
 @router.get("/export")
-def export_data(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def export_data(user: User = Depends(signed_in_user), db: Session = Depends(get_db)):
     """Everything this account owns, as one JSON document."""
     def rows(model, owner_col):
         return list(db.scalars(select(model).where(owner_col == user.id)))
@@ -99,6 +100,7 @@ def export_data(user: User = Depends(current_user), db: Session = Depends(get_db
             "date", "meal", "label", "food_id", "recipe_id", "quantity", "unit", "weighed_state", "note")}
             for p in rows(PlanItem, PlanItem.user_id)],
         "plan_sharing": shares_of(db, user),
+        "profile_access": shares_of(db, user, ProfileShare),
         "form_choices": [{"food_id": c.food_id, "component": c.component_name, "option": c.option_key}
                          for c in rows(FormChoice, FormChoice.user_id)],
         "advisor_conversations": [{"title": c.title, "messages": render(c)}
@@ -110,7 +112,7 @@ def export_data(user: User = Depends(current_user), db: Session = Depends(get_db
 
 
 @router.delete("", status_code=204)
-def delete_account(body: DeleteAccount, response: Response, user: User = Depends(current_user),
+def delete_account(body: DeleteAccount, response: Response, user: User = Depends(signed_in_user),
                    db: Session = Depends(get_db)):
     _check_password(user, body.password)
     delete_user(db, user)

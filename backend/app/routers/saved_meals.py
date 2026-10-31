@@ -9,7 +9,7 @@ from app.models import SavedMeal, SavedMealItem, User
 from app.routers.conversions import calculate_nutrition
 from app.routers.log import create_entry, item_label
 from app.schemas import LogIn, LogOut, SavedMealFromLog, SavedMealIn, SavedMealLogIn, SavedMealOut
-from app.security import current_user
+from app.security import current_user, signed_in_user
 from app.services.sharing import acting_user
 from app.services.summary import entries_between
 
@@ -74,12 +74,13 @@ def delete_meal(meal_id: int, user: User = Depends(current_user), db: Session = 
 
 
 @router.post("/{meal_id}/log", response_model=list[LogOut], status_code=201)
-def log_meal(meal_id: int, body: SavedMealLogIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def log_meal(meal_id: int, body: SavedMealLogIn, user: User = Depends(current_user), me: User = Depends(signed_in_user),
+             db: Session = Depends(get_db)):
     meal = _own(db, user, meal_id)
     when = body.consumed_at or datetime.now(UTC)
     entries = [create_entry(db, user, LogIn(
         consumed_at=when, meal=body.meal or meal.default_meal, food_id=it.food_id, recipe_id=it.recipe_id,
         quantity=it.quantity, unit=it.unit, weighed_state=it.weighed_state, yield_id=it.yield_id,
-    )) for it in meal.items]
+    ), me) for it in meal.items]
     db.commit()
     return entries

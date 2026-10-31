@@ -284,6 +284,8 @@ export interface LogEntry {
   trust_level: Trust;
   calc_notes: string[];
   note: string;
+  /** Someone using this person's profile logged it. */
+  added_by?: string | null;
 }
 
 /** A label amount that couldn't be counted toward a nutrient (e.g. vitamin A in IU of unknown form). */

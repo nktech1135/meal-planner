@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "./api";
+import { clearProfile } from "./profile";
 import type { User } from "./types";
 
 interface AuthState {
@@ -34,11 +35,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Drop every other user's cached data but keep the mounted "me" query, so its observer
     // (this provider) is notified of the new value; qc.clear() would orphan it.
     setUser: (u) => {
+      clearProfile();
       qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "me" });
       qc.setQueryData(["me"], u);
     },
     logout: async () => {
       await api.logout();
+      clearProfile();
       qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "me" });
       qc.setQueryData(["me"], null);
     },

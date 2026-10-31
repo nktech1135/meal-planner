@@ -6,7 +6,7 @@ from app.db import get_db
 from app.models import CookingYield, RetentionProfile, User
 from app.nutrients import Trust, weakest
 from app.schemas import CalculateIn, DeriveIn, NutritionOut, YieldIn, YieldOut
-from app.security import current_user
+from app.security import current_user, reads_only
 from app.services.access import form_factors, get_food, get_recipe, get_yield, recipe_yields, visible
 from app.services.nutrition import NutritionError, derive_yield, food_nutrition, recipe_portion
 from app.services.sharing import acting_user
@@ -77,6 +77,7 @@ def delete_yield(yield_id: int, user: User = Depends(current_user), db: Session 
 
 
 @router.post("/yields/derive")
+@reads_only
 def derive(body: DeriveIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     try:
         return derive_yield(get_food(db, user, body.raw_food_id), get_food(db, user, body.cooked_food_id))
@@ -102,6 +103,7 @@ def calculate_nutrition(db: Session, user: User, body) -> NutritionOut:
 
 
 @router.post("/nutrition/calculate", response_model=NutritionOut)
+@reads_only
 def calculate(body: CalculateIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     return calculate_nutrition(db, user, body)
 

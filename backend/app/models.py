@@ -223,7 +223,18 @@ class LogEntry(Base):
     trust_level: Mapped[str] = mapped_column(String(20))  # weakest trust among contributing data
     calc_notes: Mapped[list] = mapped_column(JSON, default=list)
     note: Mapped[str] = mapped_column(String(500), default="")
+    # Who logged it, when that wasn't the user (someone they gave access to their profile).
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_id])
+
+    @property
+    def added_by(self) -> str | None:
+        """The name of whoever logged it, if that wasn't the user themselves."""
+        if self.created_by is None or self.created_by_id == self.user_id:
+            return None
+        return self.created_by.display_name or self.created_by.email
 
 
 class AdvisorConversation(Base):
@@ -386,6 +397,18 @@ class PlanShare(Base):
     """One user letting another see, and optionally edit, their meal plan and shopping list."""
 
     __tablename__ = "plan_shares"
+
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    can_edit: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ProfileShare(Base):
+    """One user giving another access to all of their data (log, foods, recipes, plan, profile),
+    to see or to see and change, as if signed in as them. Not their account or sharing settings."""
+
+    __tablename__ = "profile_shares"
 
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     member_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)

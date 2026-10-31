@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import User
-from app.security import current_user
+from app.security import current_user, reads_only
 from app.services import supplement_check
 from app.services.access import get_food
 
@@ -18,6 +18,7 @@ class CheckIn(BaseModel):
 
 
 @router.post("/check")
+@reads_only
 def check_supplement(body: CheckIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     food = get_food(db, user, body.food_id)
     try:

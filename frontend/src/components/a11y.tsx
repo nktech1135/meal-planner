@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { matchPath, useLocation } from "react-router-dom";
+import { activeProfile } from "../profile";
 
 /*
  * Screen-reader plumbing shared by every page: visually hidden text, a polite/assertive announcer,
@@ -225,7 +226,11 @@ const ROUTE_TITLES: [string, string][] = [
 ];
 
 export const APP_NAME = "Mealplan";
-export const titleText = (title: string) => `${title} – ${APP_NAME}`;
+/** Page title; while using someone else's profile it says whose, so tabs and screen readers make it plain. */
+export const titleText = (title: string) => {
+  const profile = activeProfile();
+  return profile ? `${title} – ${profile.name}'s profile – ${APP_NAME}` : `${title} – ${APP_NAME}`;
+};
 
 export function routeTitle(pathname: string, fallback = APP_NAME): string {
   for (const [pattern, title] of ROUTE_TITLES) if (matchPath(pattern, pathname)) return title;
