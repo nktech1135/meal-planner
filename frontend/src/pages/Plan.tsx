@@ -530,9 +530,16 @@ function CopyDay({ from, onDone }: { from: string; onDone: (msg: string, goTo?: 
   );
 }
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** The confirmation for clearing a day or week: what goes and what stays. */
+const clearQuestion = (n: number, when: string, ownerName?: string) =>
+  `Remove ${n === 1 ? "the 1 planned item" : `all ${n} planned items`} for ${when}${ownerName ? ` from ${ownerName}'s plan` : ""}? ` +
+  "Anything already logged stays in the food log. This can't be undone.";
+
 function DayCard({ day, onGo, panelProps }: { day: PlanDay; onGo: (d: string) => void; panelProps?: Record<string, string> }) {
   const qc = useQueryClient();
-  const { canEdit, canLog } = usePlanAccess();
+  const { of, owner, canEdit, canLog } = usePlanAccess();
   const [panel, setPanel] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ text: string; goTo?: string } | null>(null);
@@ -547,6 +554,17 @@ function DayCard({ day, onGo, panelProps }: { day: PlanDay; onGo: (d: string) =>
     onSuccess: (entries) => {
       invalidateAfterLog(qc);
       setNotice({ text: `Logged ${entries.length} item${entries.length === 1 ? "" : "s"}.` });
+      rescueFocus(() => heading.current);
+    },
+  });
+  const clearDay = useMutation({
+    mutationFn: () => api.clearPlan(day.date, day.date, of),
+    onMutate: () => setNotice(null),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["plan"] });
+      qc.invalidateQueries({ queryKey: ["shopping"] });
+      setPanel(null);
+      setNotice({ text: `Cleared ${plural(r.removed, "planned item")}.` });
       rescueFocus(() => heading.current);
     },
   });
@@ -581,6 +599,19 @@ function DayCard({ day, onGo, panelProps }: { day: PlanDay; onGo: (d: string) =>
               Copy day to…<VisuallyHidden> ({dayName})</VisuallyHidden>
             </button>
           )}
+          {canEdit && day.items.length > 0 && (
+            <Button
+              type="button"
+              className="btn-link small danger"
+              disabled={clearDay.isPending}
+              onClick={() => {
+                if (confirm(clearQuestion(day.items.length, dayName, owner?.name))) clearDay.mutate();
+              }}
+            >
+              {clearDay.isPending ? "Clearing…" : "Clear day"}
+              <VisuallyHidden> ({dayName})</VisuallyHidden>
+            </Button>
+          )}
         </div>
       </div>
       <DayTotals day={day} />
@@ -595,7 +626,7 @@ function DayCard({ day, onGo, panelProps }: { day: PlanDay; onGo: (d: string) =>
           )}
         </div>
       )}
-      <ErrorBox error={logAll.error} />
+      <ErrorBox error={logAll.error || clearDay.error} />
       {day.items.length === 0 && panel !== "add" && <p className="muted small">Nothing planned.</p>}
       {MEALS.map((meal) => {
         const items = day.items.filter((i) => i.meal === meal);
@@ -734,7 +765,7 @@ export default function PlanPage() {
     // A plan that's no longer shared answers 404; don't retry that.
     retry: (n, err) => !(err instanceof ApiError && err.status < 500) && n < 2,
   });
-  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string; nextWeek?: boolean } | null>(null);
   const noticeRef = useAnnounceText<HTMLDivElement>();
   const view = (date: string, ofId: number | null, push = false) => {
     setNotice(null);
@@ -756,13 +787,23 @@ export default function PlanPage() {
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["plan"] });
       qc.invalidateQueries({ queryKey: ["shopping"] });
-      setNotice({ ok: true, text: `Copied ${r.copied} item${r.copied === 1 ? "" : "s"} to the week of ${fmtShortDate(addDays(start, 7))}.` });
+      setNotice({ ok: true, text: `Copied ${r.copied} item${r.copied === 1 ? "" : "s"} to the week of ${fmtShortDate(addDays(start, 7))}.`, nextWeek: true });
     },
     onError: (err) => {
       if (err instanceof ApiError && err.status === 404) setNotice({ ok: false, text: "Nothing is planned this week, so there was nothing to copy." });
     },
   });
+  const clearWeek = useMutation({
+    mutationFn: () => api.clearPlan(start, end, of),
+    onMutate: () => setNotice(null),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["plan"] });
+      qc.invalidateQueries({ queryKey: ["shopping"] });
+      setNotice({ ok: true, text: `Cleared ${plural(r.removed, "planned item")} from this week.` });
+    },
+  });
   const days = plan.error ? [] : (plan.data ?? []);
+  const planned = days.reduce((n, d) => n + d.items.length, 0);
   const shownDay = days.find((d) => d.date === focus) ?? days[0];
   const thisWeek = start === mondayOf(today);
   const shopStart = thisWeek ? today : start;
@@ -816,12 +857,24 @@ export default function PlanPage() {
                       {copyWeek.isPending ? "Copying…" : "Copy this week to next week"}
                     </Button>
                   )}
+                  {access.canEdit && (
+                    <Button
+                      type="button"
+                      className="btn btn-sm danger"
+                      disabled={clearWeek.isPending || !anything}
+                      onClick={() => {
+                        if (confirm(clearQuestion(planned, `the week of ${fmtShortDate(start)}`, owner?.name))) clearWeek.mutate();
+                      }}
+                    >
+                      {clearWeek.isPending ? "Clearing…" : "Clear week"}
+                    </Button>
+                  )}
                 </div>
               </div>
               {notice && (
                 <div ref={noticeRef} className={`result ${notice.ok ? "result-ok" : "result-info"}`}>
                   <span aria-hidden="true">{notice.ok ? "✓" : "ℹ"}</span> {notice.text}{" "}
-                  {notice.ok && (
+                  {notice.nextWeek && (
                     <button type="button" className="btn-link" onClick={() => go(addDays(start, 7))}>
                       View next week
                     </button>
@@ -829,6 +882,7 @@ export default function PlanPage() {
                 </div>
               )}
               {!(copyWeek.error instanceof ApiError && copyWeek.error.status === 404) && <ErrorBox error={copyWeek.error} />}
+              <ErrorBox error={clearWeek.error} />
               <ErrorBox error={plan.error} />
               {plan.isLoading && <Loading />}
               {days.length > 0 && of === null && (

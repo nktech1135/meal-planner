@@ -92,6 +92,7 @@ def test_view_only_share_and_revoking(people, db_session):
     assert len(bob.get("/api/plan", params={**RANGE, **of}).json()[0]["items"]) == 1
     denied = bob.post("/api/plan", params=of, json=_item(people["oats"]["id"]))
     assert denied.status_code == 403 and "view only" in denied.json()["detail"]
+    assert bob.post("/api/plan/clear", params=of, json=RANGE).status_code == 403
     # Someone it wasn't shared with can't see the plan or read her private foods through it.
     assert carol.get("/api/plan", params={**RANGE, **of}).status_code == 404
     assert carol.get("/api/foods", params={"for_user": ids["alice"]}).status_code == 404

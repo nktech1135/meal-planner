@@ -13,6 +13,7 @@ from app.routers.log import create_entry, item_label
 from app.schemas import (
     LogIn,
     LogOut,
+    PlanClearIn,
     PlanCopyIn,
     PlanFromSavedIn,
     PlanItemIn,
@@ -190,6 +191,22 @@ def copy_plan(body: PlanCopyIn, of: int | None = OF, user: User = Depends(curren
                         created_by_id=actor.id))
     db.commit()
     return {"copied": len(sources)}
+
+
+@router.post("/clear")
+def clear_plan(body: PlanClearIn, of: int | None = OF, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Remove everything planned from ``start`` to ``end``. What was logged from it stays in the food log.
+    Shopping-list ticks for lists entirely within those days go too, so planning again starts afresh."""
+    user = plan_owner(db, user, of, edit=True)
+    _range(body.start, body.end)
+    removed = db.execute(delete(PlanItem).where(PlanItem.user_id == user.id, PlanItem.date >= body.start,
+                                                PlanItem.date <= body.end)).rowcount
+    for check in db.scalars(select(ShoppingCheck).where(ShoppingCheck.user_id == user.id)):
+        list_start, list_end, _ = check.key.split(":", 2)
+        if body.start.isoformat() <= list_start and list_end <= body.end.isoformat():
+            db.delete(check)
+    db.commit()
+    return {"removed": removed}
 
 
 @router.post("/from-saved-meal", status_code=201)

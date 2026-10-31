@@ -502,6 +502,11 @@ class PlanCopyIn(BaseModel):
     to_start: date
 
 
+class PlanClearIn(BaseModel):
+    start: date
+    end: date
+
+
 class PlanFromSavedIn(BaseModel):
     saved_meal_id: int
     date: date

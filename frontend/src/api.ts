@@ -260,6 +260,8 @@ export const api = {
   // Logging is the owner's own (it writes to their food log), so no `of`.
   logPlanItem: (id: number) => post<LogEntry>(`/api/plan/${id}/log`),
   logPlanDay: (date: string, meal?: Meal | null) => post<LogEntry[]>("/api/plan/log-day", { date, meal: meal ?? null }),
+  clearPlan: (start: string, end: string, of?: number | null) =>
+    post<{ removed: number }>(`/api/plan/clear${qs({ of })}`, { start, end }),
   copyPlan: (from_start: string, from_end: string, to_start: string, of?: number | null) =>
     post<{ copied: number }>(`/api/plan/copy${qs({ of })}`, { from_start, from_end, to_start }),
   planSavedMeal: (saved_meal_id: number, date: string, meal?: Meal | null, of?: number | null) =>

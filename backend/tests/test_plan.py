@@ -86,3 +86,30 @@ def test_shopping_list(setup):
     assert {i["name"]: i for i in c.get("/api/plan/shopping", params=params).json()["items"]}["Rice, dry"]["checked"]
     c.put("/api/plan/shopping/check", json={**params, "key": key, "checked": False})
     assert not {i["name"]: i for i in c.get("/api/plan/shopping", params=params).json()["items"]}["Rice, dry"]["checked"]
+
+
+def test_clear_plan(setup):
+    c, rice, *_ = setup
+    after = TOMORROW + timedelta(days=1)
+    for d in (TODAY, TOMORROW, after):
+        c.post("/api/plan", json={"date": d.isoformat(), "food_id": rice["id"], "quantity": 80})
+    logged = c.post("/api/plan/log-day", json={"date": TODAY.isoformat()}).json()
+    span = {"start": TODAY.isoformat(), "end": TOMORROW.isoformat()}
+    key = c.get("/api/plan/shopping", params=span).json()["items"][0]["key"]
+    c.put("/api/plan/shopping/check", json={**span, "key": key, "checked": True})
+    wider = {"start": TODAY.isoformat(), "end": after.isoformat()}
+    c.put("/api/plan/shopping/check", json={**wider, "key": key, "checked": True})
+
+    assert c.post("/api/plan/clear", json=span).json() == {"removed": 2}
+    days = c.get("/api/plan", params=wider).json()
+    assert [len(d["items"]) for d in days] == [0, 0, 1]  # the day after is untouched
+    # The food log keeps what was logged from the plan.
+    assert [e["id"] for e in c.get("/api/summary/day", params={"date": TODAY.isoformat()}).json()["entries"]] == [logged[0]["id"]]
+    # Ticks on the cleared days' list are gone; a list that also covers other days keeps its own.
+    c.post("/api/plan", json={"date": TODAY.isoformat(), "food_id": rice["id"], "quantity": 80})
+    assert not c.get("/api/plan/shopping", params=span).json()["items"][0]["checked"]
+    assert c.get("/api/plan/shopping", params=wider).json()["items"][0]["checked"]
+
+    assert c.post("/api/plan/clear", json=span).json() == {"removed": 1}
+    assert c.post("/api/plan/clear", json=span).json() == {"removed": 0}
+    assert c.post("/api/plan/clear", json={"start": TOMORROW.isoformat(), "end": TODAY.isoformat()}).status_code == 422
