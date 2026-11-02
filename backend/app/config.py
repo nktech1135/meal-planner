@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     advisor_max_tool_rounds: int = 8
     advisor_web_research: bool = True  # Claude web search/fetch, limited to authoritative health domains
     advisor_web_max_uses: int = 3
+    advisor_pubmed: bool = True  # PubMed search through NCBI E-utilities
+    ncbi_api_key: str | None = None  # optional; raises NCBI's rate limit from 3 to 10 requests a second
 
     # Data sources. Free, authoritative sources are on by default.
     usda_fdc_api_key: str = "DEMO_KEY"  # get a free key at https://fdc.nal.usda.gov/api-key-signup

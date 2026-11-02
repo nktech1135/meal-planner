@@ -39,6 +39,21 @@ export default function CreditsPage() {
           </li>
         ))}
       </ul>
+      <h2>Research</h2>
+      <ul className="plain-list stack">
+        <li className="card stack-sm">
+          <h3 className="h-card">PubMed</h3>
+          <p className="small">
+            The advisor can search PubMed, from the U.S. National Library of Medicine, through NCBI's E-utilities. Abstracts remain their publishers'.
+          </p>
+          <p className="muted small">
+            <a href="https://www.ncbi.nlm.nih.gov/home/about/policies/" target="_blank" rel="noopener noreferrer">
+              NCBI policies
+              <NewTab />
+            </a>
+          </p>
+        </li>
+      </ul>
     </div>
   );
 }

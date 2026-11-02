@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 
 import anthropic
@@ -59,6 +60,14 @@ of Dietary Supplements fact sheets, MedlinePlus, FDA, USDA and similar). Use the
 user's data can't answer, such as supplement safety, interactions with medications and upper-limit \
 details, and cite what you used. Don't present anything as established that those sources don't support.
 
+If search_pubmed is available, use it when a recommendation depends on research evidence (does a supplement \
+or diet change work, for whom, at what dose, with what risks). Weigh the evidence by design: guidelines, \
+systematic reviews and meta-analyses of randomized trials first, then individual randomized trials, then \
+observational studies, which show association rather than cause. Notice who was studied (age, sex, health \
+status, dose, duration) and say when that differs from the user. Never rely on a retracted article; mention \
+it only to warn that it was retracted. Base claims on what the abstracts say, say so when the evidence is \
+mixed, small or old, and cite each article you use as "PMID <number>".
+
 Keep answers focused and readable: lead with the answer, use short lists or a small table when \
 comparing numbers, and give amounts in the units the app uses."""
 
@@ -70,7 +79,7 @@ RESEARCH_DOMAINS = [
 
 
 def tool_list(settings: Settings) -> list[dict]:
-    tools = list(TOOLS)
+    tools = [t for t in TOOLS if settings.advisor_pubmed or t["name"] != "search_pubmed"]
     if settings.advisor_web_research:
         uses = settings.advisor_web_max_uses
         tools += [
@@ -162,7 +171,7 @@ def run_turn(
             if block.type != "tool_use":
                 continue
             try:
-                output, is_error = run_tool(db, user, block.name, dict(block.input), conversation.id), False
+                output, is_error = run_tool(db, user, block.name, dict(block.input), conversation.id, settings), False
             except (ValueError, KeyError, TypeError) as exc:
                 output, is_error = json.dumps({"error": str(exc)}), True
             results.append({"type": "tool_result", "tool_use_id": block.id, "content": output, "is_error": is_error})
@@ -176,11 +185,31 @@ def run_turn(
     db.commit()
 
 
+PMID_RE = re.compile(r"PMID:?\s*(\d{1,9})")
+
+
+def _pubmed_results(content: list[dict], pending: set[str], found: dict[str, dict]) -> None:
+    """Remember the articles returned by search_pubmed calls, so citations by PMID can be listed as sources."""
+    for block in content:
+        if block.get("type") != "tool_result" or block.get("tool_use_id") not in pending:
+            continue
+        try:
+            articles = json.loads(block["content"]).get("articles") or []
+        except (TypeError, ValueError, AttributeError):
+            continue
+        for a in articles:
+            found[str(a.get("pmid"))] = {"url": a["url"], "title": a.get("title") or a["url"]}
+
+
 def render(conversation: AdvisorConversation) -> list[dict]:
     """Collapse raw API turns into chat bubbles: one per typed message and one per advisor reply."""
     out: list[dict] = []
+    pubmed_calls: set[str] = set()
+    articles: dict[str, dict] = {}
     for m in conversation.messages:
-        if m.role == "user" and m.is_user_prompt:
+        if m.role == "user" and not m.is_user_prompt:
+            _pubmed_results(m.content, pubmed_calls, articles)
+        elif m.role == "user" and m.is_user_prompt:
             out.append({"role": "user", "text": m.content[-1]["text"], "tools_used": [], "sources": [],
                         "created_at": m.created_at})
         elif m.role == "assistant":
@@ -196,6 +225,12 @@ def render(conversation: AdvisorConversation) -> list[dict]:
                     bubble["tools_used"].append(block.get("name", "web"))
                 if block.get("type") == "text" and block.get("text"):
                     bubble["text"] += ("\n\n" if bubble["text"] else "") + block["text"]
+                    for pmid in PMID_RE.findall(block["text"]):
+                        source = articles.get(pmid)
+                        if source and source["url"] not in {s["url"] for s in bubble["sources"]}:
+                            bubble["sources"].append(source)
                 elif block.get("type") == "tool_use":
                     bubble["tools_used"].append(block["name"])
+                    if block["name"] == "search_pubmed":
+                        pubmed_calls.add(block["id"])
     return out

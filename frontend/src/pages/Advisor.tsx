@@ -32,6 +32,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_meal_plan: "read your meal plan",
   propose_plan_items: "proposed plan items",
   check_supplement: "checked a supplement against your intake",
+  search_pubmed: "searched PubMed",
   web_search: "searched trusted sources",
   web_fetch: "read a source page",
 };

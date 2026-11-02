@@ -7,6 +7,8 @@ from fastapi import HTTPException
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.advisor import pubmed
+from app.config import Settings
 from app.models import BodyMeasurement, Food, PlanProposal, Recipe, User
 from app.nutrients import BY_CODE
 from app.routers.plan import plan_days, validate_item
@@ -17,6 +19,7 @@ from app.services.nutrition import NutritionError, recipe_nutrition
 from app.services.summary import day_summary, entries_between, local_date, local_today, range_totals
 from app.services.targets import compute_targets
 from app.services.trends import trends
+from app.sources.registry import http_client
 
 MAX_RESULT_CHARS = 30_000
 
@@ -100,6 +103,19 @@ TOOLS = [
         "input_schema": _obj({"start_date": _DATE, "end_date": _DATE}),
     },
     {
+        "name": "search_pubmed",
+        "description": "Search PubMed (US National Library of Medicine) for research on a health or nutrition question. "
+                       "Returns up to max_results articles (1-10) in relevance order with PMID, link, title, journal, "
+                       "year, publication types, retraction status and abstract. evidence narrows to stronger designs: "
+                       "reviews_and_meta_analyses, randomized_trials or guidelines; use any for everything. The query "
+                       "accepts PubMed syntax (e.g. MeSH terms, [tiab], date ranges like 2020:2026[dp]).",
+        "input_schema": _obj({
+            "query": {"type": "string"},
+            "evidence": {"type": "string", "enum": list(pubmed.EVIDENCE_FILTERS)},
+            "max_results": {"type": "integer"},
+        }),
+    },
+    {
         "name": "propose_plan_items",
         "description": "Suggest items for the user's meal plan. Nothing is added until the user reviews and accepts "
                        "the proposal in the app, so explain what you proposed. Use food_id or recipe_id values "
@@ -153,7 +169,8 @@ def _entry(user: User, e) -> dict:
     }
 
 
-def run_tool(db: Session, user: User, name: str, args: dict, conversation_id: int | None = None) -> str:
+def run_tool(db: Session, user: User, name: str, args: dict, conversation_id: int | None = None,
+             settings: Settings | None = None) -> str:
     if name == "get_profile_and_targets":
         p = user.profile
         today = local_today(user)
@@ -249,6 +266,14 @@ def run_tool(db: Session, user: User, name: str, args: dict, conversation_id: in
         except HTTPException as exc:
             result = {"error": exc.detail}
         except ValueError as exc:
+            result = {"error": str(exc)}
+    elif name == "search_pubmed":
+        if settings is None or not settings.advisor_pubmed:
+            raise ValueError("PubMed search is turned off")
+        try:
+            result = pubmed.search(http_client(), settings, args["query"], args.get("evidence") or "any",
+                                   int(args.get("max_results") or 5))
+        except pubmed.PubMedError as exc:
             result = {"error": str(exc)}
     elif name == "propose_plan_items":
         result = _propose(db, user, args, conversation_id)

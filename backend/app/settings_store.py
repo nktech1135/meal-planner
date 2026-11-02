@@ -63,6 +63,12 @@ DEFS: tuple[SettingDef, ...] = (
                "fact sheets and drug interactions) and cite them. Anthropic bills searches separately."),
     SettingDef("advisor_web_max_uses", "Source look-ups per reply", "AI advisor", "int",
                "Upper limit on searches and page reads for one reply.", minimum=1, maximum=10),
+    SettingDef("advisor_pubmed", "Search PubMed", "AI advisor", "bool",
+               "Lets the advisor search PubMed for research (systematic reviews, trials, guidelines) and cite it by "
+               "PMID. Free; uses the National Library of Medicine's E-utilities API."),
+    SettingDef("ncbi_api_key", "NCBI API key", "AI advisor", "secret",
+               "Optional and free. Raises PubMed's rate limit from 3 to 10 requests a second.",
+               link="https://account.ncbi.nlm.nih.gov/settings/"),
     SettingDef("usda_fdc_api_key", "USDA FoodData Central API key", "Data sources", "secret",
                "Free. Without one the shared DEMO_KEY is used, which is heavily rate-limited.",
                link="https://fdc.nal.usda.gov/api-key-signup"),

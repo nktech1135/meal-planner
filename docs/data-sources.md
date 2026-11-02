@@ -209,6 +209,19 @@ and `fetch` and returning an `ExternalFood`, plus an entry in `registry.py`.
 
 Pricing and terms change. Check each vendor directly.
 
+## Research sources for the advisor
+
+- **PubMed** (U.S. National Library of Medicine), searched through NCBI's free
+  [E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25499/) API. Each result
+  carries its PMID, journal, year, publication types and retraction status, and
+  the advisor can narrow a search to systematic reviews and meta-analyses,
+  randomized trials or guidelines. It is told to rank evidence by design, never
+  to rely on a retracted paper, and to cite articles by PMID. Cited articles are
+  listed under its reply. On by default; turn it off, or add a free NCBI API key
+  (3 → 10 requests a second), under **Settings → AI advisor**.
+- **Web search and fetch** (optional), restricted to NIH, MedlinePlus, FDA, USDA,
+  CDC, health.gov, the National Academies, WHO and EFSA.
+
 ## Raw → cooked conversions
 
 A **cooking yield** links a raw food to a cooking method:
