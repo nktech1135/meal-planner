@@ -98,6 +98,22 @@ def tool_list(settings: Settings) -> list[dict]:
     return tools
 
 
+# Each thinking block is bound to the system prompt, tools and earlier messages it was produced with, and
+# Claude Opus 5.5 (and the other current models) reject a replayed block when those changed. They change
+# when the app is upgraded or an admin toggles web research or PubMed in the middle of a conversation, so
+# the API is asked to drop such blocks (the model continues without that earlier reasoning) instead.
+THINKING = {"type": "adaptive", "block_binding": {"prefix_mismatch_behavior": "drop_block"}}
+BETAS = ["server-side-fallback-2026-07-01", "thinking-binding-controls-2026-08-01"]
+
+
+def _api_error_message(exc) -> str:
+    """The API's own explanation of a failed request, e.g. which field it rejected."""
+    body = exc.body if isinstance(exc.body, dict) else {}
+    error = body.get("error") if isinstance(body.get("error"), dict) else body
+    message = str(error.get("message") or exc.message or "").strip()
+    return message[:500]
+
+
 class AdvisorError(RuntimeError):
     def __init__(self, message: str, status_code: int = 502):
         super().__init__(message)
@@ -147,9 +163,10 @@ def run_turn(
                 tools=tool_list(settings),
                 tool_choice={"type": "none"} if last_round else {"type": "auto"},
                 messages=history,
+                thinking=THINKING,
                 output_config={"effort": settings.advisor_effort},
                 cache_control={"type": "ephemeral"},
-                betas=["server-side-fallback-2026-07-01"],
+                betas=BETAS,
                 fallbacks="default",
             )
         except anthropic.RateLimitError:
@@ -159,8 +176,19 @@ def run_turn(
         except anthropic.APIConnectionError:
             raise AdvisorError("Could not reach the AI service.", 503) from None
         except anthropic.APIStatusError as exc:
-            log.warning("Advisor API error %s request_id=%s", exc.status_code, exc.response.headers.get("request-id"))
-            raise AdvisorError(f"The AI service returned an error ({exc.status_code}).") from None
+            detail = _api_error_message(exc)
+            request_id = exc.response.headers.get("request-id")
+            log.warning("Advisor API error %s request_id=%s: %s", exc.status_code, request_id, detail)
+            if exc.status_code == 529 or exc.status_code >= 500:
+                raise AdvisorError(f"The AI service is having trouble ({exc.status_code}); try again shortly.", 503) from None
+            raise AdvisorError(f"The AI service rejected the request ({exc.status_code}): {detail}"
+                               + (f" [request {request_id}]" if request_id else "")) from None
+
+        dropped = [t for t in (response.to_dict().get("input_transformations") or [])
+                   if t.get("type") == "thinking_dropped"]
+        if dropped:
+            log.info("Advisor: the API dropped %d earlier thinking block(s) (%s)", len(dropped),
+                     ", ".join(sorted({t.get("reason", "?") for t in dropped})))
 
         assistant_content = _blocks(response.content)
         if response.stop_reason == "refusal":

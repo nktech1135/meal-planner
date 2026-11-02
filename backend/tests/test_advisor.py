@@ -158,3 +158,59 @@ def test_plan_proposal_review(user_client):
     [item] = user_client.get("/api/plan", params=params).json()[0]["items"]
     assert item["origin"] == "advisor" and item["quantity"] == 200
     assert user_client.post(f"/api/advisor/proposals/{proposal['id']}/dismiss").status_code == 409
+
+
+def real_client(handler):
+    """The actual SDK, with HTTP answered by `handler`, so the request is checked as it goes over the wire."""
+    import anthropic
+    import httpx2
+
+    return anthropic.Anthropic(api_key="sk-ant-test", max_retries=0,
+                               http_client=anthropic.DefaultHttpxClient(transport=httpx2.MockTransport(handler)))
+
+
+def test_request_as_sent_by_the_sdk(user_client):
+    import json as _json
+
+    import httpx2
+
+    sent = []
+
+    def handler(request):
+        sent.append((request.headers, _json.loads(request.content)))
+        return httpx2.Response(200, json={
+            "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
+            "content": [{"type": "text", "text": "Hello."}], "stop_reason": "end_turn", "stop_sequence": None,
+            "usage": {"input_tokens": 5, "output_tokens": 2},
+            "input_transformations": [{"type": "thinking_dropped", "path": "messages.1.content.0",
+                                       "reason": "prefix_binding_mismatch"}]})
+
+    use(real_client(handler))
+    resp = user_client.post("/api/advisor/chat", json={"message": "hi"})
+    assert resp.status_code == 200, resp.text
+    headers, body = sent[0]
+    assert set(headers["anthropic-beta"].split(",")) == {"server-side-fallback-2026-07-01",
+                                                          "thinking-binding-controls-2026-08-01"}
+    assert body["thinking"] == {"type": "adaptive", "block_binding": {"prefix_mismatch_behavior": "drop_block"}}
+    assert body["fallbacks"] == "default" and body["output_config"] == {"effort": get_settings().advisor_effort}
+    assert "temperature" not in body and body["tool_choice"] == {"type": "auto"}
+    assert all(t.get("strict") for t in body["tools"] if "input_schema" in t)
+
+
+def test_api_errors_explain_themselves(user_client):
+    import httpx2
+
+    def rejected(request):
+        return httpx2.Response(400, headers={"request-id": "req_abc"}, json={
+            "type": "error", "error": {"type": "invalid_request_error", "message": "tools.3: something is wrong"}})
+
+    use(real_client(rejected))
+    resp = user_client.post("/api/advisor/chat", json={"message": "hi"})
+    assert resp.status_code == 502
+    assert resp.json()["detail"] == "The AI service rejected the request (400): tools.3: something is wrong [request req_abc]"
+
+    use(real_client(lambda request: httpx2.Response(529, json={
+        "type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}})))
+    resp = user_client.post("/api/advisor/chat", json={"message": "hi"})
+    assert resp.status_code == 503 and "try again" in resp.json()["detail"]
+    assert user_client.get("/api/advisor/conversations").json() == []  # failed turns aren't saved
