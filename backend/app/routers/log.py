@@ -22,13 +22,18 @@ def item_label(db: Session, user: User, food_id: int | None, recipe_id: int | No
     return get_recipe(db, user, recipe_id).name, False
 
 
+def _utc_time(when: datetime) -> datetime:
+    """Stored in UTC: SQLite keeps the clock time and drops the offset, and readers take it as UTC."""
+    if when.tzinfo is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "consumed_at must include a timezone offset")
+    return when.astimezone(UTC)
+
+
 def create_entry(db: Session, user: User, body: LogIn, actor: User | None = None) -> LogEntry:
     """Calculate and add (not commit) a log entry to ``user``'s log, made by ``actor`` (default: them)."""
     if bool(body.food_id) == bool(body.recipe_id):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Log exactly one of food_id or recipe_id")
-    consumed_at = body.consumed_at or datetime.now(UTC)
-    if consumed_at.tzinfo is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "consumed_at must include a timezone offset")
+    consumed_at = _utc_time(body.consumed_at or datetime.now(UTC))
     result = calculate_nutrition(db, user, body)
     label, is_supplement = item_label(db, user, body.food_id, body.recipe_id)
     entry = LogEntry(
@@ -67,18 +72,21 @@ def add_entry(body: LogIn, user: User = Depends(current_user), me: User = Depend
 
 @router.patch("/log/{entry_id}", response_model=LogOut)
 def update_entry(entry_id: int, body: LogUpdate, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """Edit an entry; nutrients are recalculated from the current food or recipe data."""
+    """Edit an entry. Changing the amount recalculates its nutrients from the current food or recipe data;
+    changing only the time, meal or note keeps the nutrients worked out when it was logged."""
     entry = _own_entry(db, user, entry_id)
     changes = body.model_dump(exclude_unset=True)
+    if "consumed_at" in changes:
+        changes["consumed_at"] = _utc_time(changes["consumed_at"])
     amount_fields = {"quantity", "unit", "weighed_state", "yield_id"}
-    if entry.food_id is None and entry.recipe_id is None:
-        if amount_fields & changes.keys():
-            raise HTTPException(status.HTTP_409_CONFLICT,
-                                "The food for this entry was deleted; only time, meal and note can change")
+    if not amount_fields & changes.keys():
         for key, value in changes.items():
             setattr(entry, key, value)
         db.commit()
         return entry
+    if entry.food_id is None and entry.recipe_id is None:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "The food for this entry was deleted; only time, meal and note can change")
     recalculate(db, user, entry, **changes)
     db.commit()
     return entry

@@ -1,7 +1,7 @@
 from datetime import date, datetime
-from typing import Literal
+from typing import ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.nutrients import BY_CODE
 
@@ -16,12 +16,41 @@ class ORM(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class Patch(BaseModel):
+    """A partial update: a field left out stays as it is, and null is refused except for fields that may be
+    empty (NULLABLE)."""
+
+    NULLABLE: ClassVar[frozenset[str]] = frozenset()
+
+    @model_validator(mode="after")
+    def _no_nulls(self):
+        empty = sorted(k for k in self.model_fields_set if getattr(self, k) is None and k not in self.NULLABLE)
+        if empty:
+            raise ValueError(f"{', '.join(empty)} can't be null; leave it out to keep the current value")
+        return self
+
+
 # --- auth -------------------------------------------------------------------
 
 class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=10, max_length=200)
     display_name: str = Field(default="", max_length=120)
+    timezone: str | None = None  # the browser's, so days start at local midnight from the first entry
+    setup_code: str | None = Field(default=None, max_length=200)  # for the first account, when the server has one
+
+    @field_validator("timezone")
+    @classmethod
+    def _tz(cls, v: str | None) -> str | None:  # an unknown one is dropped rather than refusing the sign-up
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        if not v:
+            return None
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError):
+            return None
+        return v
 
 
 class LoginIn(BaseModel):
@@ -93,6 +122,7 @@ class ProfileOut(ProfileIn, ORM):
 # --- foods ------------------------------------------------------------------
 
 class PortionIn(BaseModel):
+    id: int | None = None  # an existing portion being edited, so entries that use it keep working
     label: str = Field(min_length=1, max_length=200)
     gram_weight: float = Field(gt=0)
 
@@ -389,7 +419,9 @@ class ConversationDetail(ConversationOut):
     proposals: list[ProposalOut] = []
 
 
-class LogUpdate(BaseModel):
+class LogUpdate(Patch):
+    NULLABLE = frozenset({"yield_id"})
+
     consumed_at: datetime | None = None
     meal: Meal | None = None
     quantity: float | None = Field(default=None, gt=0)
@@ -517,7 +549,9 @@ class PlanItemIn(BaseModel):
 OptionalDate = date | None  # alias: inside the class below, "date" is the field name
 
 
-class PlanItemUpdate(BaseModel):
+class PlanItemUpdate(Patch):
+    NULLABLE = frozenset({"yield_id"})
+
     date: OptionalDate = None
     meal: Meal | None = None
     quantity: float | None = Field(default=None, gt=0)

@@ -12,7 +12,7 @@ from app.models import Food, ImportJob, LogEntry, Profile, RetentionProfile, Use
 from app.security import admin_user, hash_password
 from app.services import datasets
 from app.services.accounts import delete_user, end_sessions, is_last_admin, new_reset_token, reset_link
-from app.services.mail import MailError, mail_configured, send_mail
+from app.services.mail import MailError, links_by_email, mail_configured, send_mail
 from app.settings_store import describe, get_runtime, update
 from app.sources.base import SourceError
 from app.sources.registry import build_sources, http_client
@@ -57,6 +57,16 @@ def test_integration(integration: str, _: User = Depends(admin_user), settings: 
             return {"ok": False, "message": f"Anthropic API error: {exc.__class__.__name__}"}
         return {"ok": True, "message": f"Key works; {settings.advisor_model} is available"}
 
+    if integration == "pubmed":
+        from app.advisor import pubmed
+
+        try:
+            found = pubmed.search(http_client(), settings, "vitamin D supplementation", max_results=1)
+        except pubmed.PubMedError as exc:
+            return {"ok": False, "message": str(exc)}
+        key = "with your NCBI API key" if settings.ncbi_api_key else "without an API key (3 requests a second)"
+        return {"ok": True, "message": f"Connected {key}; PubMed has {found['total_matches']:,} matching articles"}
+
     sources = build_sources(settings, http_client())
     src = sources.get(integration)
     if src is None:
@@ -71,14 +81,20 @@ def test_integration(integration: str, _: User = Depends(admin_user), settings: 
     return {"ok": True, "message": f"Connected{demo}; test search returned {len(hits)} result(s)"}
 
 
+def _any_user(db: Session) -> bool:
+    return db.scalar(select(User.id).limit(1)) is not None
+
+
 @router.get("/app-info")
-def app_info(settings: Settings = Depends(get_runtime)):
+def app_info(settings: Settings = Depends(get_runtime), db: Session = Depends(get_db)):
     """Public, non-secret facts the UI needs (also before sign-in)."""
     return {
         "allow_registration": settings.allow_registration,
         "advisor_configured": bool(settings.anthropic_api_key),
         "usda_demo_key": settings.usda_fdc_api_key in ("", "DEMO_KEY"),
         "email_enabled": mail_configured(settings),
+        "email_links": links_by_email(settings),  # reset emails also need the site address
+        "needs_setup_code": bool(settings.setup_code) and not _any_user(db),
     }
 
 
@@ -135,7 +151,10 @@ def import_dataset(key: str, user: User = Depends(admin_user), db: Session = Dep
     running = datasets.active_job(db)
     if running:
         raise HTTPException(status.HTTP_409_CONFLICT, f"An import is already running ({running.dataset})")
-    return _job_out(datasets.start_import(db, key, user.id, http_client(), runner))
+    try:
+        return _job_out(datasets.start_import(db, key, user.id, http_client(), runner))
+    except datasets.ImportRunning as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from None
 
 
 @router.get("/admin/jobs/{job_id}")
@@ -203,7 +222,7 @@ def invite_user(body: InviteIn, request: Request, admin: User = Depends(admin_us
         return {"user": _user_row(db, user), "link": None, "emailed": False}
     link = reset_link(settings, request, new_reset_token(db, user))
     emailed = False
-    if mail_configured(settings):
+    if links_by_email(settings):
         try:
             send_mail(settings, user.email, "You've been invited to Mealplan",
                       f"{admin.display_name or admin.email} created a Mealplan account for you.\n\n"

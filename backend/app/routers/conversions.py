@@ -6,8 +6,8 @@ from app.db import get_db
 from app.models import CookingYield, RetentionProfile, User
 from app.nutrients import Trust, weakest
 from app.schemas import CalculateIn, DeriveIn, NutritionOut, YieldIn, YieldOut
-from app.security import current_user, reads_only
-from app.services.access import form_factors, get_food, get_recipe, get_yield, recipe_yields, visible
+from app.security import current_user, reads_only, signed_in_user
+from app.services.access import form_factors, get_food, get_recipe, get_yield, recipe_yields, visible, yield_uses
 from app.services.nutrition import NutritionError, derive_yield, food_nutrition, recipe_portion
 from app.services.sharing import acting_user
 
@@ -68,10 +68,14 @@ def create_yield(body: YieldIn, user: User = Depends(current_user), db: Session 
 
 
 @router.delete("/yields/{yield_id}", status_code=204)
-def delete_yield(yield_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def delete_yield(yield_id: int, user: User = Depends(current_user), me: User = Depends(signed_in_user),
+                 db: Session = Depends(get_db)):
     y = get_yield(db, user, yield_id)
-    if y.owner_id != user.id and not user.is_admin:
+    if y.owner_id != user.id and not (y.owner_id is None and me.is_admin):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed")
+    if uses := yield_uses(db, y.id):
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"This yield still converts cooked weights ({uses}); change those first")
     db.delete(y)
     db.commit()
 

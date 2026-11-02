@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import { mealLabel, parseNum, toLocalInput } from "../lib";
+import { mealLabel, parseNum, toLocalInput, invalidateAfterLog } from "../lib";
 import { MEALS, type LogEntry, type LogUpdate, type Meal, type WeighedState } from "../types";
 import { QuantityFields, unitChoices, WeighedFields } from "./AmountFields";
 import { ErrorBox, Field, Loading } from "./common";
@@ -40,8 +40,7 @@ export function EntryEditor({ entry, onDone }: { entry: LogEntry; onDone: () => 
   const save = useMutation({
     mutationFn: () => api.updateLog(entry.id, changes),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["day"] });
-      qc.invalidateQueries({ queryKey: ["suggestions"] });
+      invalidateAfterLog(qc);
       onDone();
     },
   });

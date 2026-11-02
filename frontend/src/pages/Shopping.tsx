@@ -34,7 +34,8 @@ export default function ShoppingPage() {
     document.title = titleText(owner ? `${owner.name}'s shopping list` : "Shopping list");
   }, [owner]);
   const key = ["shopping", start, end, of];
-  // Ticks show immediately; the server copy catches up.
+  // Ticks show immediately, until the server has answered; then its copy is what shows (so a failed tick
+  // goes back).
   const [ticked, setTicked] = useState<Record<string, boolean>>({});
   const list = useQuery({ queryKey: key, queryFn: () => api.shopping(start, end, of), placeholderData: (prev) => prev });
   const check = useMutation({
@@ -42,10 +43,12 @@ export default function ShoppingPage() {
     onMutate: (v) => {
       qc.setQueryData<ShoppingList>(key, (old) => (old ? { ...old, items: old.items.map((i) => (i.key === v.key ? { ...i, checked: v.checked } : i)) } : old));
     },
-    onError: (_e, v) => {
-      setTicked((t) => ({ ...t, [v.key]: !v.checked }));
-      qc.invalidateQueries({ queryKey: key });
-    },
+    onError: () => qc.invalidateQueries({ queryKey: key }),
+    onSettled: (_d, _e, v) =>
+      setTicked((t) => {
+        const { [v.key]: _done, ...rest } = t;
+        return rest;
+      }),
   });
 
   const set = (k: "start" | "end", v: string) => {
@@ -109,6 +112,12 @@ export default function ShoppingPage() {
       {tooLong && <div className="alert alert-warn no-print">Choose a range of up to 62 days.</div>}
       <ErrorBox error={!tooLong && list.error} />
       {list.isLoading && <Loading />}
+      {!!list.data?.skipped.length && (
+        <div className="alert alert-warn no-print" role="note">
+          Left off the list because they can't be worked out (their food or recipe was deleted, or a recipe has no cooked weight):{" "}
+          {list.data.skipped.join(", ")}.
+        </div>
+      )}
       {list.data && items.length === 0 && (
         <p className="muted">
           Nothing to buy for these days. <Link to={planLink}>Plan some meals</Link> first.

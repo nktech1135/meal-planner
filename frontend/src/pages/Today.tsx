@@ -6,7 +6,7 @@ import { Button, rescueFocus, useAnnounce, useAnnounceText, useReturnFocus, Visu
 import { ComponentList, ErrorBox, Field, Loading, MacroLine, Notes, StatusPill } from "../components/common";
 import { EntryEditor } from "../components/EntryEditor";
 import { TrustBadge, TrustLegend, TRUST_INFO } from "../components/TrustBadge";
-import { addDays, fmtAmount, fmtDay, fmtNum, mealLabel, nutrientName, readPref, todayISO, unitText, useNutrients, writePref } from "../lib";
+import { addDays, fmtAmount, fmtDay, fmtNum, mealLabel, nutrientName, readPref, todayISO, unitText, useNutrients, writePref, invalidateAfterLog } from "../lib";
 import { MEALS, type DaySummary, type Evaluation, type LogEntry, type Meal, type NutrientDef, type Trust } from "../types";
 
 const GROUPS: { title: string; categories: string[] }[] = [
@@ -209,7 +209,7 @@ function CopyForm({
   const copy = useMutation({
     mutationFn: () => api.copyLog({ from_date: fromDate, to_date: to, meal: meal ?? null, to_meal: meal && toMeal && toMeal !== meal ? toMeal : null }),
     onSuccess: (created) => {
-      qc.invalidateQueries({ queryKey: ["day"] });
+      invalidateAfterLog(qc);
       onDone({ ok: true, text: `Copied ${created.length} entr${created.length === 1 ? "y" : "ies"} to ${fmtDay(to)}.`, goTo: to });
     },
     onError: (err) => {
@@ -379,8 +379,7 @@ export default function TodayPage() {
   const del = useMutation({
     mutationFn: (e: LogEntry) => api.deleteLog(e.id),
     onSuccess: (_, e) => {
-      qc.invalidateQueries({ queryKey: ["day"] });
-      qc.invalidateQueries({ queryKey: ["suggestions"] });
+      invalidateAfterLog(qc);
       announce(`Deleted ${e.label} from ${mealLabel(e.meal).toLowerCase()}.`);
       rescueFocus(() => logHeading.current);
     },
@@ -389,7 +388,7 @@ export default function TodayPage() {
     mutationFn: (meal: Meal) => api.copyLog({ from_date: addDays(shownDay, -1), to_date: shownDay, meal }),
     onMutate: () => setNotice(null),
     onSuccess: (created, meal) => {
-      qc.invalidateQueries({ queryKey: ["day"] });
+      invalidateAfterLog(qc);
       setNotice({ ok: true, text: `Copied ${created.length} ${meal} entr${created.length === 1 ? "y" : "ies"} from ${prevLabel}.` });
       rescueFocus(() => logHeading.current);
     },

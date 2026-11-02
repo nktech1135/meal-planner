@@ -39,3 +39,25 @@ test("saved meal: create from a logged meal and log it again", async ({ page }) 
   await card.getByRole("button", { name: `Log ${meal.name}`, exact: true }).click();
   await expect(page.getByText(/Logged 1 item/).first()).toBeVisible();
 });
+
+test("saved meal: make one from scratch with a recipe in it", async ({ page }) => {
+  const rice = await makeFood(page, "Rice");
+  const recipe = await api(page.request, "POST", "/api/recipes", {
+    name: `Rice bowl ${rice.id}`, servings: 2, ingredients: [{ food_id: rice.id, grams: 200 }],
+  });
+  const name = `Lunch ${rice.id}`;
+
+  await page.goto("/log");
+  await page.getByRole("tab", { name: "Saved meals" }).click();
+  await page.getByRole("button", { name: "New saved meal" }).click();
+  const form = page.getByRole("form", { name: "New saved meal" });
+  await form.getByLabel("Name").fill(name);
+  await form.getByRole("button", { name: "Add recipe" }).click();
+  await form.getByLabel("Recipe").selectOption({ label: recipe.name });
+  await expect(form.getByRole("button", { name: `Remove ${recipe.name}` })).toBeVisible();
+  await form.getByRole("button", { name: "Save meal" }).click();
+
+  await expect(page.getByRole("heading", { name })).toBeVisible();
+  const saved = (await api(page.request, "GET", "/api/saved-meals")).find((m: any) => m.name === name);
+  expect(saved.items).toMatchObject([{ recipe_id: recipe.id, quantity: 1, unit: "serving" }]);
+});

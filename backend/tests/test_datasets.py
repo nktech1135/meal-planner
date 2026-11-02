@@ -70,7 +70,9 @@ def fake_usda(monkeypatch):
     client = httpx.Client(transport=httpx.MockTransport(handler))
     monkeypatch.setattr("app.routers.admin.http_client", lambda: client)
     app.dependency_overrides[run_in_thread] = lambda: (lambda fn: fn())  # run imports inline
-    return files
+    yield files
+    if datasets._job_running.locked():  # a test that left its job queued, never run
+        datasets._job_running.release()
 
 
 def test_import_sr_legacy_and_derive_yields(user_client, db_session, fake_usda):

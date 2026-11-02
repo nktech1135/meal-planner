@@ -43,7 +43,11 @@ DEFS: tuple[SettingDef, ...] = (
     SettingDef("allow_registration", "Allow new sign-ups", "Accounts", "bool",
                "Anyone who can reach the site can create an account. Turn off once everyone has one."),
     SettingDef("public_url", "Site address", "Accounts", "string",
-               "The address people use to reach this site, e.g. https://meals.example.com. Used in emailed links."),
+               "The address people use to reach this site, e.g. https://meals.example.com. Needed before password "
+               "reset and invitation emails are sent, since they link to it."),
+    SettingDef("session_ttl_hours", "Stay signed in for (hours)", "Accounts", "int",
+               "How long a sign-in lasts before asking for the password again. 168 is a week.",
+               minimum=1, maximum=24 * 90),
     SettingDef("smtp_host", "SMTP server", "Email", "string", "Outgoing mail server for password-reset emails."),
     SettingDef("smtp_port", "SMTP port", "Email", "int", "Usually 587 (STARTTLS) or 465 (SSL).", minimum=1, maximum=65535),
     SettingDef("smtp_security", "Connection security", "Email", "choice", choices=("starttls", "ssl", "none")),
@@ -58,6 +62,9 @@ DEFS: tuple[SettingDef, ...] = (
                "How hard the model thinks. Higher is slower and costs more.", choices=EFFORTS),
     SettingDef("advisor_daily_message_limit", "Messages per user per day", "AI advisor", "int",
                "Caps cost per user.", minimum=1, maximum=1000),
+    SettingDef("advisor_max_tool_rounds", "Look-up rounds per reply", "AI advisor", "int",
+               "How many rounds of reading your data and sources one reply may take. More allows deeper answers "
+               "and costs more.", minimum=1, maximum=20),
     SettingDef("advisor_web_research", "Look up authoritative sources", "AI advisor", "bool",
                "Lets the advisor search and read NIH, MedlinePlus, FDA, USDA and similar sites (e.g. supplement "
                "fact sheets and drug interactions) and cite them. Anthropic bills searches separately."),
@@ -82,6 +89,9 @@ DEFS: tuple[SettingDef, ...] = (
     SettingDef("edamam_app_key", "Edamam app key", "Data sources", "secret"),
     SettingDef("enable_unverified_sources", "Allow crowdsourced data (Open Food Facts)", "Data sources", "bool",
                "Records can't be verified and are always flagged \"unverified\"."),
+    SettingDef("http_timeout_seconds", "Wait for data sources (seconds)", "Data sources", "int",
+               "How long to wait for an outside service (food databases, PubMed) before giving up.",
+               minimum=5, maximum=120),
 )
 BY_KEY = {d.key: d for d in DEFS}
 

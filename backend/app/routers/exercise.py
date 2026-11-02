@@ -1,3 +1,4 @@
+import threading
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -33,7 +34,10 @@ def _apply(db: Session, user: User, ex: Exercise, body: ExerciseIn) -> None:
     if not name:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Choose an activity or give the exercise a name")
     # An imported device figure stays "device" until someone changes it.
-    reported_by = "device" if ex.source != "manual" and body.reported_kcal == ex.reported_kcal else "entered"
+    # (Compared loosely: the form shows it rounded.)
+    unchanged = (body.reported_kcal is None) == (ex.reported_kcal is None) and (
+        body.reported_kcal is None or abs(body.reported_kcal - ex.reported_kcal) < 0.01)
+    reported_by = "device" if ex.source != "manual" and unchanged else "entered"
     for key, value in body.model_dump().items():
         setattr(ex, key, value)
     ex.name = name
@@ -84,6 +88,10 @@ def delete_exercise(exercise_id: int, user: User = Depends(current_user), db: Se
     db.commit()
 
 
+# One import at a time: a large activity file takes about 100 MB to read, and small servers have little to spare.
+_import_slot = threading.Lock()
+
+
 def _uploads(files: list[UploadFile]):
     """(file name, bytes or error) for each activity file, opening .zip archives."""
     for upload in files:
@@ -100,6 +108,15 @@ def _uploads(files: list[UploadFile]):
                 yield name, exc
 
 
+def _parse_upload(name: str, data: bytes | Exception) -> list[svc.ParsedActivity] | svc.ActivityFileError:
+    if isinstance(data, svc.ActivityFileError):
+        return data
+    try:
+        return svc.parse_file(name, data)
+    except svc.ActivityFileError as exc:
+        return exc
+
+
 @router.post("/import")
 def import_files(files: list[UploadFile] = File(...), since: date | None = Form(None),
                  user: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -109,13 +126,15 @@ def import_files(files: list[UploadFile] = File(...), since: date | None = Form(
     imported: list[Exercise] = []
     duplicates = before = 0
     errors: list[dict] = []
-    for name, data in _uploads(files):
-        try:
-            if isinstance(data, Exception):
-                raise data
-            parsed = svc.parse_file(name, data)
-        except svc.ActivityFileError as exc:
-            errors.append({"file": name, "error": str(exc)})
+    if not _import_slot.acquire(timeout=120):
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Another import is running; try again in a minute")
+    try:
+        parsed_files = [(name, _parse_upload(name, data)) for name, data in _uploads(files)]
+    finally:
+        _import_slot.release()
+    for name, parsed in parsed_files:
+        if isinstance(parsed, svc.ActivityFileError):
+            errors.append({"file": name, "error": str(parsed)})
             continue
         if not parsed:
             errors.append({"file": name, "error": "No workout found in the file"})

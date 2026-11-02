@@ -1,14 +1,16 @@
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from fastapi import Depends, HTTPException, Request, Response, status
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.models import ProfileShare, User
+from app.models import ProfileShare, User, UserSession
 
 _hasher = PasswordHasher()
 _ALGORITHM = "HS256"
@@ -25,11 +27,31 @@ def verify_password(password_hash: str, password: str) -> bool:
         return False
 
 
-def issue_session(response: Response, user: User) -> None:
-    settings = get_settings()
-    expires = datetime.now(UTC) + timedelta(hours=settings.session_ttl_hours)
-    token = jwt.encode({"sub": str(user.id), "sv": user.session_version or 0, "exp": expires}, settings.secret_key,
-                       algorithm=_ALGORITHM)
+_dummy_hash: str | None = None
+
+
+def burn_password_check(password: str) -> None:
+    """Spend as long as a real password check, so a login for an unknown email takes as long as one for a
+    known email and doesn't reveal which emails have accounts."""
+    global _dummy_hash
+    if _dummy_hash is None:
+        _dummy_hash = _hasher.hash(secrets.token_urlsafe(16))
+    verify_password(_dummy_hash, password)
+
+
+def issue_session(response: Response, user: User, db: Session) -> None:
+    """Sign this browser in: records the session (committing) and sets its cookie."""
+    from app.settings_store import runtime_settings  # imports the models, so not at the top
+
+    settings = runtime_settings(db)
+    now = datetime.now(UTC)
+    expires = now + timedelta(hours=settings.session_ttl_hours)
+    sid = secrets.token_urlsafe(32)
+    db.execute(delete(UserSession).where(UserSession.expires_at < now))  # tidy up old ones
+    db.add(UserSession(id=sid, user_id=user.id, expires_at=expires))
+    db.commit()
+    token = jwt.encode({"sub": str(user.id), "sv": user.session_version or 0, "sid": sid, "exp": expires},
+                       settings.secret_key, algorithm=_ALGORITHM)
     response.set_cookie(
         settings.session_cookie_name,
         token,
@@ -41,25 +63,42 @@ def issue_session(response: Response, user: User) -> None:
     )
 
 
-def clear_session(response: Response) -> None:
+def _session_claims(request: Request) -> dict | None:
+    settings = get_settings()
+    token = request.cookies.get(settings.session_cookie_name)
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[_ALGORITHM])
+        payload["sub"] = int(payload["sub"])
+    except (jwt.PyJWTError, KeyError, ValueError):
+        return None
+    return payload
+
+
+def clear_session(request: Request, response: Response, db: Session) -> None:
+    """Sign this browser out: revokes its session, so a copy of the cookie stops working too."""
+    claims = _session_claims(request)
+    if claims and claims.get("sid"):
+        db.execute(delete(UserSession).where(UserSession.id == claims["sid"]))
+        db.commit()
     response.delete_cookie(get_settings().session_cookie_name, path="/")
 
 
 def signed_in_user(request: Request, db: Session = Depends(get_db)) -> User:
     """The person signed in. Use for their account, admin rights and who-can-see-what settings."""
-    settings = get_settings()
     unauthorized = HTTPException(status.HTTP_401_UNAUTHORIZED, "Not signed in")
-    token = request.cookies.get(settings.session_cookie_name)
-    if not token:
+    claims = _session_claims(request)
+    if claims is None:
         raise unauthorized
-    try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[_ALGORITHM])
-        user_id = int(payload["sub"])
-    except (jwt.PyJWTError, KeyError, ValueError):
-        raise unauthorized from None
-    user = db.get(User, user_id)
-    if user is None or not user.is_active or payload.get("sv", 0) != (user.session_version or 0):
+    user = db.get(User, claims["sub"])
+    if user is None or not user.is_active or claims.get("sv", 0) != (user.session_version or 0):
         raise unauthorized
+    # Sessions issued before they were recorded carry no id; they run out within session_ttl_hours.
+    if "sid" in claims:
+        session = db.get(UserSession, claims["sid"])
+        if session is None or session.user_id != user.id:
+            raise unauthorized
     return user
 
 
@@ -115,7 +154,12 @@ def admin_user(user: User = Depends(signed_in_user)) -> User:
 
 
 class LoginThrottle:
-    """In-memory brute-force brake: too many failures for an email or address in a window → 429."""
+    """In-memory brute-force brake: too many failures for a key in a window → 429.
+
+    Callers key it by address, and by address plus email, never by email alone: that would let anyone lock
+    a person out of their account by failing to sign in as them."""
+
+    MAX_KEYS = 10_000  # bounds memory however many addresses and emails are tried
 
     def __init__(self, limit: int = 10, window: timedelta = timedelta(minutes=15)):
         self.limit, self.window = limit, window
@@ -124,16 +168,29 @@ class LoginThrottle:
     def _recent(self, key: str) -> list[datetime]:
         cutoff = datetime.now(UTC) - self.window
         times = [t for t in self.failures.get(key, []) if t > cutoff]
-        self.failures[key] = times
+        if times:
+            self.failures[key] = times
+        else:
+            self.failures.pop(key, None)
         return times
 
-    def check(self, *keys: str) -> None:
-        if any(len(self._recent(k)) >= self.limit for k in keys):
+    def _prune(self) -> None:
+        for key in list(self.failures):
+            self._recent(key)
+        excess = len(self.failures) - self.MAX_KEYS
+        if excess > 0:  # still too many: forget the keys whose last failure is oldest
+            for key in sorted(self.failures, key=lambda k: self.failures[k][-1])[:excess]:
+                del self.failures[key]
+
+    def check(self, *keys: str, limit: int | None = None) -> None:
+        if any(len(self._recent(k)) >= (limit or self.limit) for k in keys):
             raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many attempts; try again in 15 minutes")
 
     def fail(self, *keys: str) -> None:
+        if len(self.failures) >= self.MAX_KEYS:
+            self._prune()
         for k in keys:
-            self._recent(k).append(datetime.now(UTC))
+            self.failures[k] = [*self._recent(k), datetime.now(UTC)]
 
     def clear(self, *keys: str) -> None:
         for k in keys:

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Loading, MacroLine } from "../components/common";
@@ -9,19 +9,24 @@ import { basisLabel, SOURCE_NAMES, useAppInfo } from "../lib";
 import type { SearchHit, Source } from "../types";
 import { Button, tabPanelProps, TabList, useAnnounceWhen, VisuallyHidden } from "../components/a11y";
 
+const PAGE = 100;
+
 function LocalSearch() {
   const [q, setQ] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [mine, setMine] = useState(false);
   const [kind, setKind] = useState("");
-  const foods = useQuery({
+  const foods = useInfiniteQuery({
     queryKey: ["foods", "browse", submitted, mine, kind],
-    queryFn: () => api.foods(submitted, { mine, kind: kind || undefined, limit: 100 }),
+    queryFn: ({ pageParam }) => api.foods(submitted, { mine, kind: kind || undefined, limit: PAGE, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) => (last.length === PAGE ? pages.length * PAGE : undefined),
   });
-  const n = foods.data?.length ?? 0;
+  const list = foods.data?.pages.flat();
+  const n = list?.length ?? 0;
   useAnnounceWhen(
-    foods.data && !foods.isFetching && (submitted || mine || kind)
-      ? `${n === 0 ? "No" : n === 100 ? "100 or more" : n} food${n === 1 ? "" : "s"} found${submitted ? ` for “${submitted}”` : ""}${kind ? `, ${kind === "food" ? "foods" : "supplements"} only` : ""}${mine ? ", yours only" : ""}.`
+    list && !foods.isFetching && (submitted || mine || kind)
+      ? `${n === 0 ? "No" : foods.hasNextPage ? `${n} or more` : n} food${n === 1 ? "" : "s"} found${submitted ? ` for “${submitted}”` : ""}${kind ? `, ${kind === "food" ? "foods" : "supplements"} only` : ""}${mine ? ", yours only" : ""}.`
       : null,
   );
   return (
@@ -57,11 +62,11 @@ function LocalSearch() {
       </form>
       <ErrorBox error={foods.error} />
       {foods.isLoading && <Loading />}
-      {foods.data?.length === 0 && (
+      {list?.length === 0 && (
         <p className="muted">No foods found. Import from an online source, or add one manually.</p>
       )}
       <ul className="plain-list cards">
-        {foods.data?.map((f) => (
+        {list?.map((f) => (
           <li key={f.id} className={`card card-link ${f.trust_level === "unverified" ? "card-unverified" : ""}`}>
             <Link to={`/foods/${f.id}`}>
               <div className="row between">
@@ -84,6 +89,13 @@ function LocalSearch() {
           </li>
         ))}
       </ul>
+      {foods.hasNextPage && (
+        <div>
+          <Button type="button" className="btn" onClick={() => foods.fetchNextPage()} disabled={foods.isFetchingNextPage}>
+            {foods.isFetchingNextPage ? "Loading…" : "Show more"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

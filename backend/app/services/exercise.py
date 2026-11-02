@@ -30,6 +30,7 @@ COMPENDIUM_CITATION = ("2024 Adult Compendium of Physical Activities (Herrmann S
 
 MAX_FILE_BYTES = 50 * 1024 * 1024  # one activity file, after decompression
 MAX_ARCHIVE_FILES = 5000
+MAX_ARCHIVE_BYTES = 4 * 1024 * 1024 * 1024  # all of an archive's activity files, after decompression
 
 # Sport names found in FIT, TCX and GPX files (lower case, no spaces, dashes or underscores), mapped to a
 # general Compendium activity used when the file has no calorie figure.
@@ -180,13 +181,34 @@ def parse_fit(data: bytes) -> list[ParsedActivity]:
 TCX = "{http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2}"
 
 
+def _local(tag) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _stream(data: bytes, drop: set[str]):
+    """Yield each element of an XML document as it ends, with ``drop`` elements (track points) removed from
+    their parent once seen, so a large file is never held as one tree. Entities and DTDs are refused."""
+    stack = []
+    for event, el in SafeET.iterparse(io.BytesIO(data), events=("start", "end")):
+        if event == "start":
+            stack.append(el)
+            continue
+        stack.pop()
+        yield el
+        if _local(el.tag) in drop and stack:
+            stack[-1].remove(el)  # the parent's newest child, so this is quick
+
+
 def parse_tcx(data: bytes) -> list[ParsedActivity]:
-    root = SafeET.fromstring(data)
     out = []
-    for act in root.iter(f"{TCX}Activity"):
+    for act in _stream(data, {"Trackpoint"}):
+        if act.tag != f"{TCX}Activity":
+            continue
         laps = act.findall(f"{TCX}Lap")
         start = _iso(act.findtext(f"{TCX}Id")) or (_iso(laps[0].get("StartTime")) if laps else None)
         seconds = sum(_float(lap.findtext(f"{TCX}TotalTimeSeconds")) or 0 for lap in laps)
+        sport = act.get("Sport")
+        act.clear()
         if start is None or not seconds:
             continue
         distance = sum(_float(lap.findtext(f"{TCX}DistanceMeters")) or 0 for lap in laps)
@@ -196,7 +218,7 @@ def parse_tcx(data: bytes) -> list[ParsedActivity]:
         hr_time = [(hr, t) for hr, t in hr_time if hr]
         hr_secs = sum(t for _, t in hr_time)
         out.append(ParsedActivity(
-            started_at=start, sport=act.get("Sport"), sub_sport=None, duration_min=seconds / 60,
+            started_at=start, sport=sport, sub_sport=None, duration_min=seconds / 60,
             distance_m=distance or None, avg_hr=sum(hr * t for hr, t in hr_time) / hr_secs if hr_secs else None,
             reported_kcal=kcal or None, source="tcx"))
     return out
@@ -208,35 +230,102 @@ def _haversine(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 2 * 6_371_000 * math.asin(math.sqrt(h))
 
 
-def _local(tag) -> str:
-    return tag.rsplit("}", 1)[-1]
+# GPX files have no timer, so pauses are worked out from the track: time counts as moving over stretches of at
+# least MOVING_WINDOW_S covering MOVING_SPEED_MS or more (slow uphill walking is about 0.5 m/s; GPS jitter
+# while standing still stays well under), and a gap of over MAX_GAP_S between points is a pause (devices stop
+# recording when paused).
+MOVING_WINDOW_S = 30
+MOVING_SPEED_MS = 0.25
+MAX_GAP_S = 300
+
+
+class _GpxTrack:
+    def __init__(self):
+        self.sport: str | None = None
+        self.first: datetime | None = None
+        self.last: datetime | None = None
+        self.elapsed = self.moving = self.distance = 0.0
+        self.hr_sum, self.hr_count = 0.0, 0
+        self.prev_pos: tuple[float, float] | None = None
+        self.prev_time: datetime | None = None
+        self.anchor: tuple[datetime, tuple[float, float] | None] | None = None
+
+    def new_segment(self):
+        self.prev_pos = self.prev_time = self.anchor = None
+
+    def point(self, time: datetime | None, pos: tuple[float, float] | None, hr: float | None):
+        if hr:
+            self.hr_sum, self.hr_count = self.hr_sum + hr, self.hr_count + 1
+        if pos is not None:
+            if self.prev_pos is not None:
+                self.distance += _haversine(self.prev_pos, pos)
+            self.prev_pos = pos
+        if time is None:
+            return
+        self.first = min(self.first or time, time)
+        self.last = max(self.last or time, time)
+        if self.prev_time is not None and 0 < (time - self.prev_time).total_seconds() <= MAX_GAP_S:
+            self.elapsed += (time - self.prev_time).total_seconds()
+        if self.prev_time is not None and (time - self.prev_time).total_seconds() > MAX_GAP_S:
+            self.anchor = None  # a pause: start a new stretch
+        self.prev_time = time
+        if self.anchor is None:
+            self.anchor = (time, pos)
+            return
+        seconds = (time - self.anchor[0]).total_seconds()
+        if seconds < MOVING_WINDOW_S:
+            return
+        start_pos = self.anchor[1]
+        if start_pos is None or pos is None or _haversine(start_pos, pos) / seconds >= MOVING_SPEED_MS:
+            self.moving += seconds
+        self.anchor = (time, pos)
+
+    def activity(self) -> ParsedActivity | None:
+        if self.first is None or self.elapsed <= 0:
+            return None
+        # Hardly any movement (a gym or yoga session that happened to be recorded): count all of it.
+        seconds = self.moving if self.moving >= 0.25 * self.elapsed else self.elapsed
+        return ParsedActivity(
+            started_at=self.first, sport=self.sport, sub_sport=None, duration_min=seconds / 60,
+            distance_m=self.distance or None, avg_hr=self.hr_sum / self.hr_count if self.hr_count else None,
+            reported_kcal=None, source="gpx")
 
 
 def parse_gpx(data: bytes) -> list[ParsedActivity]:
-    root = SafeET.fromstring(data)
-    out = []
-    for trk in (el for el in root.iter() if _local(el.tag) == "trk"):
-        sport = next((el.text for el in trk if _local(el.tag) == "type"), None)
-        times, points, hrs = [], [], []
-        for pt in (el for el in trk.iter() if _local(el.tag) == "trkpt"):
-            lat, lon = _float(pt.get("lat")), _float(pt.get("lon"))
-            if lat is not None and lon is not None:
-                points.append((lat, lon))
-            for child in pt.iter():
-                name = _local(child.tag)
-                if name == "time" and (t := _iso(child.text)):
-                    times.append(t)
-                elif name == "hr" and (hr := _float(child.text)):
-                    hrs.append(hr)
-        if len(times) < 2:
+    out: list[ParsedActivity] = []
+    track: _GpxTrack | None = None
+    stack = []
+    for event, el in SafeET.iterparse(io.BytesIO(data), events=("start", "end")):
+        name = _local(el.tag)
+        if event == "start":
+            stack.append(el)
+            if name == "trk":
+                track = _GpxTrack()
+            elif name == "trkseg" and track:
+                track.new_segment()
             continue
-        seconds = (max(times) - min(times)).total_seconds()
-        if seconds <= 0:
+        stack.pop()
+        if track is None:
             continue
-        distance = sum(_haversine(points[i - 1], points[i]) for i in range(1, len(points)))
-        out.append(ParsedActivity(
-            started_at=min(times), sport=sport, sub_sport=None, duration_min=seconds / 60, distance_m=distance or None,
-            avg_hr=sum(hrs) / len(hrs) if hrs else None, reported_kcal=None, source="gpx"))
+        if name == "type" and stack and _local(stack[-1].tag) == "trk":
+            track.sport = (el.text or "").strip() or None
+        elif name == "trkpt":
+            lat, lon = _float(el.get("lat")), _float(el.get("lon"))
+            time = hr = None
+            for child in el.iter():
+                tag = _local(child.tag)
+                if tag == "time":
+                    time = _iso(child.text)
+                elif tag == "hr":
+                    hr = _float(child.text)
+            track.point(time, (lat, lon) if lat is not None and lon is not None else None, hr)
+            if stack:
+                stack[-1].remove(el)
+        elif name == "trk":
+            if act := track.activity():
+                out.append(act)
+            track = None
+            el.clear()
     return out
 
 
@@ -284,12 +373,19 @@ def iter_archive(fileobj) -> Iterator[tuple[str, bytes | ActivityFileError]]:
     members = [m for m in archive.infolist() if not m.is_dir() and is_activity_file(m.filename)]
     if len(members) > MAX_ARCHIVE_FILES:
         raise ActivityFileError(f"The archive holds more than {MAX_ARCHIVE_FILES} activity files")
+    total = 0
     for m in members:
+        if total > MAX_ARCHIVE_BYTES:
+            yield m.filename, ActivityFileError(f"Skipped: the archive holds over {MAX_ARCHIVE_BYTES >> 30} GB of files")
+            continue
         with archive.open(m) as f:
             try:
-                yield m.filename, read_limited(f)
+                data = read_limited(f)
             except ActivityFileError as exc:
                 yield m.filename, exc
+                continue
+        total += len(data)
+        yield m.filename, data
 
 
 def external_id(started_at: datetime) -> str:

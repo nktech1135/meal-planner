@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "./api";
+import { activeProfile } from "./profile";
 import type { AppInfo, Food, Meal, NutrientDef, Recipe, UnitSystem, WeighedState } from "./types";
 
 export function useNutrients() {
@@ -185,6 +186,69 @@ export function useDebounced<T>(value: T, ms = 250): T {
     return () => clearTimeout(t);
   }, [value, ms]);
   return v;
+}
+
+export const LEAVE_WARNING = "Leave without saving? Your changes will be lost.";
+
+/** While a form has unsaved changes, ask before leaving it: by a link in the app, or by closing or reloading
+ * the page. (The browser's Back button isn't covered.) */
+export function useLeaveWarning(dirty: boolean): void {
+  useEffect(() => {
+    if (!dirty) return;
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    // Capturing on the document runs before the router's own click handling, so cancelling stops it.
+    const click = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const link = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!link || link.target === "_blank" || link.origin !== location.origin) return;
+      if (link.pathname === location.pathname && link.search === location.search) return; // e.g. the skip link
+      if (!confirm(LEAVE_WARNING)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("click", click, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("click", click, true);
+    };
+  }, [dirty]);
+}
+
+/** Everything that shows what was eaten: refresh it after the food log changes. */
+export function invalidateAfterLog(qc: QueryClient): void {
+  for (const key of ["day", "suggestions", "plan", "trends", "range", "shopping", "supplement-stack", "supplement-check"]) {
+    qc.invalidateQueries({ queryKey: [key] });
+  }
+}
+
+/** Everything that depends on the profile's weight: refresh it after a body measurement changes. */
+export function invalidateAfterWeighIn(qc: QueryClient): void {
+  for (const key of ["body", "trends", "profile", "targets", "day", "plan", "exercise", "supplement-check"]) {
+    qc.invalidateQueries({ queryKey: [key] });
+  }
+}
+
+/** Give a profile that never had a timezone the browser's, so its days start at local midnight (the server
+ * counts days in UTC until one is set). Only for your own profile, never one shared with you. */
+export function useAdoptBrowserTimezone(enabled: boolean): void {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["profile"], queryFn: api.profile, enabled });
+  const profile = q.data;
+  useEffect(() => {
+    if (!enabled || !profile || profile.timezone || activeProfile()) return;
+    api
+      .saveProfile({ ...profile, timezone: browserTimezone() })
+      .then((saved) => {
+        qc.setQueryData(["profile"], saved);
+        qc.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "profile" && query.queryKey[0] !== "me" });
+      })
+      .catch(() => {}); // the Profile page still offers the browser's zone
+  }, [enabled, profile, qc]);
 }
 
 /** The signed-in user's unit preference (metric until the profile says otherwise). */

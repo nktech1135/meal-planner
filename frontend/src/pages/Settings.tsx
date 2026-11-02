@@ -14,6 +14,9 @@ const TESTS: Record<string, { integration: Integration; label: string }> = {
   usda_fdc_api_key: { integration: "usda_fdc", label: "Test USDA" },
   nutritionix_app_key: { integration: "nutritionix", label: "Test Nutritionix" },
   edamam_app_key: { integration: "edamam", label: "Test Edamam" },
+  nih_dsld_enabled: { integration: "nih_dsld", label: "Test NIH DSLD" },
+  enable_unverified_sources: { integration: "open_food_facts", label: "Test Open Food Facts" },
+  ncbi_api_key: { integration: "pubmed", label: "Test PubMed" },
 };
 
 function SourceNote({ row }: { row: SettingRow }) {
@@ -45,9 +48,11 @@ function TestEmail() {
     <div className="setting">
       <strong>Check the email settings</strong>
       <p className="muted small setting-desc">
-        {info?.email_enabled
-          ? `Sends a test message to your address (${user?.email}).`
-          : "Email isn't fully set up yet (it needs at least the SMTP server and a From address). Until then, password resets work with links you create under Users."}
+        {!info?.email_enabled
+          ? "Email isn't fully set up yet (it needs at least the SMTP server and a From address). Until then, password resets work with links you create under Users."
+          : !info.email_links
+            ? `Sends a test message to your address (${user?.email}). Password reset and invitation emails also need the Site address (under Accounts), since they link to it; until it's set, they aren't sent.`
+            : `Sends a test message to your address (${user?.email}).`}
       </p>
       <div>
         <Button type="button" className="btn btn-sm" onClick={() => test.mutate()} disabled={test.isPending}>

@@ -52,12 +52,14 @@ def trends(db: Session, user: User, start: date, end: date) -> dict:
     # and each day against its own.
     exercise = daily_kcal(db, user, start, end)
     targets = compute_targets(user.profile, end, sum(exercise.get(d, 0) for d in logged) / n if n else 0)
-    day_targets = {d: compute_targets(user.profile, end, exercise[d])["targets"] for d in logged if exercise.get(d)}
+    rest_day = compute_targets(user.profile, end)["targets"]
+    day_targets = {d: compute_targets(user.profile, end, exercise[d])["targets"] if exercise.get(d) else rest_day
+                   for d in logged}
     evaluation = evaluate(averages, supp_averages, targets["targets"])
     for row in evaluation:
         met = 0
         for d in logged:
-            t = day_targets.get(d, {}).get(row["code"], row)
+            t = day_targets[d].get(row["code"], row)
             day_eval = evaluate(daily[d], supplements.get(d, {}), {row["code"]: {k: t.get(k) for k in (
                 "min", "target", "max", "ul_scope", "max_is_limit")}})[0]
             met += day_eval["status"] == "ok"

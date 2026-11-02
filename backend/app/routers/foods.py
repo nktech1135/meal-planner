@@ -11,12 +11,13 @@ from app.models import Food, FoodNutrient, FoodPortion, FormChoice, LogEntry, Us
 from app.nutrients import BY_CODE, MACRO_CODES, NUTRIENTS, Trust
 from app.routers.log import recalculate
 from app.schemas import FoodIn, FoodOut, FoodSummary, NutrientDefOut
-from app.security import current_user
-from app.services.access import get_food, visible
+from app.security import current_user, signed_in_user
+from app.services.access import food_uses_by_others, get_food, visible
 from app.services.datasets import DATASETS
 from app.services.forms import options_for
 from app.services.sharing import acting_user
 from app.sources.base import normalize_barcode
+from app.sources.registry import sync_portions
 
 router = APIRouter(prefix="/api", tags=["foods"])
 
@@ -51,6 +52,7 @@ def search_foods(
     kind: str | None = None,
     mine: bool = False,
     limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0, le=10_000),
     user: User = Depends(acting_user),
     db: Session = Depends(get_db),
 ):
@@ -65,7 +67,7 @@ def search_foods(
     if kind:
         stmt = stmt.where(Food.kind == kind)
     if not terms:
-        return [food_summary(f) for f in db.scalars(stmt.order_by(Food.name).limit(limit))]
+        return [food_summary(f) for f in db.scalars(stmt.order_by(Food.name, Food.id).offset(offset).limit(limit))]
     # Branded products can outnumber everything else a hundred to one; gather basic foods and
     # products separately so the basics always reach the ranking.
     is_branded = Food.source_data_type == "Branded"
@@ -73,7 +75,7 @@ def search_foods(
     candidates += list(db.scalars(stmt.where(is_branded).limit(500)))
     preferred = (user.profile.preferred_source if user.profile else None) or "usda_fdc"
     candidates.sort(key=lambda f: search_rank(f, terms, user.id, preferred))
-    return [food_summary(f) for f in candidates[:limit]]
+    return [food_summary(f) for f in candidates[offset:offset + limit]]
 
 
 _TYPE_RANK = {"Foundation": 0, "SR Legacy": 1, "Survey (FNDDS)": 2}
@@ -122,10 +124,9 @@ def _apply(food: Food, body: FoodIn, db: Session) -> None:
     food.barcode = normalize_barcode(body.barcode)
     food.other_components = [_component(c) for c in body.other_components]
     food.nutrients.clear()
-    food.portions.clear()
     db.flush()
     food.nutrients = [FoodNutrient(nutrient_code=c, amount=a, derivation="User entered") for c, a in body.nutrients.items()]
-    food.portions = [FoodPortion(label=p.label, gram_weight=p.gram_weight) for p in body.portions]
+    sync_portions(food, [(p.id, p.label, p.gram_weight) for p in body.portions])
 
 
 @router.post("/foods", response_model=FoodOut, status_code=201)
@@ -174,10 +175,14 @@ def copy_food(food_id: int, user: User = Depends(current_user), db: Session = De
 
 
 @router.delete("/foods/{food_id}", status_code=204)
-def delete_food(food_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+def delete_food(food_id: int, user: User = Depends(current_user), me: User = Depends(signed_in_user),
+                db: Session = Depends(get_db)):
     food = get_food(db, user, food_id)
-    if food.owner_id != user.id and not (food.owner_id is None and user.is_admin):
+    # Admin rights are the signed-in person's, not those of a profile they were given access to.
+    if food.owner_id != user.id and not (food.owner_id is None and me.is_admin):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed")
+    if food.owner_id is None and (uses := food_uses_by_others(db, food.id, me)):
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Other people still use this food ({uses})")
     db.delete(food)
     try:
         db.commit()

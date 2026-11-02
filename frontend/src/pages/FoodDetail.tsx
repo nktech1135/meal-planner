@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import { ComponentList, ErrorBox, Field, Loading, NutrientTable, ResultNote } from "../components/common";
 import { FoodPicker } from "../components/FoodPicker";
 import { TrustBadge, TRUST_INFO } from "../components/TrustBadge";
-import { basisLabel, fmtNum, nutrientName, parseNum, SOURCE_NAMES, useDebounced, useNutrients } from "../lib";
+import { basisLabel, fmtNum, nutrientName, parseNum, SOURCE_NAMES, useDebounced, useNutrients, invalidateAfterLog } from "../lib";
 import type { DerivedYield, Food, FoodSummary, FormRow, RetentionProfile, YieldInput } from "../types";
 import {
   Button,
@@ -373,7 +373,7 @@ function Yields({ food }: { food: Food }) {
               <div className="entry-actions">
                 <TrustBadge level={y.trust_level} />
                 {(y.owner_id === user?.id || user?.is_admin) && (
-                  <Button type="button" className="btn-link danger" onClick={() => del.mutate(y)} disabled={del.isPending}>
+                  <Button type="button" className="btn-link danger" onClick={() => confirm(`Delete the ${y.method} yield?`) && del.mutate(y)} disabled={del.isPending}>
                     Delete<VisuallyHidden> {y.method} yield</VisuallyHidden>
                   </Button>
                 )}
@@ -437,9 +437,7 @@ function FormChoice({ food, row }: { food: Food; row: FormRow }) {
     onSuccess: (res) => {
       qc.setQueryData(["food-forms", food.id], res.forms);
       setDone(res.recalculated_entries);
-      qc.invalidateQueries({ queryKey: ["day"] });
-      qc.invalidateQueries({ queryKey: ["range"] });
-      qc.invalidateQueries({ queryKey: ["suggestions"] });
+      invalidateAfterLog(qc);
       qc.invalidateQueries({ queryKey: ["calc"] });
     },
   });

@@ -326,7 +326,7 @@ export default function AdvisorPage() {
                 <span className="convo-title">{c.title}</span>
                 <span className="muted small">{new Date(c.updated_at).toLocaleDateString()}</span>
               </Link>
-              <button type="button" className="btn-link danger small convo-delete" onClick={() => remove.mutate(c.id)}>
+              <button type="button" className="btn-link danger small convo-delete" onClick={() => confirm(`Delete the conversation "${c.title}"? This can't be undone.`) && remove.mutate(c.id)}>
                 <span aria-hidden="true">×</span>
                 <VisuallyHidden>Delete conversation: {c.title}</VisuallyHidden>
               </button>

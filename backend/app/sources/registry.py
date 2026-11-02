@@ -30,6 +30,26 @@ def build_sources(settings: Settings, client: httpx.Client | None = None) -> dic
     return {cls.key: cls(settings, client) for cls in SOURCE_CLASSES}
 
 
+def sync_portions(food: Food, wanted: list[tuple[int | None, str, float]]) -> None:
+    """Set a food's portions to ``wanted`` (id or None, label, grams), keeping the rows of portions that stay:
+    log entries, plan items and saved meals refer to them as "portion:<id>". A portion is matched by its id,
+    then by its label; unmatched ones are removed and new ones added."""
+    by_id = {p.id: p for p in food.portions}
+    by_label: dict[str, FoodPortion] = {}
+    for p in food.portions:
+        by_label.setdefault(p.label, p)
+    kept: list[FoodPortion] = []
+    for portion_id, label, grams in wanted:
+        p = by_id.get(portion_id) if portion_id is not None else None
+        if p is None or p in kept:
+            p = by_label.get(label)
+        if p is None or p in kept:
+            p = FoodPortion()
+        p.label, p.gram_weight = label, grams
+        kept.append(p)
+    food.portions = kept
+
+
 def upsert_external_food(db: Session, ext: ExternalFood, commit: bool = True) -> Food:
     """Store an imported record as a shared food, replacing any earlier copy of it.
 
@@ -60,11 +80,10 @@ def upsert_external_food(db: Session, ext: ExternalFood, commit: bool = True) ->
     food.fetched_at = datetime.now(UTC)
     # Delete old child rows before inserting replacements (nutrients have a natural key).
     food.nutrients.clear()
-    food.portions.clear()
     db.flush()
     food.nutrients = [FoodNutrient(nutrient_code=c, amount=a, derivation=d[:120] if d else d)
                       for c, (a, d) in ext.nutrients.items()]
-    food.portions = [FoodPortion(label=label[:200], gram_weight=g) for label, g in ext.portions]
+    sync_portions(food, [(None, label[:200], g) for label, g in ext.portions])
     if commit:
         db.commit()
         db.refresh(food)
@@ -87,8 +106,9 @@ def _food_columns(ext: ExternalFood, now: datetime) -> dict:
 def bulk_upsert_external_foods(db: Session, exts: list[ExternalFood]) -> int:
     """Set-based version of upsert_external_food for dataset imports (one source per call).
 
-    Existing records (same source and source_id) are updated in place, so their ids, and
-    the log entries, recipes and yields pointing at them, stay valid. Not committed.
+    Existing records (same source and source_id) are updated in place, so their ids, and the log entries,
+    recipes and yields pointing at them, stay valid; so do the ids of portions whose label is unchanged.
+    Not committed.
     """
     batch = list({e.source_id: e for e in exts}.values())
     if not batch:
@@ -98,10 +118,14 @@ def bulk_upsert_external_foods(db: Session, exts: list[ExternalFood]) -> int:
     ids = dict(db.execute(select(Food.source_id, Food.id).where(
         Food.source == source, Food.source_id.in_([e.source_id for e in batch]))).all())
     existing = [e for e in batch if e.source_id in ids]
+    # Portions already on file, by food and label: they are updated in place, keeping their ids.
+    old_portions: dict[tuple[int, str], list[int]] = {}
     if existing:
         old_ids = [ids[e.source_id] for e in existing]
         db.execute(delete(FoodNutrient).where(FoodNutrient.food_id.in_(old_ids)))
-        db.execute(delete(FoodPortion).where(FoodPortion.food_id.in_(old_ids)))
+        for portion_id, food_id, label in db.execute(select(FoodPortion.id, FoodPortion.food_id, FoodPortion.label)
+                                                     .where(FoodPortion.food_id.in_(old_ids)).order_by(FoodPortion.id)):
+            old_portions.setdefault((food_id, label), []).append(portion_id)
         db.execute(update(Food), [{"id": ids[e.source_id], **_food_columns(e, now)} for e in existing])
     new = [e for e in batch if e.source_id not in ids]
     if new:
@@ -114,8 +138,19 @@ def bulk_upsert_external_foods(db: Session, exts: list[ExternalFood]) -> int:
                  for e in batch for code, (amount, derivation) in e.nutrients.items()]
     if nutrients:
         db.execute(insert(FoodNutrient), nutrients)
-    portions = [{"food_id": ids[e.source_id], "label": label[:200], "gram_weight": grams}
-                for e in batch for label, grams in e.portions]
+    portions, updates = [], []
+    for e in batch:
+        for label, grams in e.portions:
+            reuse = old_portions.get((ids[e.source_id], label[:200]))
+            if reuse:
+                updates.append({"id": reuse.pop(0), "gram_weight": grams})
+            else:
+                portions.append({"food_id": ids[e.source_id], "label": label[:200], "gram_weight": grams})
+    gone = [portion_id for left in old_portions.values() for portion_id in left]
+    if gone:
+        db.execute(delete(FoodPortion).where(FoodPortion.id.in_(gone)))
+    if updates:
+        db.execute(update(FoodPortion), updates)
     if portions:
         db.execute(insert(FoodPortion), portions)
     return len(batch)

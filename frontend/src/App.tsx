@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth";
+import { useAdoptBrowserTimezone } from "./lib";
 import { RouteFocus, SkipLink } from "./components/a11y";
 import { Loading } from "./components/common";
 import { MeMenu } from "./components/MeMenu";
@@ -40,6 +41,7 @@ const NAV = [
 
 export default function App() {
   const { user, loading, logout } = useAuth();
+  useAdoptBrowserTimezone(!!user);
   // Signing in or out swaps the whole page; move focus to the new page's heading then too.
   const state = loading ? "none" : user ? "in" : "out";
   const shown = useRef(state);

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { ErrorBox, Field, ResultNote } from "../components/common";
-import { useAppInfo } from "../lib";
+import { browserTimezone, useAppInfo } from "../lib";
 import { Button, focusSoon, tabPanelProps, TabList, useAnnounceText, usePageTitle } from "../components/a11y";
 
 function ForgotPassword({ initialEmail, onBack }: { initialEmail: string; onBack: () => void }) {
@@ -61,6 +61,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [setupCode, setSetupCode] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const info = useAppInfo();
@@ -74,7 +75,8 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const user = mode === "login" ? await api.login(email, password) : await api.register(email, password, name);
+      const user =
+        mode === "login" ? await api.login(email, password) : await api.register(email, password, name, browserTimezone(), setupCode.trim());
       setUser(user);
     } catch (err) {
       setError(err);
@@ -123,6 +125,14 @@ export default function LoginPage() {
               </div>
             ) : (
               <form onSubmit={submit} className="stack">
+                {mode === "register" && (info?.needs_setup_code || firstAccount) && (
+                  <Field
+                    label="Setup code"
+                    hint="The installer printed it when it finished. It's also SETUP_CODE in the server's configuration file. Only the first account needs it."
+                  >
+                    <input value={setupCode} onChange={(e) => setSetupCode(e.target.value)} autoComplete="off" spellCheck={false} />
+                  </Field>
+                )}
                 {mode === "register" && (
                   <Field label="Display name">
                     <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" />

@@ -1,6 +1,9 @@
 import pytest
+from fastapi.testclient import TestClient
 
-from app.models import PasswordReset
+from app.config import get_settings
+from app.main import app
+from app.models import Food, PasswordReset
 from app.security import login_throttle
 from tests.conftest import register
 
@@ -147,3 +150,99 @@ def test_cli_reset_link_and_make_admin(client, db_session, monkeypatch, capsys):
     assert ok.status_code == 200
     assert cli.main(["make-admin", "user@example.com"]) == 0
     assert [u for u in client.get("/api/admin/users").json() if u["email"] == "user@example.com"][0]["is_admin"]
+
+
+def test_failed_sign_ins_elsewhere_dont_lock_the_owner_out(client):
+    register(client)
+    client.cookies.clear()
+    attacker = TestClient(app, client=("203.0.113.9", 4000))
+    for _ in range(10):
+        assert login(attacker, password="wrong password").status_code == 401
+    assert login(attacker).status_code == 429  # that address is slowed down for this account
+    assert login(client).status_code == 200  # but the owner, from their own address, still gets in
+
+
+def test_throttle_memory_is_bounded(monkeypatch):
+    monkeypatch.setattr(login_throttle, "MAX_KEYS", 50)
+    for i in range(500):
+        login_throttle.fail(f"ip:10.0.{i // 256}.{i % 256}")
+    assert len(login_throttle.failures) <= 51
+
+
+def test_sign_out_revokes_the_session(client):
+    register(client)
+    cookie = client.cookies.get("mp_session")
+    assert client.post("/api/auth/logout").status_code == 204
+    use_cookie(client, cookie)  # a copy of the cookie, e.g. stolen before signing out
+    assert client.get("/api/auth/me").status_code == 401
+
+
+def test_email_change_signs_out_other_sessions(client):
+    register(client)
+    other = client.cookies.get("mp_session")
+    resp = client.put("/api/account", json={"display_name": "A", "email": "new@example.com", "current_password": PW})
+    assert resp.status_code == 200
+    assert client.get("/api/auth/me").status_code == 200  # this browser stays signed in
+    use_cookie(client, other)
+    assert client.get("/api/auth/me").status_code == 401
+
+
+def test_reset_emails_never_link_to_the_requests_host(client, db_session, monkeypatch):
+    sent = []
+    monkeypatch.setattr("app.routers.auth.send_mail", lambda settings, to, subject, body: sent.append(body))
+    register(client, "admin@example.com")
+    client.put("/api/admin/settings", json={"values": {"smtp_host": "smtp.example.com", "smtp_from": "m@example.com"}})
+    assert client.get("/api/app-info").json()["email_links"] is False  # no site address yet
+    client.cookies.clear()
+    forged = {"Host": "evil.example"}
+    assert client.post("/api/auth/forgot", json={"email": "admin@example.com"}, headers=forged).json() == {
+        "email_enabled": False}
+    assert sent == []  # without the site address, no reset email goes out
+    login(client, "admin@example.com")
+    client.put("/api/admin/settings", json={"values": {"public_url": "https://meals.example.com"}})
+    client.cookies.clear()
+    client.post("/api/auth/forgot", json={"email": "admin@example.com"}, headers=forged)
+    assert len(sent) == 1 and "https://meals.example.com/reset-password?token=" in sent[0] and "evil" not in sent[0]
+
+
+def test_asking_for_a_reset_link_doesnt_cancel_the_last_one(client, monkeypatch):
+    sent = []
+    monkeypatch.setattr("app.routers.auth.send_mail", lambda settings, to, subject, body: sent.append(body))
+    register(client, "admin@example.com")
+    client.put("/api/admin/settings", json={"values": {
+        "smtp_host": "smtp.example.com", "smtp_from": "m@example.com", "public_url": "https://meals.example.com"}})
+    client.cookies.clear()
+    client.post("/api/auth/forgot", json={"email": "admin@example.com"})
+    client.post("/api/auth/forgot", json={"email": "admin@example.com"})  # e.g. someone else, to cancel the first
+    first, second = (body.split("token=")[1].split()[0] for body in sent)
+    assert client.post("/api/auth/reset", json={"token": first, "new_password": "brand new pass 1"}).status_code == 200
+    # Using one link spends the others, as does changing the password.
+    assert client.post("/api/auth/reset", json={"token": second, "new_password": "brand new pass 2"}).status_code == 400
+
+
+def test_first_account_needs_the_setup_code(client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "setup_code", "s3tup-c0de")
+    assert client.get("/api/app-info").json()["needs_setup_code"] is True
+    body = {"email": "a@example.com", "password": PW}
+    assert client.post("/api/auth/register", json=body).status_code == 403
+    assert client.post("/api/auth/register", json=body | {"setup_code": "guess"}).status_code == 403
+    resp = client.post("/api/auth/register", json=body | {"setup_code": " s3tup-c0de ", "timezone": "Australia/Sydney"})
+    assert resp.status_code == 201 and resp.json()["is_admin"] is True
+    assert client.get("/api/profile").json()["timezone"] == "Australia/Sydney"  # days follow the browser's clock
+    assert client.get("/api/app-info").json()["needs_setup_code"] is False
+    client.cookies.clear()
+    later = client.post("/api/auth/register", json={"email": "b@example.com", "password": PW, "timezone": "Nowhere/x"})
+    assert later.status_code == 201 and later.json()["is_admin"] is False  # no code needed once there's an admin
+
+
+def test_shared_profile_doesnt_lend_admin_rights(client, db_session):
+    admin = register(client, "admin@example.com")
+    food = client.post("/api/foods", json={"name": "Reference", "nutrients": {"energy_kcal": 1}}).json()
+    db_session.get(Food, food["id"]).owner_id = None  # a shared food, as imported ones are
+    db_session.commit()
+    bob = TestClient(app)
+    register(bob, "bob@example.com")
+    assert client.put("/api/profile-access", json={"email": "bob@example.com", "can_edit": True}).status_code == 200
+    as_admin = {"X-Mealplan-Profile": str(admin["id"])}
+    assert bob.delete(f"/api/foods/{food['id']}", headers=as_admin).status_code == 403
+    assert client.delete(f"/api/foods/{food['id']}").status_code == 204  # the admin themself can

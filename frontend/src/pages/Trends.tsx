@@ -11,6 +11,7 @@ import {
   fmtShortDate,
   fromLength,
   fromWeight,
+  invalidateAfterWeighIn,
   lengthUnit,
   nutrientName,
   parseNum,
@@ -280,10 +281,7 @@ function BodyForm({ units, editing, onDone }: { units: UnitSystem; editing: Body
         note: note.trim(),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["body"] });
-      qc.invalidateQueries({ queryKey: ["trends"] });
-      qc.invalidateQueries({ queryKey: ["profile"] });
-      qc.invalidateQueries({ queryKey: ["targets"] });
+      invalidateAfterWeighIn(qc);
       announce(`Saved measurements for ${fmtShortDate(date)}.`);
       setWeight("");
       setFat("");
@@ -341,16 +339,15 @@ function BodyForm({ units, editing, onDone }: { units: UnitSystem; editing: Body
 
 function BodySection({ units }: { units: UnitSystem }) {
   const qc = useQueryClient();
-  const body = useQuery({ queryKey: ["body"], queryFn: () => api.body() });
+  // The whole history (one row a day at most), not just the server's default of the last 90 days.
+  const body = useQuery({ queryKey: ["body", "all"], queryFn: () => api.body("1900-01-01") });
   const [editing, setEditing] = useState<BodyMeasurement | null>(null);
   const [showAll, setShowAll] = useState(false);
   const announce = useAnnounce();
   const del = useMutation({
     mutationFn: api.deleteBody,
     onSuccess: (_, date) => {
-      qc.invalidateQueries({ queryKey: ["body"] });
-      qc.invalidateQueries({ queryKey: ["trends"] });
-      qc.invalidateQueries({ queryKey: ["profile"] });
+      invalidateAfterWeighIn(qc);
       announce(`Deleted the measurements for ${fmtShortDate(date)}.`);
       rescueFocus(() => listHeading.current);
     },

@@ -104,6 +104,13 @@ function checkProfile(resp: Response): void {
   }
 }
 
+let onSignedOut: (() => void) | null = null;
+
+/** Called when the server says the session is gone (expired, signed out elsewhere, account deactivated). */
+export function whenSignedOut(handler: (() => void) | null): void {
+  onSignedOut = handler;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let resp: Response;
   try {
@@ -117,6 +124,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new ApiError("Could not reach the server", 0);
   }
   checkProfile(resp);
+  if (resp.status === 401 && !path.startsWith("/api/auth/")) onSignedOut?.();
   if (resp.status === 204) return undefined as T;
   let data: unknown = null;
   try {
@@ -148,8 +156,8 @@ export const api = {
   // auth
   me: () => get<User>("/api/auth/me"),
   login: (email: string, password: string) => post<User>("/api/auth/login", { email, password }),
-  register: (email: string, password: string, display_name: string) =>
-    post<User>("/api/auth/register", { email, password, display_name }),
+  register: (email: string, password: string, display_name: string, timezone: string, setup_code?: string) =>
+    post<User>("/api/auth/register", { email, password, display_name, timezone, setup_code: setup_code || undefined }),
   logout: () => post<void>("/api/auth/logout"),
   forgotPassword: (email: string) => post<{ email_enabled: boolean }>("/api/auth/forgot", { email }),
   resetPassword: (token: string, new_password: string) => post<User>("/api/auth/reset", { token, new_password }),
@@ -199,7 +207,7 @@ export const api = {
   nutrients: () => get<NutrientDef[]>("/api/nutrients"),
   foodDatabases: () => get<FoodDatabase[]>("/api/datasets"),
   // `for_user`: read as the owner of a plan shared with you (their foods and recipes, not yours).
-  foods: (q: string, opts: { kind?: string; mine?: boolean; limit?: number; for_user?: number | null } = {}) =>
+  foods: (q: string, opts: { kind?: string; mine?: boolean; limit?: number; offset?: number; for_user?: number | null } = {}) =>
     get<FoodSummary[]>(`/api/foods${qs({ q, ...opts })}`),
   food: (id: number, for_user?: number | null) => get<Food>(`/api/foods/${id}${qs({ for_user })}`),
   createFood: (f: FoodInput) => post<Food>("/api/foods", f),
@@ -242,6 +250,7 @@ export const api = {
 
   // saved meals
   savedMeals: (for_user?: number | null) => get<SavedMeal[]>(`/api/saved-meals${qs({ for_user })}`),
+  createSavedMeal: (m: SavedMealInput) => post<SavedMeal>("/api/saved-meals", m),
   updateSavedMeal: (id: number, m: SavedMealInput) => put<SavedMeal>(`/api/saved-meals/${id}`, m),
   deleteSavedMeal: (id: number) => del(`/api/saved-meals/${id}`),
   logSavedMeal: (id: number, body: { meal?: Meal | null; consumed_at?: string | null }) =>

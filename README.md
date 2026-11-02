@@ -42,7 +42,8 @@ A web app for tracking meals and supplements, with an AI nutrition advisor.
 - **Multi-user, managed in the browser.** Accounts with private data; admin
   Settings for every API key and option (keys encrypted at rest); user
   management, invitations and password resets; data export and account
-  deletion. The first account created is the admin.
+  deletion. The first account created is the admin; on a server set up by the
+  installer, creating it takes the setup code the installer prints.
 
 > Not medical advice. Reference values are for healthy, non-pregnant adults.
 
@@ -207,19 +208,23 @@ as dataset downloads go to `/var/tmp`, because `/tmp` is often held in memory.
   `/etc/caddy/Caddyfile.before-mealplan` and puts it back on uninstall; an edited
   Caddyfile is kept, with one `import` line added.
 
-After installing, everything is done in the browser. Register (the first
-account is the admin), then open **Settings**:
+After installing, everything is done in the browser. Create the first account,
+which becomes the admin. It asks for the setup code the installer printed at
+the end (also `SETUP_CODE` in the configuration file), so nobody else who
+reaches a new server first can claim it. Then open **Settings**:
 - add an Anthropic API key and a free USDA key;
 - under **Data**, import the USDA databases;
-- set up email if you want password-reset emails;
-- close sign-ups, or invite people from **Users**.
+- set up email if you want password-reset emails, and set **Site address**:
+  reset and invitation emails link to it, and aren't sent without it;
+- invite people from **Users**, or turn on **Allow new sign-ups** while everyone
+  creates an account. New installs start with sign-ups off, since anyone with an
+  account can use the advisor, which you pay for.
 
 Without `--domain`, traffic is plain HTTP; use that only on a trusted network.
 The camera barcode scanner also needs HTTPS (or localhost). Options: `--domain`,
 `--port` (the app's local port), `--db postgres|sqlite`, `--repo`, `--branch`.
 Upgrading an older install that listened on all addresses moves it to
-127.0.0.1 and, system-wide, sets up Caddy in front of it. Open the URL it prints and register. The first account is
-the admin.
+127.0.0.1 and, system-wide, sets up Caddy in front of it.
 
 Day-to-day (drop `sudo` for a per-user install):
 

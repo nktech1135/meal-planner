@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session, aliased, sessionmaker
 from app.memory import release_free_memory
 from app.models import CookingYield, Food, FoodNutrient, ImportJob, RetentionProfile
 from app.nutrients import BY_FDC_NUMBER, Trust, weakest
+from app.services.access import yield_uses
 from app.sources.registry import bulk_upsert_external_foods
 from app.sources.usda_fdc import parse_fdc_food
 
@@ -236,8 +237,19 @@ def release_of(file_name: str) -> str:
 STALE_AFTER = timedelta(minutes=5)
 
 
+# Held while an import runs. The server is one process, so this, unlike a look at the jobs table, can't let two
+# imports start at once, and shows whether a quiet job (e.g. parsing a large file) is still alive.
+_job_running = threading.Lock()
+
+
+class ImportRunning(RuntimeError):
+    pass
+
+
 def expire_stale_jobs(db: Session) -> None:
     """Jobs that stopped reporting (e.g. the server restarted mid-import) are marked failed."""
+    if _job_running.locked():
+        return  # the job is still working here, however long since it last reported
     cutoff = datetime.now(UTC) - STALE_AFTER
     for job in db.scalars(select(ImportJob).where(ImportJob.status.in_(("queued", "running")))):
         beat = job.heartbeat_at if job.heartbeat_at.tzinfo else job.heartbeat_at.replace(tzinfo=UTC)
@@ -254,18 +266,30 @@ def active_job(db: Session) -> ImportJob | None:
 
 def start_import(db: Session, dataset_key: str, user_id: int, client: httpx.Client,
                  run: Callable[[Callable[[], None]], None] | None = None) -> ImportJob:
-    """Queue an import and run it in a background thread (``run`` lets tests run it inline)."""
+    """Queue an import and run it in a background thread (``run`` lets tests run it inline). Raises
+    ImportRunning if one is already running."""
     ds = BY_KEY[dataset_key]
-    job = ImportJob(dataset=ds.key, created_by=user_id, message="Queued")
-    db.add(job)
-    db.commit()
-    factory = sessionmaker(bind=db.get_bind(), autoflush=False, expire_on_commit=False)
-    job_id = job.id
+    if not _job_running.acquire(blocking=False):
+        raise ImportRunning("An import is already running")
+    started = threading.Event()  # once set, the job releases the lock when it ends
 
     def work():
-        _run_job(factory, job_id, ds, client)
+        started.set()
+        try:
+            _run_job(factory, job.id, ds, client)
+        finally:
+            _job_running.release()
 
-    (run or (lambda fn: threading.Thread(target=fn, name=f"import-{job_id}", daemon=True).start()))(work)
+    try:
+        job = ImportJob(dataset=ds.key, created_by=user_id, message="Queued")
+        db.add(job)
+        db.commit()
+        factory = sessionmaker(bind=db.get_bind(), autoflush=False, expire_on_commit=False)
+        (run or (lambda fn: threading.Thread(target=fn, name=f"import-{job.id}", daemon=True).start()))(work)
+    except BaseException:
+        if not started.is_set():
+            _job_running.release()
+        raise
     return job
 
 
@@ -475,7 +499,8 @@ def derive_usda_yields(db: Session) -> int:
                protein.amount.label("protein_g"))
         .outerjoin(protein, (protein.food_id == Food.id) & (protein.nutrient_code == "protein_g"))
         .where(Food.source == "usda_fdc", Food.owner_id.is_(None),
-               Food.source_data_type.in_(("Foundation", "SR Legacy"))))
+               Food.source_data_type.in_(("Foundation", "SR Legacy")))
+        .order_by(Food.id))  # a stable choice of raw food when several match, so yields keep their pairing
     raws: dict[tuple, Row] = {}
     cooked: list[tuple[tuple, Row, list[str]]] = []
     for f in foods:
@@ -516,7 +541,7 @@ def derive_usda_yields(db: Session) -> int:
         kept.add((raw.id, cook.id))
         made += 1
     for pair, y in existing.items():
-        if pair not in kept:
+        if pair not in kept and not yield_uses(db, y.id):  # one still in use stays, as it was
             db.delete(y)
     db.commit()
     return made

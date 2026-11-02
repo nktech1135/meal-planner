@@ -134,6 +134,26 @@ def _blocks(content) -> list[dict]:
     return [block.to_dict() for block in content]
 
 
+def _answered(message: dict | None) -> set[str]:
+    if not message or message["role"] != "user" or not isinstance(message["content"], list):
+        return set()
+    return {b.get("tool_use_id") for b in message["content"] if b.get("type") == "tool_result"}
+
+
+def _repaired(history: list[dict]) -> list[dict]:
+    """Drop tool calls that never got a result (a reply cut off for length, saved before that was handled), which
+    the API refuses; the rest of the conversation is unchanged."""
+    out = []
+    for i, m in enumerate(history):
+        if m["role"] == "assistant" and isinstance(m["content"], list):
+            answered = _answered(history[i + 1] if i + 1 < len(history) else None)
+            content = [b for b in m["content"] if b.get("type") != "tool_use" or b.get("id") in answered]
+            if len(content) != len(m["content"]):
+                m = {**m, "content": content or [{"type": "text", "text": "(Reply cut off.)"}]}
+        out.append(m)
+    return out
+
+
 def run_turn(
     db: Session, client: "anthropic.Anthropic", settings: Settings, user: User,
     conversation: AdvisorConversation, text: str,
@@ -144,7 +164,7 @@ def run_turn(
     """
     import anthropic
 
-    history = [{"role": m.role, "content": m.content} for m in conversation.messages]
+    history = _repaired([{"role": m.role, "content": m.content} for m in conversation.messages])
     tz = (user.profile.timezone if user.profile else None) or "UTC"
     user_content = [
         {"type": "text", "text": f"<context>Today is {local_today(user).isoformat()} ({tz}).</context>"},
@@ -195,6 +215,9 @@ def run_turn(
             # Discard any partial output; tell the user plainly.
             assistant_content = [{"type": "text", "text": "I can't help with that request."}]
         elif response.stop_reason == "max_tokens":
+            # A tool call cut off part-way has no result, and the API refuses a conversation with one.
+            while assistant_content and assistant_content[-1].get("type") in ("tool_use", "server_tool_use"):
+                assistant_content.pop()
             assistant_content.append({"type": "text", "text": "\n\n(Reply cut off for length.)"})
         new_messages.append(AdvisorMessage(role="assistant", content=assistant_content))
         history.append({"role": "assistant", "content": assistant_content})

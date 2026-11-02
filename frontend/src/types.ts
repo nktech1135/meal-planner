@@ -73,6 +73,8 @@ export interface Component {
   amount: number | null;
   unit: string | null;
   note?: string | null;
+  /** The nutrient a label amount belongs to when its conversion depends on the form (e.g. vitamin A in IU). */
+  nutrient_code?: string | null;
 }
 
 export interface FoodSummary {
@@ -120,7 +122,8 @@ export interface FoodInput {
   serving_size_g: number | null;
   citation: string | null;
   nutrients: NutrientMap;
-  portions: { label: string; gram_weight: number }[];
+  /** `id` keeps an existing portion (and the entries that use it) when it's edited. */
+  portions: { id?: number; label: string; gram_weight: number }[];
   other_components: Component[];
   barcode?: string | null;
   ingredients?: string | null;
@@ -469,6 +472,10 @@ export interface AppInfo {
   advisor_configured: boolean;
   usda_demo_key: boolean;
   email_enabled: boolean;
+  /** Reset and invitation emails can go out: email is set up and so is the site address they link to. */
+  email_links: boolean;
+  /** No account yet, and creating the first (admin) one takes the setup code the installer printed. */
+  needs_setup_code: boolean;
 }
 
 export type SettingKind = "secret" | "string" | "bool" | "int" | "choice";
@@ -489,7 +496,7 @@ export interface SettingRow {
   source: "settings" | "environment" | "default";
 }
 
-export type Integration = "anthropic" | "usda_fdc" | "nutritionix" | "edamam";
+export type Integration = "anthropic" | "usda_fdc" | "nutritionix" | "edamam" | "nih_dsld" | "open_food_facts" | "pubmed";
 
 export interface TestResult {
   ok: boolean;
@@ -766,6 +773,8 @@ export interface ShoppingList {
   start: string;
   end: string;
   items: ShoppingItem[];
+  /** Planned items left off the list because they can't be worked out (e.g. their food was deleted). */
+  skipped: string[];
 }
 
 export interface BarcodeResult {

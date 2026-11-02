@@ -13,6 +13,12 @@ def mail_configured(settings: Settings) -> bool:
     return bool(settings.smtp_host and settings.smtp_from)
 
 
+def links_by_email(settings: Settings) -> bool:
+    """Whether emails with links (password resets, invites) can be sent. Links need the site address from
+    Settings: guessing it from the request would let anyone point a reset email at their own site."""
+    return mail_configured(settings) and bool(settings.public_url)
+
+
 def send_mail(settings: Settings, to: str, subject: str, body: str) -> None:
     if not mail_configured(settings):
         raise MailError("Email isn't set up (Settings → Email)")

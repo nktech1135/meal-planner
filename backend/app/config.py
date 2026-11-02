@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     cookie_secure: bool = False  # set true behind HTTPS in production
     allow_registration: bool = True
     public_url: str | None = None
+    # Needed to create the first (admin) account when set; the installer generates one, so whoever reaches a
+    # fresh server first can't claim it.
+    setup_code: str | None = None
 
     # Email (password resets)
     smtp_host: str | None = None

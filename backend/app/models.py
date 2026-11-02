@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    TypeDecorator,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -20,6 +21,24 @@ from app.db import Base
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+class UTCDateTime(TypeDecorator):
+    """A moment in time, stored in UTC and always read back with its timezone. SQLite keeps no offset: it would
+    store a local clock time as is and hand back times that the browser takes for its own local time."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if isinstance(value, datetime) and value.tzinfo is not None:
+            value = value.astimezone(UTC)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if isinstance(value, datetime):  # PostgreSQL gives the session's timezone; SQLite none
+            value = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+        return value
 
 
 class User(Base):
@@ -33,8 +52,8 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Bumped on password change/reset or deactivation; sessions carrying an older value are rejected.
     session_version: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
 
     profile: Mapped["Profile | None"] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
 
@@ -62,7 +81,7 @@ class Profile(Base):
     hidden_sources: Mapped[list] = mapped_column(JSON, default=list)
     # Database ranked first among generic search results (None = USDA FoodData Central).
     preferred_source: Mapped[str | None] = mapped_column(String(40))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
     user: Mapped[User] = relationship(back_populates="profile")
 
@@ -106,8 +125,8 @@ class Food(Base):
     source_payload: Mapped[dict | None] = mapped_column(JSON)  # raw upstream record, kept for audit
 
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    fetched_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
 
     nutrients: Mapped[list["FoodNutrient"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
     portions: Mapped[list["FoodPortion"]] = relationship(cascade="all, delete-orphan", lazy="selectin")
@@ -156,7 +175,7 @@ class CookingYield(Base):
     citation: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
     generated_by: Mapped[str | None] = mapped_column(String(40))  # e.g. "usda-pairs" for yields derived in bulk
 
@@ -173,8 +192,8 @@ class Recipe(Base):
     servings: Mapped[float] = mapped_column(Float, default=1)
     cooked_weight_g: Mapped[float | None] = mapped_column(Float)  # weigh the finished dish for best accuracy
     notes: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
     ingredients: Mapped[list["RecipeIngredient"]] = relationship(
         cascade="all, delete-orphan", order_by="RecipeIngredient.position", lazy="selectin"
@@ -207,7 +226,7 @@ class LogEntry(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    consumed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime] = mapped_column(UTCDateTime())
     meal: Mapped[str] = mapped_column(String(20), default="snack")  # breakfast | lunch | dinner | snack | supplement
     food_id: Mapped[int | None] = mapped_column(ForeignKey("foods.id", ondelete="SET NULL"))
     recipe_id: Mapped[int | None] = mapped_column(ForeignKey("recipes.id", ondelete="SET NULL"))
@@ -225,7 +244,7 @@ class LogEntry(Base):
     note: Mapped[str] = mapped_column(String(500), default="")
     # Who logged it, when that wasn't the user (someone they gave access to their profile).
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
     created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_id])
 
@@ -243,8 +262,8 @@ class AdvisorConversation(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(200), default="New conversation")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
     messages: Mapped[list["AdvisorMessage"]] = relationship(
         cascade="all, delete-orphan", order_by="AdvisorMessage.id", lazy="selectin"
@@ -262,7 +281,7 @@ class AdvisorMessage(Base):
     role: Mapped[str] = mapped_column(String(20))  # user | assistant
     content: Mapped[list] = mapped_column(JSON)
     is_user_prompt: Mapped[bool] = mapped_column(Boolean, default=False)  # a typed message (vs. tool results)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
 class AppSetting(Base):
@@ -272,7 +291,7 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value: Mapped[object] = mapped_column(JSON, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
 
@@ -285,7 +304,7 @@ class SavedMeal(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(200))
     default_meal: Mapped[str] = mapped_column(String(20), default="snack")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
     items: Mapped[list["SavedMealItem"]] = relationship(
         cascade="all, delete-orphan", order_by="SavedMealItem.position", lazy="selectin")
@@ -318,7 +337,7 @@ class FormChoice(Base):
     component_name: Mapped[str] = mapped_column(String(200))
     nutrient_code: Mapped[str] = mapped_column(String(40))
     option_key: Mapped[str] = mapped_column(String(40))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
 class RetentionProfile(Base):
@@ -346,9 +365,9 @@ class ImportJob(Base):
     total: Mapped[int | None] = mapped_column(Integer)
     message: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    heartbeat_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
 
 
 class BodyMeasurement(Base):
@@ -364,7 +383,7 @@ class BodyMeasurement(Base):
     body_fat_pct: Mapped[float | None] = mapped_column(Float)
     waist_cm: Mapped[float | None] = mapped_column(Float)
     note: Mapped[str] = mapped_column(String(500), default="")
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
 
 class Exercise(Base):
@@ -378,7 +397,7 @@ class Exercise(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     date: Mapped[date] = mapped_column(Date)  # in the user's timezone
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     name: Mapped[str] = mapped_column(String(200))
     activity_code: Mapped[str | None] = mapped_column(String(5))  # 2024 Adult Compendium code
     met: Mapped[float | None] = mapped_column(Float)
@@ -393,8 +412,8 @@ class Exercise(Base):
     source: Mapped[str] = mapped_column(String(10), default="manual")  # manual | fit | tcx | gpx
     external_id: Mapped[str | None] = mapped_column(String(64))  # de-duplicates imports
     note: Mapped[str] = mapped_column(String(500), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
 
 
 class PlanItem(Base):
@@ -420,7 +439,7 @@ class PlanItem(Base):
     logged_entry_id: Mapped[int | None] = mapped_column(ForeignKey("log_entries.id", ondelete="SET NULL"))
     # Who added it, when that wasn't the plan's owner (someone they shared their plan with).
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
 class PlanShare(Base):
@@ -431,7 +450,7 @@ class PlanShare(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     member_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
     can_edit: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
 class ProfileShare(Base):
@@ -443,7 +462,7 @@ class ProfileShare(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     member_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
     can_edit: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
 class ShoppingCheck(Base):
@@ -453,7 +472,7 @@ class ShoppingCheck(Base):
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     key: Mapped[str] = mapped_column(String(120), primary_key=True)
-    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    checked_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
 class PlanProposal(Base):
@@ -468,8 +487,19 @@ class PlanProposal(Base):
     items: Mapped[list] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | accepted | dismissed
     accepted_indexes: Mapped[list | None] = mapped_column(JSON)  # which items were added to the plan
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class UserSession(Base):
+    """A signed-in browser. The session cookie names it, so signing out can revoke just that one."""
+
+    __tablename__ = "user_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
 
 
 class PasswordReset(Base):
@@ -480,6 +510,6 @@ class PasswordReset(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    used_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)

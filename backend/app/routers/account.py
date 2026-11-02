@@ -3,7 +3,7 @@
 import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
@@ -28,7 +28,7 @@ from app.models import (
 from app.routers.foods import food_out
 from app.schemas import BodyOut, ExerciseOut, LogOut, ProfileOut, SavedMealOut, UserOut
 from app.security import clear_session, hash_password, issue_session, signed_in_user, verify_password
-from app.services.accounts import delete_user, end_sessions
+from app.services.accounts import delete_user, end_sessions, revoke_reset_tokens
 from app.services.sharing import shares_of
 
 router = APIRouter(prefix="/api/account", tags=["account"])
@@ -55,16 +55,23 @@ def _check_password(user: User, password: str | None) -> None:
 
 
 @router.put("", response_model=UserOut)
-def update_account(body: AccountUpdate, user: User = Depends(signed_in_user), db: Session = Depends(get_db)):
-    if body.email.lower() != user.email:
+def update_account(body: AccountUpdate, response: Response, user: User = Depends(signed_in_user),
+                   db: Session = Depends(get_db)):
+    email_changed = body.email.lower() != user.email
+    if email_changed:
         _check_password(user, body.current_password)
         user.email = body.email.lower()
+        end_sessions(user)  # sign out other devices, as for a new password
     user.display_name = body.display_name
     try:
+        if email_changed:
+            revoke_reset_tokens(db, user)  # links sent to the old address
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "That email is already in use") from None
+    if email_changed:
+        issue_session(response, user, db)  # but keep this one
     return user
 
 
@@ -74,8 +81,8 @@ def change_password(body: PasswordChange, response: Response, user: User = Depen
     _check_password(user, body.current_password)
     user.password_hash = hash_password(body.new_password)
     end_sessions(user)  # sign out other devices
-    db.commit()
-    issue_session(response, user)  # but keep this one
+    revoke_reset_tokens(db, user)
+    issue_session(response, user, db)  # but keep this one (commits)
 
 
 @router.get("/export")
@@ -114,8 +121,8 @@ def export_data(user: User = Depends(signed_in_user), db: Session = Depends(get_
 
 
 @router.delete("", status_code=204)
-def delete_account(body: DeleteAccount, response: Response, user: User = Depends(signed_in_user),
+def delete_account(body: DeleteAccount, request: Request, response: Response, user: User = Depends(signed_in_user),
                    db: Session = Depends(get_db)):
     _check_password(user, body.password)
     delete_user(db, user)
-    clear_session(response)
+    clear_session(request, response, db)

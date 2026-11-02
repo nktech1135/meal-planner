@@ -71,7 +71,8 @@ if [[ "$MODE" == user ]]; then
   VAR_DIR="$DATA_HOME/mealplan/data"
   BIN_PATH="$HOME/.local/bin/mealplan"
   UNIT_PATH="$CONFIG_HOME/systemd/user/mealplan.service"
-  LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/mealplan-$EUID.lock"
+  # Not /tmp, where another user could plant a link at the name first.
+  LOCK_FILE="${XDG_RUNTIME_DIR:-$DATA_HOME/mealplan}/mealplan-$EUID.lock"
   SUDO=""
 else
   PREFIX="$TEST_ROOT/opt/mealplan"
@@ -449,12 +450,17 @@ write_config() {
 #
 # SECRET_KEY signs sessions and encrypts the keys stored in Settings: keep it secret,
 # and don't change it, or stored keys can no longer be read and must be entered again.
+# SETUP_CODE is asked for when creating the first (admin) account, so nobody else
+# who reaches a new server first can claim it.
+# ALLOW_REGISTRATION is the starting value of "Allow new sign-ups" in Settings.
 # After editing this file: ${SUDO}mealplan restart
 
 MEALPLAN_HOST=127.0.0.1
 MEALPLAN_PORT=$PORT
 DATABASE_URL=$db_url
 SECRET_KEY=$(random_secret)
+SETUP_CODE=$(head -c 9 /dev/urandom | base64 -w0 | tr '+/' '-_')
+ALLOW_REGISTRATION=false
 COOKIE_SECURE=$secure
 STATIC_DIR=$CURRENT/frontend/dist
 ${DOMAIN:+PUBLIC_URL=https://$DOMAIN}
@@ -714,7 +720,7 @@ service_start() {
     # Launched directly (not via a function, which would fork a wrapper) so $! is the server's PID,
     # and without fd 9 so the server doesn't hold the installer lock.
     nohup bash -c "set -a; . '$ENV_FILE'; set +a; cd '$CURRENT/backend' && exec '$CURRENT/venv/bin/uvicorn' app.main:app \
-      --host \"\$MEALPLAN_HOST\" --port \"\$MEALPLAN_PORT\"" >>"$VAR_DIR/server.log" 2>&1 9>&- </dev/null &
+      --host \"\$MEALPLAN_HOST\" --port \"\$MEALPLAN_PORT\" --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-server-header" >>"$VAR_DIR/server.log" 2>&1 9>&- </dev/null &
     echo $! >"$VAR_DIR/server.pid"
   else
     systemctl_ enable mealplan >/dev/null 2>&1
@@ -846,14 +852,17 @@ cmd_install() {
   ensure_linger
 
   log "Mealplan ${rev:0:12} is running at $(public_url)"
+  local setup_code
+  setup_code="$(env_value SETUP_CODE)"
   cat >&2 <<EOF
 
   Next steps, all in the app:
-    1. Open $(public_url) and register. The first account becomes the admin.
+    1. Open $(public_url) and create the first account, which becomes the admin.
+       It asks for this setup code: ${setup_code:-(see SETUP_CODE in $ENV_FILE)}
     2. Settings: add an Anthropic API key (AI advisor) and a free USDA key.
     3. Settings → Data: import the USDA food databases (about a minute).
-    4. Settings: turn off "Allow new sign-ups" once everyone has an account,
-       or invite people from Settings → Users.
+    4. Settings → Users: invite people, or turn on "Allow new sign-ups" while
+       everyone creates an account. Set "Site address" before using email.
 
   Manage it with:  ${SUDO}mealplan status | restart | upgrade | backup | uninstall
 EOF

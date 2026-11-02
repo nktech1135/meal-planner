@@ -381,6 +381,10 @@ textarea {
 .w-sm {
   width: 110px;
 }
+.w-md {
+  width: 180px;
+  max-width: 100%;
+}
 
 /* buttons */
 .btn {

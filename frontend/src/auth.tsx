@@ -1,6 +1,6 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError } from "./api";
+import { api, ApiError, whenSignedOut } from "./api";
 import { clearProfile } from "./profile";
 import type { User } from "./types";
 
@@ -28,6 +28,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     retry: false,
     staleTime: 5 * 60_000,
   });
+
+  // A session that ends (it expired, or an admin signed this account out) goes back to the sign-in page
+  // instead of leaving every page showing "Not signed in".
+  useEffect(() => {
+    whenSignedOut(() => {
+      if (!qc.getQueryData(["me"])) return;
+      clearProfile();
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "me" });
+      qc.setQueryData(["me"], null);
+    });
+    return () => whenSignedOut(null);
+  }, [qc]);
 
   const state: AuthState = {
     user: me.data ?? null,

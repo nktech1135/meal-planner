@@ -214,3 +214,56 @@ def test_api_errors_explain_themselves(user_client):
     resp = user_client.post("/api/advisor/chat", json={"message": "hi"})
     assert resp.status_code == 503 and "try again" in resp.json()["detail"]
     assert user_client.get("/api/advisor/conversations").json() == []  # failed turns aren't saved
+
+
+def test_reply_cut_off_mid_tool_call_doesnt_break_the_conversation(user_client):
+    cut = [{"type": "text", "text": "Let me check"}, {"type": "tool_use", "id": "toolu_cut", "name": "list_recipes", "input": {}}]
+    fake = FakeClient([message(cut, "max_tokens"), message([{"type": "text", "text": "Fine."}], "end_turn")])
+    use(fake)
+    convo = user_client.post("/api/advisor/chat", json={"message": "first"}).json()
+    assert user_client.post("/api/advisor/chat", json={"conversation_id": convo["id"], "message": "again"}).status_code == 200
+    sent = fake.requests[-1]["messages"]
+    assert not any(b.get("type") == "tool_use" for m in sent if m["role"] == "assistant" for b in m["content"])
+
+
+def test_conversations_saved_with_an_unanswered_tool_call_are_repaired():
+    from app.advisor.agent import _repaired
+
+    history = [
+        {"role": "user", "content": [{"type": "text", "text": "hi"}]},
+        {"role": "assistant", "content": [{"type": "tool_use", "id": "a", "name": "x", "input": {}}]},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "a", "content": "ok"}]},
+        {"role": "assistant", "content": [{"type": "text", "text": "cut"}, {"type": "tool_use", "id": "b", "name": "x",
+                                                                            "input": {}}]},
+    ]
+    fixed = _repaired(history)
+    assert fixed[1] == history[1]  # answered calls stay
+    assert fixed[3]["content"] == [{"type": "text", "text": "cut"}]
+
+
+def test_food_search_tolerates_a_serving_without_a_size(user_client, db_session):
+    from app.advisor.tools import run_tool
+    from app.models import User
+
+    user_client.post("/api/foods", json={"name": "Magnesium glycinate", "kind": "supplement", "basis": "serving",
+                                         "serving_unit": "capsule", "nutrients": {"magnesium_mg": 100}})
+    user = db_session.query(User).one()
+    out = run_tool(db_session, user, "search_foods", {"query": "magnesium"}, None, get_settings())
+    assert "per serving (capsule)" in out
+
+
+def test_targets_tool_counts_todays_exercise(user_client, db_session):
+    import json
+
+    from app.advisor.tools import run_tool
+    from app.models import User
+
+    user_client.put("/api/profile", json={"sex": "male", "birth_date": "1985-01-01", "height_cm": 180,
+                                          "weight_kg": 80, "timezone": "UTC"})
+    user = db_session.query(User).one()
+    before = json.loads(run_tool(db_session, user, "get_profile_and_targets", {}, None, get_settings()))
+    today = datetime.now(UTC).date().isoformat()
+    user_client.post("/api/exercise", json={"date": today, "name": "Ride", "duration_min": 60, "reported_kcal": 580})
+    after = json.loads(run_tool(db_session, user, "get_profile_and_targets", {}, None, get_settings()))
+    assert after["net_exercise_kcal_today"] == 500  # 580 reported, less 80 kcal resting
+    assert after["targets"]["energy_kcal"]["target"] == before["targets"]["energy_kcal"]["target"] + 500

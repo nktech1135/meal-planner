@@ -15,6 +15,7 @@ from app.routers.plan import plan_days, validate_item
 from app.schemas import PlanItemIn
 from app.services import supplement_check
 from app.services.access import get_food, recipe_yields, visible
+from app.services.exercise import daily_kcal
 from app.services.nutrition import NutritionError, recipe_nutrition
 from app.services.summary import day_summary, entries_between, local_date, local_today, range_totals
 from app.services.targets import compute_targets
@@ -166,6 +167,12 @@ def _span(args: dict, max_days: int) -> tuple[date, date]:
     return start, end
 
 
+def _serving(food: Food) -> str:
+    """e.g. "2 capsules"; a label may give the serving without its size."""
+    size = f"{food.serving_quantity:g} " if food.serving_quantity else ""
+    return f"{size}{food.serving_unit or 'serving'}".strip()
+
+
 def _entry(user: User, e) -> dict:
     return {
         "date": local_date(user, e.consumed_at).isoformat(), "meal": e.meal, "item": e.label,
@@ -186,7 +193,9 @@ def run_tool(db: Session, user: User, name: str, args: dict, conversation_id: in
             "weight_kg": p.weight_kg, "activity_level": p.activity_level, "goal": p.goal, "life_stage": p.life_stage,
             "timezone": p.timezone, "health_notes": p.health_notes,
         } if p else {}
-        result = {"profile": profile, "today": today.isoformat(), **compute_targets(p, today)}
+        exercise_kcal = daily_kcal(db, user, today, today).get(today, 0.0)
+        result = {"profile": profile, "today": today.isoformat(), "net_exercise_kcal_today": round(exercise_kcal, 1),
+                  **compute_targets(p, today, exercise_kcal)}
     elif name == "get_day_summary":
         s = day_summary(db, user, _date(args["date"]))
         result = {
@@ -218,7 +227,7 @@ def run_tool(db: Session, user: User, name: str, args: dict, conversation_id: in
             stmt = stmt.where(Food.kind == args["kind"])
         result = [{
             "food_id": f.id, "name": f.name, "brand": f.brand, "kind": f.kind, "state": f.state,
-            "basis": "per 100 g" if f.basis == "100g" else f"per serving ({f.serving_quantity:g} {f.serving_unit})",
+            "basis": "per 100 g" if f.basis == "100g" else f"per serving ({_serving(f)})",
             "trust_level": f.trust_level, "source": f.source,
             "macros": _named({k: v for k, v in f.nutrient_map().items()
                               if k in ("energy_kcal", "protein_g", "fat_g", "carbs_g", "fiber_g")}),

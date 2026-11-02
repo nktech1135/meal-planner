@@ -7,7 +7,7 @@ import { ComponentList, ErrorBox, Field, MacroLine, Notes, NutrientTable } from 
 import { FoodPicker } from "../components/FoodPicker";
 import { SavedMeals } from "../components/SavedMeals";
 import { TrustBadge } from "../components/TrustBadge";
-import { basisLabel, defaultMeal, fmtNum, mealLabel, nowLocalInput, parseNum, unitText } from "../lib";
+import { basisLabel, defaultMeal, fmtNum, mealLabel, nowLocalInput, parseNum, unitText, invalidateAfterLog } from "../lib";
 import { MEALS, type CalculateInput, type FoodSummary, type LogEntry, type Meal, type Suggestion, type WeighedState } from "../types";
 import { Button, focusSoon, rescueFocus, tabPanelProps, TabList, useAnnounceText, VisuallyHidden } from "../components/a11y";
 
@@ -128,8 +128,7 @@ export default function AddEntryPage() {
   const save = useMutation({
     mutationFn: () => api.addLog({ ...calcInput!, meal, consumed_at: new Date(when).toISOString(), note }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["day"] });
-      qc.invalidateQueries({ queryKey: ["suggestions"] });
+      invalidateAfterLog(qc);
       navigate("/");
     },
   });
@@ -152,8 +151,7 @@ export default function AddEntryPage() {
     },
     onSuccess: (entry) => {
       setLogged(entry);
-      qc.invalidateQueries({ queryKey: ["day"] });
-      qc.invalidateQueries({ queryKey: ["suggestions"] });
+      invalidateAfterLog(qc);
     },
   });
   const undo = useMutation({
@@ -162,8 +160,7 @@ export default function AddEntryPage() {
       setLogged(null);
       setUndone(`Undone: removed ${e.label} from the log.`);
       rescueFocus(() => noticeRef.current);
-      qc.invalidateQueries({ queryKey: ["day"] });
-      qc.invalidateQueries({ queryKey: ["suggestions"] });
+      invalidateAfterLog(qc);
     },
   });
 

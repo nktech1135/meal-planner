@@ -1,8 +1,18 @@
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import CookingYield, Food, FormChoice, Recipe, User
+from app.models import (
+    CookingYield,
+    Food,
+    FormChoice,
+    PlanItem,
+    Recipe,
+    RecipeIngredient,
+    SavedMeal,
+    SavedMealItem,
+    User,
+)
 from app.services.forms import option
 
 
@@ -23,6 +33,29 @@ def get_yield(db: Session, user: User, yield_id: int) -> CookingYield:
     if y is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cooking yield not found")
     return y
+
+
+def _count(db: Session, column, value) -> int:
+    return db.scalar(select(func.count()).where(column == value)) or 0
+
+
+def yield_uses(db: Session, yield_id: int) -> str | None:
+    """What still converts cooked weight through this yield (anyone's), or None. Logged entries don't count:
+    they keep the nutrients worked out when they were logged."""
+    uses = [(_count(db, RecipeIngredient.yield_id, yield_id), "recipe ingredient"),
+            (_count(db, PlanItem.yield_id, yield_id), "plan item"),
+            (_count(db, SavedMealItem.yield_id, yield_id), "saved-meal item")]
+    found = [f"{n} {what}{'s' if n != 1 else ''}" for n, what in uses if n]
+    return ", ".join(found) or None
+
+
+def food_uses_by_others(db: Session, food_id: int, user: User) -> str | None:
+    """Other people's plan items and saved meals that would vanish with this (shared) food, or None."""
+    plans = db.scalar(select(func.count()).where(PlanItem.food_id == food_id, PlanItem.user_id != user.id)) or 0
+    meals = db.scalar(select(func.count()).select_from(SavedMealItem).join(SavedMeal)
+                      .where(SavedMealItem.food_id == food_id, SavedMeal.owner_id != user.id)) or 0
+    found = [f"{n} {what}{'s' if n != 1 else ''}" for n, what in ((plans, "plan item"), (meals, "saved-meal item")) if n]
+    return ", ".join(found) or None
 
 
 def get_recipe(db: Session, user: User, recipe_id: int) -> Recipe:

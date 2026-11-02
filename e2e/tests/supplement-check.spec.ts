@@ -131,7 +131,7 @@ test("two servings a day go over the supplement-only magnesium limit; Back resto
   await expect(mg).toContainText("Over the upper limit");
   await expect(mg).toContainText("supplements only: 500 mg with this product");
   await expect(mg).toContainText("The upper limit counts supplements only, not food.");
-  await expect(page.getByText("Would take you over the upper limit for Magnesium.")).toBeVisible();
+  await expect(page.getByText("Would take you over the upper limit for Magnesium.", { exact: true })).toBeVisible();
   await expect(page.getByText("Over an upper limit").first()).toBeVisible();
 
   await page.goBack();

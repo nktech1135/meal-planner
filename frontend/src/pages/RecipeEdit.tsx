@@ -5,7 +5,7 @@ import { api } from "../api";
 import { ComponentList, ErrorBox, Field, Loading, MacroLine, Notes, NutrientTable } from "../components/common";
 import { FoodPicker } from "../components/FoodPicker";
 import { TrustBadge } from "../components/TrustBadge";
-import { fmtNum, parseNum } from "../lib";
+import { fmtNum, parseNum, useLeaveWarning } from "../lib";
 import type { Recipe, RecipeInput, WeighedState } from "../types";
 import { Button, rescueFocus, useAnnounce, usePageTitle, VisuallyHidden } from "../components/a11y";
 
@@ -145,6 +145,7 @@ export default function RecipeEditPage() {
   const [notes, setNotes] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [dirty, setDirty] = useState(false);
+  useLeaveWarning(dirty);
 
   useEffect(() => {
     const r = existing.data;

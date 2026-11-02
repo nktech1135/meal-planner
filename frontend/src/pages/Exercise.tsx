@@ -105,9 +105,16 @@ function ExerciseForm({ units, editing, onDone }: { units: UnitSystem; editing: 
     // The activity's own description is used when the name is left as it.
     name: form.activity_code && form.name === activityLabel ? "" : form.name.trim(),
     duration_min: minutes ?? 0,
-    distance_m: dist === null ? null : Math.round(fromDistance(dist, units)),
+    // Fields left as they were keep their exact values, not the rounded ones the form shows: an imported
+    // device calorie figure stays the device's.
+    distance_m:
+      editing && distance === numText(editing.distance_m, (m) => toDistance(m, units))
+        ? editing.distance_m
+        : dist === null
+          ? null
+          : Math.round(fromDistance(dist, units)),
     avg_hr: parseNum(hr),
-    reported_kcal: parseNum(kcal),
+    reported_kcal: editing && kcal === numText(editing.reported_kcal) ? editing.reported_kcal : parseNum(kcal),
     note: form.note.trim(),
   });
   const save = useMutation({
@@ -284,6 +291,7 @@ export default function ExercisePage() {
     mutationFn: (x: Exercise) => api.deleteExercise(x.id),
     onSuccess: (_, x) => {
       invalidate(qc);
+      if (editing?.id === x.id) setEditing(null); // it's gone, so stop editing it
       announce(`Deleted ${x.name} on ${fmtShortDate(x.date)}.`);
       rescueFocus(() => listHeading.current);
     },
@@ -361,7 +369,7 @@ export default function ExercisePage() {
                       >
                         Edit<VisuallyHidden> {x.name}</VisuallyHidden>
                       </button>
-                      <button type="button" className="btn-link small danger" disabled={del.isPending} onClick={() => del.mutate(x)}>
+                      <button type="button" className="btn-link small danger" disabled={del.isPending} onClick={() => confirm(`Delete ${x.name} on ${fmtShortDate(x.date)}?`) && del.mutate(x)}>
                         Delete<VisuallyHidden> {x.name}</VisuallyHidden>
                       </button>
                     </div>

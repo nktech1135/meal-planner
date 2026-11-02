@@ -16,9 +16,10 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def new_reset_token(db: Session, user: User) -> str:
-    """A fresh one-time token; earlier unused tokens for the user are revoked."""
-    db.execute(delete(PasswordReset).where(PasswordReset.user_id == user.id, PasswordReset.used_at.is_(None)))
+def new_reset_token(db: Session, user: User, revoke_earlier: bool = True) -> str:
+    """A fresh one-time token, by default revoking the user's earlier unused ones."""
+    if revoke_earlier:
+        revoke_reset_tokens(db, user)
     token = secrets.token_urlsafe(32)
     db.add(PasswordReset(user_id=user.id, token_hash=_hash(token), expires_at=datetime.now(UTC) + RESET_TTL))
     db.commit()
@@ -37,13 +38,25 @@ def consume_reset_token(db: Session, token: str) -> User:
     return user
 
 
-def reset_link(settings: Settings, request: Request, token: str) -> str:
-    base = (settings.public_url or str(request.base_url)).rstrip("/")
-    return f"{base}/reset-password?token={token}"
+def reset_link(settings: Settings, request: Request | None, token: str) -> str:
+    """The link to choose a new password. Without the site address, it is built from the request: only for a
+    link shown to the admin who asked for it, never for one sent by email (see mail.links_by_email)."""
+    if settings.public_url:
+        base = settings.public_url
+    elif request is not None:
+        base = str(request.base_url)
+    else:
+        raise ValueError("The site address isn't set")
+    return f"{base.rstrip('/')}/reset-password?token={token}"
 
 
 def end_sessions(user: User) -> None:
     user.session_version = (user.session_version or 0) + 1
+
+
+def revoke_reset_tokens(db: Session, user: User) -> None:
+    db.flush()  # a token just used is marked so first, and kept as used
+    db.execute(delete(PasswordReset).where(PasswordReset.user_id == user.id, PasswordReset.used_at.is_(None)))
 
 
 def is_last_admin(db: Session, user: User) -> bool:

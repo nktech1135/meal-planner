@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
 import { QuantityFields, unitChoices, WeighedFields } from "../components/AmountFields";
 import { ErrorBox, Field, Loading, MacroLine } from "../components/common";
 import { FoodPicker } from "../components/FoodPicker";
 import { TrustBadge } from "../components/TrustBadge";
-import { addDays, basisLabel, fmtDay, fmtNum, fmtShortDate, mealLabel, mondayOf, nutrientName, parseNum, todayISO, unitText, useMedia, useNutrients } from "../lib";
+import { addDays, basisLabel, fmtDay, fmtNum, fmtShortDate, mealLabel, mondayOf, nutrientName, parseNum, todayISO, unitText, useMedia, useNutrients, invalidateAfterLog } from "../lib";
 import { MEALS, type FoodSummary, type Meal, type PlanDay, type PlanItem, type PlanItemUpdate, type PlanPerson, type WeighedState } from "../types";
 import { Button, focusSoon, rescueFocus, tabPanelProps, TabList, titleText, useAnnounce, useAnnounceText, useReturnFocus, VisuallyHidden } from "../components/a11y";
 import { ActingForProvider, useActingFor } from "../components/actingFor";
@@ -15,10 +15,6 @@ import { activeProfile } from "../profile";
 import { useAuth } from "../auth";
 
 const ORIGIN: Record<string, string | null> = { manual: null, advisor: "from advisor", copy: "copied", saved_meal: "saved meal" };
-
-function invalidateAfterLog(qc: QueryClient) {
-  for (const key of ["plan", "day", "suggestions", "trends", "range", "shopping"]) qc.invalidateQueries({ queryKey: [key] });
-}
 
 /**
  * Whose plan is shown and what you may do with it. `of` is the owner's id when it's a plan someone

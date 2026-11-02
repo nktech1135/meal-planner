@@ -34,8 +34,14 @@ test("logging a workout raises the day's energy target", async ({ page }) => {
   await expect(page.getByText(new RegExp(`Includes ${kcal} kcal of logged exercise`)).first()).toBeVisible();
 
   await page.goto("/exercise");
+  const asked: string[] = [];
+  page.once("dialog", (d) => {
+    asked.push(d.message());
+    d.accept();
+  });
   await recent.getByRole("button", { name: /^Delete Jogging/ }).click();
   await expect(recent.getByText("No workouts logged in this period.")).toBeVisible();
+  expect(asked[0]).toMatch(/^Delete Jogging, general, self-selected pace on /);
 });
 
 test("importing a GPX file estimates energy from the activity type", async ({ page }) => {

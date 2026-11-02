@@ -103,7 +103,8 @@ def add_item(body: PlanItemIn, of: int | None = OF, user: User = Depends(current
     return create_item(db, plan_owner(db, user, of, edit=True), body, "manual", added_by=me)
 
 
-def create_item(db: Session, user: User, body: PlanItemIn, origin: str, added_by: User | None = None) -> dict:
+def create_item(db: Session, user: User, body: PlanItemIn, origin: str, added_by: User | None = None,
+                commit: bool = True) -> dict:
     """Add to ``user``'s plan; the item is checked as them, so it must be something they can see."""
     label = validate_item(db, user, body)
     last = db.scalar(select(PlanItem.position).where(PlanItem.user_id == user.id, PlanItem.date == body.date)
@@ -111,7 +112,10 @@ def create_item(db: Session, user: User, body: PlanItemIn, origin: str, added_by
     item = PlanItem(user_id=user.id, label=label, position=(last or 0) + 1, origin=origin,
                     created_by_id=(added_by or user).id, **body.model_dump())
     db.add(item)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return item_out(db, user, item)
 
 
@@ -169,7 +173,13 @@ def log_day(body: PlanLogIn, user: User = Depends(current_user), me: User = Depe
                                      .order_by(PlanItem.position))
              if (body.meal is None or it.meal == body.meal)
              and not (it.logged_entry_id and db.get(LogEntry, it.logged_entry_id))]
-    entries = [_log_item(db, user, it, me) for it in items]
+    entries = []
+    for it in items:
+        try:
+            entries.append(_log_item(db, user, it, me))
+        except HTTPException as exc:  # nothing is logged unless all of it can be
+            db.rollback()
+            raise HTTPException(exc.status_code, f"Couldn't log “{it.label}”: {exc.detail}") from None
     db.commit()
     return entries
 
@@ -217,11 +227,16 @@ def plan_saved_meal(body: PlanFromSavedIn, of: int | None = OF, user: User = Dep
     if meal is None or meal.owner_id != user.id:  # the plan owner's saved meals
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Saved meal not found")
     out = []
-    for it in meal.items:
-        out.append(create_item(db, user, PlanItemIn(date=body.date, meal=body.meal or meal.default_meal,
-                                                    food_id=it.food_id, recipe_id=it.recipe_id, quantity=it.quantity,
-                                                    unit=it.unit, weighed_state=it.weighed_state, yield_id=it.yield_id),
-                               "saved_meal", added_by=actor))
+    try:  # all of the meal or, if any item fails, none of it
+        for it in meal.items:
+            out.append(create_item(db, user, PlanItemIn(
+                date=body.date, meal=body.meal or meal.default_meal, food_id=it.food_id, recipe_id=it.recipe_id,
+                quantity=it.quantity, unit=it.unit, weighed_state=it.weighed_state, yield_id=it.yield_id),
+                "saved_meal", added_by=actor, commit=False))
+    except HTTPException:
+        db.rollback()
+        raise
+    db.commit()
     return out
 
 
@@ -262,15 +277,18 @@ def shopping_list(start: date, end: date, include_logged: bool = False, of: int 
         row["amount"] += amount
         row["used_for"].add(used_for)
 
+    skipped: list[str] = []
     for it in db.scalars(select(PlanItem).where(PlanItem.user_id == user.id, PlanItem.date >= start,
                                                 PlanItem.date <= end)):
         if it.logged_entry_id and not include_logged and db.get(LogEntry, it.logged_entry_id):
             continue
+        # Worked out in full before any of it is added, so a recipe never appears in part.
+        wanted: list[tuple[Food, str, float, str]] = []
         try:
             if it.food_id:
                 food = get_food(db, user, it.food_id)
                 unit, amount = _food_need(db, user, food, it.quantity, it.unit, it.weighed_state, it.yield_id)
-                need(food, unit, amount, it.label)
+                wanted.append((food, unit, amount, it.label))
             else:
                 recipe = get_recipe(db, user, it.recipe_id)
                 if it.unit == "serving":
@@ -278,26 +296,38 @@ def shopping_list(start: date, end: date, include_logged: bool = False, of: int 
                 elif recipe.cooked_weight_g:
                     share = it.quantity / recipe.cooked_weight_g
                 else:
-                    continue
+                    raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "no cooked weight")
                 yields = recipe_yields(db, user, recipe)
                 for ing in recipe.ingredients:
                     unit, amount = _food_need(db, user, ing.food, ing.grams, "g", ing.weighed_state, ing.yield_id)
                     if ing.yield_id not in yields:
                         unit, amount = "g", ing.grams
-                    need(ing.food, unit, amount * share, recipe.name)
-        except HTTPException:
-            continue  # a food or recipe that was since deleted
+                    wanted.append((ing.food, unit, amount * share, recipe.name))
+        except (HTTPException, NutritionError):
+            skipped.append(it.label)  # e.g. a food or recipe since deleted; the list says what's missing
+            continue
+        for args in wanted:
+            need(*args)
 
-    prefix = f"{start}:{end}:"
-    checked = {c.key.removeprefix(prefix) for c in db.scalars(
-        select(ShoppingCheck).where(ShoppingCheck.user_id == user.id, ShoppingCheck.key.startswith(prefix)))}
+    checked = _ticks(db, user, end)
     items = []
     for row in needs.values():
         key = f"{row['food_id']}:{row['unit']}"[:80]
         items.append({**row, "key": key, "amount": round(row["amount"], 1), "used_for": sorted(row["used_for"]),
                       "checked": key in checked})
     items.sort(key=lambda r: (r["category"], r["name"]))
-    return {"start": start.isoformat(), "end": end.isoformat(), "items": items}
+    return {"start": start.isoformat(), "end": end.isoformat(), "items": items, "skipped": sorted(set(skipped))}
+
+
+def _ticks(db: Session, user: User, end: date) -> set[str]:
+    """Items ticked on lists ending on ``end``. The start doesn't matter: this week's list starts today, so it
+    starts a day later each day, and ticks made yesterday still count."""
+    out = set()
+    for c in db.scalars(select(ShoppingCheck).where(ShoppingCheck.user_id == user.id)):
+        _, list_end, key = c.key.split(":", 2)
+        if list_end == end.isoformat():
+            out.add(key)
+    return out
 
 
 @router.put("/shopping/check", status_code=204)
@@ -306,8 +336,10 @@ def check_item(body: ShoppingCheckIn, of: int | None = OF, user: User = Depends(
     user = plan_owner(db, user, of, edit=True)  # ticks are shared: everyone shopping for this plan sees them
     key = f"{body.start}:{body.end}:{body.key}"
     if body.checked:
-        if db.get(ShoppingCheck, (user.id, key)) is None:
+        if body.key not in _ticks(db, user, body.end):
             db.add(ShoppingCheck(user_id=user.id, key=key))
     else:
-        db.execute(delete(ShoppingCheck).where(ShoppingCheck.user_id == user.id, ShoppingCheck.key == key))
+        for c in db.scalars(select(ShoppingCheck).where(ShoppingCheck.user_id == user.id,
+                                                        ShoppingCheck.key.endswith(f":{body.end}:{body.key}", autoescape=True))):
+            db.delete(c)
     db.commit()

@@ -1,9 +1,9 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { ErrorBox, Field, Loading } from "../components/common";
-import { parseNum, useNutrients } from "../lib";
+import { LEAVE_WARNING, parseNum, useLeaveWarning, useNutrients } from "../lib";
 import type { Basis, Component, Food, FoodInput, FoodState, Kind } from "../types";
 import { Button, rescueFocus, VisuallyHidden } from "../components/a11y";
 
@@ -31,8 +31,10 @@ interface FormState {
   barcode: string;
   ingredients: string;
   nutrients: Record<string, string>;
-  portions: { label: string; gram_weight: string }[];
-  other_components: { name: string; amount: string; unit: string }[];
+  portions: { id?: number; label: string; gram_weight: string }[];
+  // nutrient_code: the nutrient a label amount belongs to when its conversion depends on the form (e.g.
+  // vitamin A in IU), so it can be converted once the form is chosen. note: kept from imported labels.
+  other_components: { name: string; amount: string; unit: string; nutrient_code: string; note?: string | null }[];
 }
 
 const EMPTY: FormState = {
@@ -69,8 +71,14 @@ function fromFood(f: Food): FormState {
     barcode: f.barcode ?? "",
     ingredients: f.ingredients ?? "",
     nutrients: Object.fromEntries(Object.entries(f.nutrients).map(([k, v]) => [k, String(v)])),
-    portions: f.portions.map((p) => ({ label: p.label, gram_weight: String(p.gram_weight) })),
-    other_components: f.other_components.map((c) => ({ name: c.name, amount: s(c.amount), unit: c.unit ?? "" })),
+    portions: f.portions.map((p) => ({ id: p.id, label: p.label, gram_weight: String(p.gram_weight) })),
+    other_components: f.other_components.map((c) => ({
+      name: c.name,
+      amount: s(c.amount),
+      unit: c.unit ?? "",
+      nutrient_code: c.nutrient_code ?? "",
+      note: c.note,
+    })),
   };
 }
 
@@ -95,11 +103,19 @@ function toInput(s: FormState): FoodInput {
     ingredients: s.ingredients.trim() || null,
     nutrients,
     portions: s.portions
-      .map((p) => ({ label: p.label.trim(), gram_weight: parseNum(p.gram_weight) ?? 0 }))
+      .map((p) => ({ id: p.id, label: p.label.trim(), gram_weight: parseNum(p.gram_weight) ?? 0 }))
       .filter((p) => p.label && p.gram_weight > 0),
     other_components: s.other_components
       .filter((c) => c.name.trim())
-      .map((c): Component => ({ name: c.name.trim(), amount: parseNum(c.amount), unit: c.unit.trim() || null })),
+      .map(
+        (c): Component => ({
+          name: c.name.trim(),
+          amount: parseNum(c.amount),
+          unit: c.unit.trim() || null,
+          nutrient_code: c.nutrient_code || null,
+          ...(c.note ? { note: c.note } : {}),
+        }),
+      ),
   };
 }
 
@@ -113,24 +129,38 @@ export default function FoodFormPage() {
   const [params] = useSearchParams();
   // Arriving from a barcode scan that found nothing: start with the scanned barcode filled in.
   // From the supplement check (?kind=supplement): start a supplement label, counted per serving.
-  const [form, setForm] = useState<FormState>(() => ({
+  const [initial, setInitial] = useState<FormState>(() => ({
     ...EMPTY,
     barcode: params.get("barcode") ?? "",
     ...(params.get("kind") === "supplement" ? { kind: "supplement" as Kind, basis: "serving" as Basis, serving_quantity: "1" } : {}),
   }));
+  const [form, setForm] = useState<FormState>(initial);
 
   useEffect(() => {
-    if (existing.data) setForm(fromFood(existing.data));
+    if (existing.data) {
+      const loaded = fromFood(existing.data);
+      setInitial(loaded);
+      setForm(loaded);
+    }
   }, [existing.data]);
 
   const save = useMutation({
     mutationFn: (input: FoodInput) => (editing ? api.updateFood(editing, input) : api.createFood(input)),
     onSuccess: (food) => {
       qc.invalidateQueries({ queryKey: ["foods"] });
+      // Everywhere this food's numbers show: its page (also as read for a shared plan), its form choices,
+      // and the recipes, plans and calculations that use it.
+      qc.invalidateQueries({ queryKey: ["food", food.id] });
+      qc.invalidateQueries({ queryKey: ["food-forms", food.id] });
+      for (const key of ["recipe", "recipes", "plan", "calc", "supplement-stack", "supplement-check"]) qc.invalidateQueries({ queryKey: [key] });
       qc.setQueryData(["food", food.id], food);
+      setInitial(form);
       navigate(`/foods/${food.id}`);
     },
   });
+  const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initial), [form, initial]) && !save.isSuccess;
+  useLeaveWarning(dirty);
+  const formNutrients = useMemo(() => nutrientDefs.filter((n) => n.category === "vitamin" || n.category === "mineral"), [nutrientDefs]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -299,12 +329,17 @@ export default function FoodFormPage() {
       {form.kind === "supplement" && (
         <section className="card stack">
           <h2>Other label components</h2>
-          <p className="muted small">Ingredients that aren't in the nutrient list (e.g. botanicals, creatine), {basisText}.</p>
+          <p className="muted small">
+            Ingredients that aren't in the nutrient list (e.g. botanicals, creatine), {basisText}. For a vitamin or mineral given in a unit
+            that depends on its form (e.g. vitamin A or E in IU), choose the nutrient under "Counts toward"; you can then pick the form on the
+            food's page and it's counted.
+          </p>
           {form.other_components.length > 0 && (
             <div className="row row-head muted small" aria-hidden="true">
               <span className="grow">Name</span>
               <span className="w-sm">Amount</span>
               <span className="w-sm">Unit</span>
+              <span className="w-md">Counts toward</span>
               <span className="btn-link row-head-spacer">Remove</span>
             </div>
           )}
@@ -333,6 +368,19 @@ export default function FoodFormPage() {
                 onChange={(e) => set("other_components", form.other_components.map((x, j) => (j === i ? { ...x, unit: e.target.value } : x)))}
                 aria-label={`Component ${i + 1}: unit`}
               />
+              <select
+                className="w-md"
+                value={c.nutrient_code}
+                onChange={(e) => set("other_components", form.other_components.map((x, j) => (j === i ? { ...x, nutrient_code: e.target.value } : x)))}
+                aria-label={`Component ${i + 1}: counts toward`}
+              >
+                <option value="">Not a listed nutrient</option>
+                {formNutrients.map((n) => (
+                  <option key={n.code} value={n.code}>
+                    {n.name}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 className="btn-link danger"
@@ -349,7 +397,7 @@ export default function FoodFormPage() {
             id="add-component"
             type="button"
             className="btn"
-            onClick={() => set("other_components", [...form.other_components, { name: "", amount: "", unit: "mg" }])}
+            onClick={() => set("other_components", [...form.other_components, { name: "", amount: "", unit: "mg", nutrient_code: "" }])}
           >
             <span aria-hidden="true">+</span> Add component
           </button>
@@ -361,7 +409,7 @@ export default function FoodFormPage() {
         <Button type="submit" className="btn btn-primary" disabled={save.isPending}>
           {save.isPending ? "Saving…" : "Save food"}
         </Button>
-        <button type="button" className="btn" onClick={() => navigate(-1)}>
+        <button type="button" className="btn" onClick={() => (!dirty || confirm(LEAVE_WARNING)) && navigate(-1)}>
           Cancel
         </button>
       </div>
