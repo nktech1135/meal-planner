@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import LogEntry, User
+from app.models import Exercise, LogEntry, User
 from app.nutrients import TRUST_RANK
 from app.services.nutrition import add_into, rounded
 from app.services.targets import compute_targets
@@ -85,7 +85,10 @@ def day_summary(db: Session, user: User, day: date) -> dict:
             if c.get("amount") is not None:
                 key = (c["name"], c.get("unit") or "")
                 others[key] = others.get(key, 0) + c["amount"]
-    target_info = compute_targets(user.profile, day)
+    exercises = list(db.scalars(select(Exercise).where(Exercise.user_id == user.id, Exercise.date == day)
+                                .order_by(Exercise.started_at, Exercise.id)))
+    exercise_kcal = sum(x.kcal or 0 for x in exercises)
+    target_info = compute_targets(user.profile, day, exercise_kcal)
     evaluation = evaluate(totals, supplement_totals, target_info["targets"], uncounted)
     alerts = [
         f"{r['code']}: {r['limit_amount']:g} exceeds the upper limit {r['max']:g}"
@@ -101,6 +104,8 @@ def day_summary(db: Session, user: User, day: date) -> dict:
         "evaluation": evaluation,
         "warnings": target_info["warnings"],
         "alerts": alerts,
+        "exercises": exercises,
+        "exercise_kcal": round(exercise_kcal, 1),
         "energy_by_trust": {k: round(v, 1) for k, v in sorted(energy_by_trust.items(), key=lambda kv: TRUST_RANK[kv[0]])},
     }
 

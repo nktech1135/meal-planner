@@ -319,6 +319,8 @@ export interface DaySummary {
   warnings: string[];
   alerts: string[];
   energy_by_trust: Partial<Record<Trust, number>>;
+  exercises: Exercise[];
+  exercise_kcal: number; // net, already added to the energy target
 }
 
 export interface RangeDay {
@@ -644,7 +646,52 @@ export interface Trends {
   weight: WeightPoint[];
   body: Omit<BodyMeasurement, "note">[];
   energy_estimate: EnergyEstimate;
+  exercise_kcal: Record<string, number>; // net exercise energy by date
   warnings: string[];
+}
+
+// --- exercise ---------------------------------------------------------------------
+
+/** An activity from the 2024 Adult Compendium of Physical Activities. */
+export interface Activity {
+  code: string;
+  met: number;
+  heading: string;
+  description: string;
+}
+
+export type KcalMethod = "compendium" | "device" | "entered" | "none";
+
+export interface ExerciseInput {
+  date: string;
+  started_at?: string | null;
+  activity_code: string | null;
+  name: string;
+  duration_min: number;
+  distance_m: number | null;
+  avg_hr: number | null;
+  reported_kcal: number | null; // gross, from a device or a machine
+  note: string;
+}
+
+export interface Exercise extends ExerciseInput {
+  id: number;
+  started_at: string | null;
+  met: number | null;
+  kcal: number; // net (above resting), added to the day's energy target
+  kcal_method: KcalMethod;
+  calc_note: string;
+  weight_kg: number | null;
+  source: "manual" | "fit" | "tcx" | "gpx";
+}
+
+export interface ExerciseImport {
+  imported: number;
+  skipped_duplicates: number;
+  skipped_before_since: number;
+  errors: { file: string; error: string }[];
+  error_count: number;
+  exercises: Exercise[];
 }
 
 // --- meal plan --------------------------------------------------------------------

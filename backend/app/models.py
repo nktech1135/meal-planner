@@ -367,6 +367,36 @@ class BodyMeasurement(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
+class Exercise(Base):
+    """One workout, entered by hand or imported from an activity file. ``kcal`` is net energy (above resting),
+    which is added to that day's energy target."""
+
+    __tablename__ = "exercises"
+    __table_args__ = (UniqueConstraint("user_id", "external_id", name="uq_exercise_user_external"),
+                      Index("ix_exercises_user_date", "user_id", "date"))
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    date: Mapped[date] = mapped_column(Date)  # in the user's timezone
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    name: Mapped[str] = mapped_column(String(200))
+    activity_code: Mapped[str | None] = mapped_column(String(5))  # 2024 Adult Compendium code
+    met: Mapped[float | None] = mapped_column(Float)
+    duration_min: Mapped[float] = mapped_column(Float)
+    distance_m: Mapped[float | None] = mapped_column(Float)
+    avg_hr: Mapped[float | None] = mapped_column(Float)
+    reported_kcal: Mapped[float | None] = mapped_column(Float)  # gross, from a device or entered by hand
+    kcal: Mapped[float] = mapped_column(Float, default=0)
+    kcal_method: Mapped[str] = mapped_column(String(20), default="none")  # compendium | device | entered | none
+    calc_note: Mapped[str] = mapped_column(String(300), default="")
+    weight_kg: Mapped[float | None] = mapped_column(Float)  # the weight used for the estimate
+    source: Mapped[str] = mapped_column(String(10), default="manual")  # manual | fit | tcx | gpx
+    external_id: Mapped[str | None] = mapped_column(String(64))  # de-duplicates imports
+    note: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
 class PlanItem(Base):
     """Something the user intends to eat or take on a future (or current) day."""
 

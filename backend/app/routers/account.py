@@ -15,6 +15,7 @@ from app.db import get_db
 from app.models import (
     AdvisorConversation,
     BodyMeasurement,
+    Exercise,
     Food,
     FormChoice,
     LogEntry,
@@ -25,7 +26,7 @@ from app.models import (
     User,
 )
 from app.routers.foods import food_out
-from app.schemas import BodyOut, LogOut, ProfileOut, SavedMealOut, UserOut
+from app.schemas import BodyOut, ExerciseOut, LogOut, ProfileOut, SavedMealOut, UserOut
 from app.security import clear_session, hash_password, issue_session, signed_in_user, verify_password
 from app.services.accounts import delete_user, end_sessions
 from app.services.sharing import shares_of
@@ -96,6 +97,7 @@ def export_data(user: User = Depends(signed_in_user), db: Session = Depends(get_
         "saved_meals": [SavedMealOut.model_validate(m).model_dump(mode="json") for m in rows(SavedMeal, SavedMeal.owner_id)],
         "body_measurements": [BodyOut.model_validate(m).model_dump(mode="json")
                               for m in rows(BodyMeasurement, BodyMeasurement.user_id)],
+        "exercise": [ExerciseOut.model_validate(x).model_dump(mode="json") for x in rows(Exercise, Exercise.user_id)],
         "meal_plan": [{k: (getattr(p, k).isoformat() if k == "date" else getattr(p, k)) for k in (
             "date", "meal", "label", "food_id", "recipe_id", "quantity", "unit", "weighed_state", "note")}
             for p in rows(PlanItem, PlanItem.user_id)],

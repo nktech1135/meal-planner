@@ -205,6 +205,7 @@ const ROUTE_TITLES: [string, string][] = [
   ["/log", "Add entry"],
   ["/plan", "Plan"],
   ["/plan/shopping", "Shopping list"],
+  ["/exercise", "Exercise"],
   ["/trends", "Trends"],
   ["/foods", "Foods"],
   ["/foods/new", "New food"],

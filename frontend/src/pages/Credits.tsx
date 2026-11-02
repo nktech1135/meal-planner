@@ -39,8 +39,22 @@ export default function CreditsPage() {
           </li>
         ))}
       </ul>
-      <h2>Research</h2>
+      <h2>Exercise and research</h2>
       <ul className="plain-list stack">
+        <li className="card stack-sm">
+          <h3 className="h-card">2024 Adult Compendium of Physical Activities</h3>
+          <p className="small">
+            MET values for exercise energy estimates, unchanged from the published table. Herrmann SD, Willis EA, Ainsworth BE, et al. 2024 Adult
+            Compendium of Physical Activities: A third update of the energy costs of human activities. J Sport Health Sci. 2024;13(1):6-12.
+          </p>
+          <p className="muted small">
+            <a href="https://pacompendium.com/adult-compendium/" target="_blank" rel="noopener noreferrer">
+              pacompendium.com
+              <NewTab />
+            </a>
+            {" · "}Article licence: CC BY-NC-ND 4.0
+          </p>
+        </li>
         <li className="card stack-sm">
           <h3 className="h-card">PubMed</h3>
           <p className="small">

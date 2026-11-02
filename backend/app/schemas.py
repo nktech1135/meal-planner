@@ -471,6 +471,37 @@ class BodyOut(BodyIn, ORM):
     date: date
 
 
+class ExerciseIn(BaseModel):
+    date: date
+    started_at: datetime | None = None
+    activity_code: str | None = Field(default=None, pattern=r"^\d{5}$")
+    name: str = Field(default="", max_length=200)
+    duration_min: float = Field(gt=0, le=24 * 60)
+    distance_m: float | None = Field(default=None, ge=0, lt=1_000_000)
+    avg_hr: float | None = Field(default=None, gt=20, lt=260)
+    reported_kcal: float | None = Field(default=None, ge=0, lt=20_000)
+    note: str = Field(default="", max_length=500)
+
+
+class ExerciseOut(ORM):
+    id: int
+    date: date
+    started_at: datetime | None
+    name: str
+    activity_code: str | None
+    met: float | None
+    duration_min: float
+    distance_m: float | None
+    avg_hr: float | None
+    reported_kcal: float | None
+    kcal: float
+    kcal_method: str
+    calc_note: str
+    weight_kg: float | None
+    source: str
+    note: str
+
+
 class PlanItemIn(BaseModel):
     date: date
     meal: Meal = "dinner"

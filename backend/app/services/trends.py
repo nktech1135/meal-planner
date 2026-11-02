@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import BodyMeasurement, User
+from app.services.exercise import daily_kcal
 from app.services.nutrition import add_into
 from app.services.summary import entries_between, evaluate, local_date
 from app.services.targets import compute_targets
@@ -47,12 +48,16 @@ def trends(db: Session, user: User, start: date, end: date) -> dict:
         averages = {k: v / n for k, v in averages.items()}
         supp_averages = {k: v / n for k, v in supp_averages.items()}
 
-    targets = compute_targets(user.profile, end)
+    # Exercise raises a day's energy target, so averages are judged against the average day's target
+    # and each day against its own.
+    exercise = daily_kcal(db, user, start, end)
+    targets = compute_targets(user.profile, end, sum(exercise.get(d, 0) for d in logged) / n if n else 0)
+    day_targets = {d: compute_targets(user.profile, end, exercise[d])["targets"] for d in logged if exercise.get(d)}
     evaluation = evaluate(averages, supp_averages, targets["targets"])
     for row in evaluation:
-        t = row
         met = 0
         for d in logged:
+            t = day_targets.get(d, {}).get(row["code"], row)
             day_eval = evaluate(daily[d], supplements.get(d, {}), {row["code"]: {k: t.get(k) for k in (
                 "min", "target", "max", "ul_scope", "max_is_limit")}})[0]
             met += day_eval["status"] == "ok"
@@ -77,6 +82,7 @@ def trends(db: Session, user: User, start: date, end: date) -> dict:
         "body": [{"date": m.date.isoformat(), "weight_kg": m.weight_kg, "body_fat_pct": m.body_fat_pct,
                   "waist_cm": m.waist_cm} for m in measurements if m.date >= start],
         "energy_estimate": energy_estimate(daily, in_window, start, end),
+        "exercise_kcal": {d.isoformat(): round(v, 1) for d, v in sorted(exercise.items())},
         "warnings": targets["warnings"],
     }
 

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.advisor import pubmed
 from app.config import Settings
-from app.models import BodyMeasurement, Food, PlanProposal, Recipe, User
+from app.models import BodyMeasurement, Exercise, Food, PlanProposal, Recipe, User
 from app.nutrients import BY_CODE
 from app.routers.plan import plan_days, validate_item
 from app.schemas import PlanItemIn
@@ -95,6 +95,13 @@ TOOLS = [
     {
         "name": "get_body_measurements",
         "description": "Weight, body fat and waist measurements over a date range (max 365 days).",
+        "input_schema": _obj({"start_date": _DATE, "end_date": _DATE}),
+    },
+    {
+        "name": "get_exercise",
+        "description": "Workouts over a date range (max 92 days): activity, duration, distance, heart rate, MET value, "
+                       "and net exercise energy (kcal above resting, added to that day's energy target) with how it was "
+                       "worked out: from a device, entered by hand, or estimated from 2024 Adult Compendium METs.",
         "input_schema": _obj({"start_date": _DATE, "end_date": _DATE}),
     },
     {
@@ -189,6 +196,9 @@ def run_tool(db: Session, user: User, name: str, args: dict, conversation_id: in
             "vs_targets": [{k: r.get(k) for k in ("code", "amount", "limit_amount", "status", "min", "target", "max",
                                                   "kind", "ul_scope", "note")} for r in s["evaluation"]],
             "alerts": s["alerts"], "warnings": s["warnings"], "energy_kcal_by_trust_level": s["energy_by_trust"],
+            "exercise": [{"activity": x.name, "duration_min": round(x.duration_min), "net_kcal": round(x.kcal),
+                          "kcal_method": x.kcal_method} for x in s["exercises"]],
+            "net_exercise_kcal": s["exercise_kcal"],
         }
     elif name == "get_daily_totals":
         start, end = _span(args, 92)
@@ -244,6 +254,7 @@ def run_tool(db: Session, user: User, name: str, args: dict, conversation_id: in
                                           for r in t["evaluation"]],
             "weight_trend": (t["weight"][0], t["weight"][-1]) if t["weight"] else None,
             "energy_estimate": t["energy_estimate"], "warnings": t["warnings"],
+            "net_exercise_kcal_by_day": t["exercise_kcal"],
         }
     elif name == "get_body_measurements":
         start, end = _span(args, 365)
@@ -252,6 +263,14 @@ def run_tool(db: Session, user: User, name: str, args: dict, conversation_id: in
                   for m in db.scalars(select(BodyMeasurement).where(
                       BodyMeasurement.user_id == user.id, BodyMeasurement.date >= start, BodyMeasurement.date <= end)
                       .order_by(BodyMeasurement.date))]
+    elif name == "get_exercise":
+        start, end = _span(args, 92)
+        result = [{"date": x.date.isoformat(), "activity": x.name, "compendium_code": x.activity_code, "met": x.met,
+                   "duration_min": round(x.duration_min), "distance_km": x.distance_m and round(x.distance_m / 1000, 2),
+                   "avg_heart_rate": x.avg_hr, "net_kcal": round(x.kcal), "reported_kcal": x.reported_kcal,
+                   "kcal_method": x.kcal_method, "calculation": x.calc_note, "source": x.source, "note": x.note}
+                  for x in db.scalars(select(Exercise).where(Exercise.user_id == user.id, Exercise.date >= start,
+                                                             Exercise.date <= end).order_by(Exercise.date))]
     elif name == "get_meal_plan":
         start, end = _span(args, 31)
         result = [{"date": d["date"], "items": [{k: i[k] for k in ("meal", "label", "quantity", "unit", "food_id",

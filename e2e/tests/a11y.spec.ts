@@ -103,6 +103,7 @@ const pages: [string, (s: Seed) => string][] = [
   ["Plan", () => "/plan"],
   ["Shopping list", () => "/plan/shopping"],
   ["Trends", () => "/trends?days=30"],
+  ["Exercise", () => "/exercise"],
   ["Foods", () => "/foods"],
   ["Foods (online sources)", () => "/foods?tab=online"],
   ["Food detail", (s) => `/foods/${s.chicken.id}`],

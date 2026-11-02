@@ -254,7 +254,7 @@ export default function ProfilePage() {
                   setWeight({ text: e.target.value, kg: v === null ? null : fromWeight(v, units) });
                 }} />
             </Field>
-            <Field label="Activity level">
+            <Field label="Activity level" hint="Everyday activity, not counting workouts you log on Exercise: those are added to each day's target.">
               <select value={form.activity_level} onChange={(e) => set("activity_level", e.target.value as Profile["activity_level"])}>
                 <option value="sedentary">Sedentary</option>
                 <option value="light">Lightly active</option>

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Food, LogEntry, User
 from app.routers.conversions import calculate_nutrition
-from app.schemas import CopyIn, LogIn, LogOut, LogUpdate, SuggestionOut
+from app.schemas import CopyIn, ExerciseOut, LogIn, LogOut, LogUpdate, SuggestionOut
 from app.security import current_user, signed_in_user
 from app.services.access import get_food, get_recipe
 from app.services.summary import day_summary, entries_between, local_today, range_totals, user_tz
@@ -165,6 +165,7 @@ def delete_entry(entry_id: int, user: User = Depends(current_user), db: Session 
 def summary_day(day: date | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
     summary = day_summary(db, user, day or local_today(user))
     summary["entries"] = [LogOut.model_validate(e) for e in summary["entries"]]
+    summary["exercises"] = [ExerciseOut.model_validate(x) for x in summary["exercises"]]
     return summary
 
 

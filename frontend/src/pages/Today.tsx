@@ -466,6 +466,34 @@ export default function TodayPage() {
             <MacroLine values={s.totals} />
           </section>
 
+          <section className="card stack-sm">
+            <div className="row between wrap">
+              <h2>Exercise</h2>
+              <Link to="/exercise" className="btn btn-sm">
+                {s.exercises.length ? "Manage" : "Log exercise"}
+              </Link>
+            </div>
+            {s.exercises.length === 0 ? (
+              <p className="muted">No workouts logged for this day.</p>
+            ) : (
+              <>
+                <ul className="plain-list">
+                  {s.exercises.map((x) => (
+                    <li key={x.id}>
+                      <strong>{x.name}</strong>{" "}
+                      <span className="muted">
+                        {Math.round(x.duration_min)} min · {x.kcal_method === "none" ? "not counted" : `+${Math.round(x.kcal)} kcal`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="muted small">
+                  {Math.round(s.exercise_kcal)} kcal above resting is included in this day's energy target.
+                </p>
+              </>
+            )}
+          </section>
+
           <section className="card">
             <div className="row between wrap">
               <h2 ref={logHeading}>Log</h2>

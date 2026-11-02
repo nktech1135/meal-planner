@@ -5,7 +5,11 @@ import type {
   AdminUser,
   BodyInput,
   BodyMeasurement,
+  Activity,
   Dataset,
+  Exercise,
+  ExerciseImport,
+  ExerciseInput,
   ImportJob,
   InviteResult,
   NewUserInput,
@@ -106,8 +110,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     resp = await fetch(path, {
       method,
       credentials: "same-origin",
-      headers: { ...baseHeaders(), ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: { ...baseHeaders(), ...(body !== undefined && !(body instanceof FormData) ? { "Content-Type": "application/json" } : {}) },
+      body: body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
     throw new ApiError("Could not reach the server", 0);
@@ -245,6 +249,19 @@ export const api = {
   savedMealFromLog: (name: string, date: string, meal: Meal) => post<SavedMeal>("/api/saved-meals/from-log", { name, date, meal }),
   day: (day?: string) => get<DaySummary>(`/api/summary/day${qs({ day })}`),
   range: (days: number) => get<RangeDay[]>(`/api/summary/range${qs({ days })}`),
+
+  // exercise
+  exercise: (start?: string, end?: string) => get<Exercise[]>(`/api/exercise${qs({ start, end })}`),
+  activities: (q: string) => get<Activity[]>(`/api/exercise/activities${qs({ q })}`),
+  addExercise: (x: ExerciseInput) => post<Exercise>("/api/exercise", x),
+  updateExercise: (id: number, x: ExerciseInput) => put<Exercise>(`/api/exercise/${id}`, x),
+  deleteExercise: (id: number) => del(`/api/exercise/${id}`),
+  importExercise: (files: File[], since: string | null) => {
+    const form = new FormData();
+    for (const f of files) form.append("files", f);
+    if (since) form.append("since", since);
+    return post<ExerciseImport>("/api/exercise/import", form);
+  },
 
   // trends & body
   trends: (days: number) => get<Trends>(`/api/trends${qs({ days })}`),

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { api, makeFood } from "./helpers";
 
-const PAGES = ["/", "/log", "/plan", "/plan/shopping", "/trends", "/foods", "/foods/new", "/supplements/check", "/recipes", "/advisor", "/about/data",
+const PAGES = ["/", "/log", "/plan", "/plan/shopping", "/exercise", "/trends", "/foods", "/foods/new", "/supplements/check", "/recipes", "/advisor", "/about/data",
   "/profile", "/account", "/settings", "/settings/data", "/settings/users"];
 
 async function noSidewaysScroll(page: Page, path: string) {

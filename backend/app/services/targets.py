@@ -87,8 +87,12 @@ def estimate_energy_kcal(sex: str, age: int, weight_kg: float, height_cm: float,
     return bmr * ACTIVITY_FACTORS.get(activity, 1.55) * GOAL_FACTORS.get(goal, 1.0)
 
 
-def compute_targets(profile, today: date) -> dict:
-    """Return {"targets": {code: {...}}, "warnings": [...]} for a Profile (or None)."""
+def compute_targets(profile, today: date, exercise_kcal: float = 0.0) -> dict:
+    """Return {"targets": {code: {...}}, "warnings": [...]} for a Profile (or None).
+
+    ``exercise_kcal`` is the day's net exercise energy. It raises the energy target (the activity level
+    describes everyday activity without logged workouts), and the macronutrient ranges scale with it.
+    """
     targets: dict[str, dict] = {}
     warnings: list[str] = []
 
@@ -126,11 +130,11 @@ def compute_targets(profile, today: date) -> dict:
         }
 
         if weight and height:
-            kcal = estimate_energy_kcal(sex, age, weight, height, profile.activity_level, profile.goal)
+            kcal = estimate_energy_kcal(sex, age, weight, height, profile.activity_level, profile.goal) + exercise_kcal
             targets["energy_kcal"] = {
                 "min": None, "target": round(kcal), "max": None, "kind": "estimate",
-                "source": "Mifflin-St Jeor × activity factor", "ul_scope": None,
-                "note": "An estimate; adjust using your weight trend.",
+                "source": "Mifflin-St Jeor × activity factor" + (" + logged exercise" if exercise_kcal else ""),
+                "ul_scope": None, "note": "An estimate; adjust using your weight trend.",
             }
             amdr = "DRI Acceptable Macronutrient Distribution Range"
             targets["protein_g"] = {
@@ -158,4 +162,11 @@ def compute_targets(profile, today: date) -> dict:
                          "kind": "override", "source": "Your override",
                          "max_is_limit": True if override.get("max") is not None else base.get("max_is_limit", True)}
 
+    energy = targets.get("energy_kcal")
+    if energy and exercise_kcal:
+        if energy["kind"] == "override":
+            energy.update({k: round(energy[k] + exercise_kcal) for k in ("min", "target", "max")
+                           if energy.get(k) is not None})
+        energy["exercise_kcal"] = round(exercise_kcal)
+        energy["note"] = f"Includes {exercise_kcal:.0f} kcal of logged exercise. " + (energy.get("note") or "")
     return {"targets": targets, "warnings": warnings}

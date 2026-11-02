@@ -222,6 +222,31 @@ Pricing and terms change. Check each vendor directly.
 - **Web search and fetch** (optional), restricted to NIH, MedlinePlus, FDA, USDA,
   CDC, health.gov, the National Academies, WHO and EFSA.
 
+## Exercise energy
+
+- **MET values** come from the [2024 Adult Compendium of Physical
+  Activities](https://pacompendium.com/adult-compendium/) (Herrmann et al.,
+  J Sport Health Sci 2024;13(1):6-12), vendored unchanged in
+  `backend/app/data/compendium/` with its provenance. The article is CC BY-NC-ND 4.0.
+- **Net energy** is what's added to a day's target, because the profile estimate
+  already counts resting energy for every hour of the day. With 1 MET ≈ 1 kcal/kg/h,
+  a Compendium estimate is (MET − 1) × weight × hours, and a device or machine
+  total has 1 kcal/kg/h × hours taken off. Weight is the latest weigh-in on or
+  before the workout, else the profile weight, and is stored with the workout.
+- **Imported files**: `.fit` (decoded with [fitdecode](https://github.com/polyvertex/fitdecode)),
+  `.tcx` and `.gpx`, optionally gzipped, or a `.zip` of them. Device calories are
+  used when present; otherwise the sport is mapped to a general Compendium
+  activity (`SPORT_CODES` in `app/services/exercise.py`). GPX has no calorie field.
+- **Not connected directly:**
+  - **Strava**: its API Policy (effective 2026-06-01) bans using Strava data in any AI application, including a
+    model's context window (§5.3), and combining it with other user data (§5.4).
+    Users can upload their own Strava archive instead.
+  - **Fitbit**: the Fitbit Web API was switched off at the end of October 2026, and its replacement, the Google Health
+    API, needs a Google Cloud project and a security assessment for server-side apps.
+- Estimates are rough. The Compendium says it "does not reflect precise
+  individual EE values", and wrist devices vary widely. The weight-trend
+  maintenance estimate on Trends is the better check.
+
 ## Raw → cooked conversions
 
 A **cooking yield** links a raw food to a cooking method:
@@ -284,7 +309,9 @@ log portions by cooked weight.
 - Some ULs apply only to supplemental/fortificant forms: magnesium, folic acid,
   niacin, vitamin E, and preformed vitamin A. Those are compared against
   supplement intake only.
-- Energy is a Mifflin-St Jeor estimate × activity factor. Macronutrient ranges are
+- Energy is a Mifflin-St Jeor estimate × activity factor, plus that day's net
+  exercise energy (the activity level means everyday activity without logged
+  workouts; an energy override rises by the same amount). Macronutrient ranges are
   the AMDRs. Saturated fat and added sugars are capped at <10% of energy, per the
   Dietary Guidelines for Americans 2020–2025.
 - Built-in values do not cover pregnancy, lactation or people under 19. The app

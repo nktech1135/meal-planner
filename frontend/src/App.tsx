@@ -12,6 +12,7 @@ import AddEntryPage from "./pages/AddEntry";
 import PlanPage from "./pages/Plan";
 import ShoppingPage from "./pages/Shopping";
 import TrendsPage from "./pages/Trends";
+import ExercisePage from "./pages/Exercise";
 import FoodsPage from "./pages/Foods";
 import FoodDetailPage from "./pages/FoodDetail";
 import FoodFormPage from "./pages/FoodForm";
@@ -30,6 +31,7 @@ const NAV = [
   { to: "/", label: "Today", end: true },
   { to: "/log", label: "Add" },
   { to: "/plan", label: "Plan" },
+  { to: "/exercise", label: "Exercise" },
   { to: "/trends", label: "Trends" },
   { to: "/foods", label: "Foods" },
   { to: "/recipes", label: "Recipes" },
@@ -89,6 +91,7 @@ export default function App() {
           <Route path="/log" element={<AddEntryPage />} />
           <Route path="/plan" element={<PlanPage />} />
           <Route path="/plan/shopping" element={<ShoppingPage />} />
+          <Route path="/exercise" element={<ExercisePage />} />
           <Route path="/trends" element={<TrendsPage />} />
           <Route path="/foods" element={<FoodsPage />} />
           <Route path="/foods/new" element={<FoodFormPage />} />

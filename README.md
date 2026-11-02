@@ -27,8 +27,13 @@ A web app for tracking meals and supplements, with an AI nutrition advisor.
 - **Meal planning.** Plan days ahead from foods, recipes and saved meals, see
   projected totals against targets, log a planned day in one click, and get a
   shopping list with recipes broken down into raw ingredients.
+- **Exercise.** Log workouts by hand from the 1,111 activities in the 2024 Adult
+  Compendium of Physical Activities, or import `.fit`, `.tcx` and `.gpx` files
+  (a Garmin export, or a whole Strava archive `.zip`). Energy burned above resting
+  is added to that day's energy target, using device calories when a file has them
+  and Compendium METs otherwise.
 - **AI advisor.** A Claude-powered chat that reads your profile, targets, logs,
-  trends, plan and food database. It reviews your intake and flags
+  trends, exercise, plan and food database. It reviews your intake and flags
   upper-limit problems. It can propose meal-plan items, which you approve before
   they're added. It searches PubMed for research, weighs it by study design
   (guidelines and systematic reviews first, retracted papers never) and cites it
@@ -231,5 +236,6 @@ carries credentials (e.g. a deploy token).
 | Web UI | Builds with no type errors; Playwright suite (58 tests) on the built app, incl. axe accessibility checks in light and dark; not yet tried with a real screen reader |
 | Nutritionix and Edamam adapters | Written to the vendors' published API docs; need a live check with real keys |
 | AI advisor | Tool loop tested with a fake client; needs a live check with an API key. PubMed search runs against recorded E-utilities responses (2026-11-02) |
+| Exercise | Compendium table extracted from the official PDF and cross-checked against its text; file import tested with synthetic FIT/TCX/GPX files; not yet tried with files from real devices |
 | Installer (`install.sh`) | Tested in unprivileged test mode (SQLite, no root): install (from a file and piped), upgrade, rollback after a failed migration and after a failed start (schema downgraded), uninstall, reinstall reusing data, purge. The generated systemd unit passes `systemd-analyze verify`. Per-user mode run for real without root (in a scratch home, as a background process): install, restart, upgrade, uninstall, purge; its systemd user unit passes `systemd-analyze --user verify` but hasn't been started. App bound to 127.0.0.1 in test and per-user mode, including the upgrade that moves an older all-addresses install to 127.0.0.1. Not yet run as root: apt packages, the system user, PostgreSQL setup, starting under systemd, Caddy (HTTP on port 80, `--domain` HTTPS, Caddyfile set aside and restored) |
 | Upper limits & reference intakes | Hand-transcribed from the DRI tables; verify before relying on them |

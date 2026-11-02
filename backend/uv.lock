@@ -301,6 +301,15 @@ wheels = [
 ]
 
 [[package]]
+name = "defusedxml"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69", size = 75520, upload-time = "2021-03-08T10:59:26.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61", size = 25604, upload-time = "2021-03-08T10:59:24.45Z" },
+]
+
+[[package]]
 name = "dnspython"
 version = "2.9.1"
 source = { registry = "https://pypi.org/simple" }
@@ -355,6 +364,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e9/eb/2cf8c80abf09b2800aef0a83b41066fbfda8ee5495b7a08b9d1af40f7046/fastapi-0.162.0.tar.gz", hash = "sha256:6a22c1e2e6e32e0633ee7e170f00009a29b8228b16feb219ee42f32fd8d88a8f", size = 527867, upload-time = "2026-10-23T18:47:33.264Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b4/4f/3f2c25c9b43970b5e9a08beb5e04776247edea684ddc0930f4f02f0bb6cb/fastapi-0.162.0-py3-none-any.whl", hash = "sha256:3785963de305dd09912426cb81f2d230fce98ab3521cdfe97265c8d14983128c", size = 148912, upload-time = "2026-10-23T18:47:31.734Z" },
+]
+
+[[package]]
+name = "fitdecode"
+version = "0.11.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/87/19/1bde056f443d8ce890dbc0f0bd8a216cc9ebfda4221619767f80cf1835e2/fitdecode-0.11.0.tar.gz", hash = "sha256:52d920e50eaa76eb065b20bfd4e42f72195e894a079098dacc1cafa908cd4b83", size = 107149, upload-time = "2025-08-06T08:08:42.105Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7b/7b/75829f9b77b2546f955ec265de10de993939bf3218b5d957ca79803a2d28/fitdecode-0.11.0-py3-none-any.whl", hash = "sha256:a1bdb9b4d1e9ebac0001fc58c22fe07a3f9967ca4e13258c6ef99cdb8d697a78", size = 109961, upload-time = "2025-08-06T08:08:39.033Z" },
 ]
 
 [[package]]
@@ -846,14 +864,17 @@ dependencies = [
     { name = "anthropic" },
     { name = "argon2-cffi" },
     { name = "cryptography" },
+    { name = "defusedxml" },
     { name = "email-validator" },
     { name = "fastapi" },
+    { name = "fitdecode" },
     { name = "httpx" },
     { name = "ijson" },
     { name = "openpyxl" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
+    { name = "python-multipart" },
     { name = "sqlalchemy" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -871,14 +892,17 @@ requires-dist = [
     { name = "anthropic", specifier = ">=2.3.0" },
     { name = "argon2-cffi", specifier = ">=25.1.0" },
     { name = "cryptography", specifier = ">=50.0.2" },
+    { name = "defusedxml", specifier = ">=0.7.1" },
     { name = "email-validator", specifier = ">=2.3.0" },
     { name = "fastapi", specifier = ">=0.162.0" },
+    { name = "fitdecode", specifier = ">=0.11.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "ijson", specifier = ">=3.6.0" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
     { name = "pydantic-settings", specifier = ">=2.16.2" },
     { name = "pyjwt", specifier = ">=2.15.1" },
+    { name = "python-multipart", specifier = ">=0.0.33" },
     { name = "sqlalchemy", specifier = ">=2" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },
 ]
@@ -1187,6 +1211,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/74/26/2fbeedb218a787a5eea551c7532cac4e009f83d689dd2faa0d0353473f86/python_dotenv-1.2.4.tar.gz", hash = "sha256:f0d53e69935a851c0dcc78f3ab7aaccd8cabef0b92382b576b824212902873c0", size = 60824, upload-time = "2026-10-01T05:36:10Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/60/d1/38f3a3405989a89ac18390803e70c6ad7c7760da4f9b83cbeca0c44a0c72/python_dotenv-1.2.4-py3-none-any.whl", hash = "sha256:42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc", size = 23266, upload-time = "2026-10-01T05:36:08.633Z" },
+]
+
+[[package]]
+name = "python-multipart"
+version = "0.0.33"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/b7/15b905f6142a9a8a68f66900788da1a32e4d4254452783b37ad1eccb0506/python_multipart-0.0.33.tar.gz", hash = "sha256:b8112424a6abd162ec08d390565dd113ad699f2fe6fef3c987b8bbcbfe9e390d", size = 50499, upload-time = "2026-10-31T14:23:47.461Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dd/1b/6b1b4164ec734cac911460ab599bfbe46afedd42c5c9627fe4235942c314/python_multipart-0.0.33-py3-none-any.whl", hash = "sha256:8f16c07b36add9da6b2ee87d3efcaf0a45a6de9c3d0a5dd94e9ccf7675a7bc45", size = 32253, upload-time = "2026-10-31T14:23:46.33Z" },
 ]
 
 [[package]]

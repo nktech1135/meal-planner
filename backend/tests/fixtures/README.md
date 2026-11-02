@@ -7,3 +7,7 @@ Recorded responses used by the source-adapter tests.
 
 Nutritionix, Edamam and Open Food Facts tests use small synthetic payloads shaped
 like those services' documented responses (see `tests/test_sources.py`).
+
+- `exercise/*.fit` — synthetic FIT activity files (a run; a swim + mountain-bike multisport file) written
+  with Garmin's FIT SDK encoder (`garmin-fit-sdk` 21.218.0), 2026-11-02. TCX and GPX test files are
+  built inline in `tests/test_exercise.py`.

@@ -12,6 +12,7 @@ from app.routers import (
     auth,
     body,
     conversions,
+    exercise,
     foods,
     log,
     plan,
@@ -70,8 +71,8 @@ def create_app() -> FastAPI:
             response.headers.setdefault("Content-Security-Policy", CSP)
         return response
 
-    for module in (auth, account, profile, foods, sources, conversions, recipes, log, saved_meals, body, plan, sharing,
-                   supplements, advisor, admin):
+    for module in (auth, account, profile, foods, sources, conversions, recipes, log, saved_meals, body, exercise, plan,
+                   sharing, supplements, advisor, admin):
         app.include_router(module.router)
 
     @app.get("/api/health")

@@ -29,6 +29,7 @@ const TOOL_LABELS: Record<string, string> = {
   list_recipes: "looked at recipes",
   get_trends: "looked at trends",
   get_body_measurements: "checked body measurements",
+  get_exercise: "looked at exercise",
   get_meal_plan: "read your meal plan",
   propose_plan_items: "proposed plan items",
   check_supplement: "checked a supplement against your intake",
