@@ -126,7 +126,7 @@ const pages: [string, (s: Seed) => string][] = [
 for (const scheme of ["light", "dark"] as const) {
   test.describe(`${scheme} scheme`, () => {
     test.use({ colorScheme: scheme });
-    // The multi-step tests below audit several pages each; CI machines are slower than a laptop.
+    // The multi-step tests below audit several pages each; small machines are slower than a laptop.
     test.describe.configure({ timeout: 120_000 });
 
     // One test per page, so each page has its own time budget and a failure names the page.

@@ -38,9 +38,6 @@ umask 022
 # Where the code is published (a fork can change this, or pass --repo).
 DEFAULT_REPO="https://github.com/nktech1135/meal-planner.git"
 DEFAULT_BRANCH="main"
-WEB_BRANCH="web-builds"
-OFFICIAL_WEB_REF="refs/official/web-builds"
-BUILD_WEB=0
 DEFAULT_PORT=8080
 
 UV_VERSION="0.11.25"
@@ -126,8 +123,6 @@ Commands:
                 --port N         port the app listens on at 127.0.0.1 (default 8080)
                 --repo URL|PATH  git repository to install from
                 --branch NAME    branch to track (default main)
-                --build-web      build the web interface here (needs about 300 MB of memory)
-                                 when CI hasn't published one for the commit
               System-wide only:
                 --domain NAME    serve over HTTPS at NAME (DNS must point here); without it,
                                  Caddy serves plain HTTP on port 80
@@ -138,7 +133,6 @@ Commands:
   upgrade     Upgrade to the latest commit of the tracked branch
                 --ref REF        a specific branch, tag or commit instead
                 --force          rebuild even if already at that commit
-                --build-web      as for install
   uninstall   Remove the app; keeps config, data and the database
                 --purge          also delete config, data, backups, database and the service user
                 --yes            don't ask for confirmation
@@ -305,55 +299,18 @@ fetch_source() {
     log "Fetching updates from $REPO"
   fi
   git_ -C "$REPO_DIR" fetch --quiet --prune --tags origin '+refs/heads/*:refs/heads/*'
-  # Installed from somewhere else (a local copy, a mirror, a fork): the official builds still
-  # cover any commit it shares with the main repository.
-  if [[ "$REPO" != "$DEFAULT_REPO" ]]; then
-    git_ -C "$REPO_DIR" fetch --quiet "$DEFAULT_REPO" "+refs/heads/$WEB_BRANCH:$OFFICIAL_WEB_REF" 2>/dev/null \
-      || warn "could not fetch the prebuilt web interfaces from $DEFAULT_REPO"
-  fi
 }
 
 resolve_ref() {  # resolve_ref REF -> full commit id
   git_ -C "$REPO_DIR" rev-parse --verify --quiet "$1^{commit}" || die "unknown branch, tag or commit: $1"
 }
 
-# After the tests pass, CI publishes each main commit's built web interface to the
-# web-builds branch, as a directory named after the commit. Unpacking that spares the
-# server a Node.js download, about 150 MB of packages and the build itself.
-# Building it here instead (about 300 MB of memory) only happens with --build-web.
-web_build_ref() {  # web_build_ref REV -> the ref whose tree has REV's build; fails if none does
-  local ref
-  for ref in "refs/heads/$WEB_BRANCH" "$OFFICIAL_WEB_REF"; do
-    if git_ -C "$REPO_DIR" cat-file -e "$ref:$1/index.html" 2>/dev/null; then echo "$ref"; return 0; fi
-  done
-  return 1
+pick_rev() {  # pick_rev BRANCH -> the newest commit on BRANCH
+  resolve_ref "$1"
 }
 
-no_web_build() {  # no_web_build REV: stop, unless building here was asked for
-  ((BUILD_WEB)) && return 0
-  die "there's no prebuilt web interface for ${1:0:12}. CI publishes one a few minutes after each push to main once the tests pass, so try again shortly. To build it on this machine instead (needs about 300 MB of memory), add --build-web."
-}
-
-pick_rev() {  # pick_rev BRANCH -> the newest commit on BRANCH that has a published web build
-  local tip rev
-  tip="$(resolve_ref "$1")"
-  if web_build_ref "$tip" >/dev/null; then echo "$tip"; return 0; fi
-  ((BUILD_WEB)) && { echo "$tip"; return 0; }
-  while read -r rev; do
-    if web_build_ref "$rev" >/dev/null; then
-      warn "the newest commit, ${tip:0:12}, has no CI build yet (CI may still be testing it); using ${rev:0:12}, the newest that has one"
-      echo "$rev"
-      return 0
-    fi
-  done < <(git_ -C "$REPO_DIR" rev-list --max-count=30 "$tip")
-  no_web_build "$tip"
-}
-
-pick_ref() {  # pick_ref REF -> REF's commit (an explicit choice: no falling back to an older one)
-  local rev
-  rev="$(resolve_ref "$1")"
-  web_build_ref "$rev" >/dev/null || no_web_build "$rev"
-  echo "$rev"
+pick_ref() {  # pick_ref REF -> REF's commit
+  resolve_ref "$1"
 }
 
 build_release() {  # build_release REV -> path of the built release
@@ -372,29 +329,23 @@ build_release() {  # build_release REV -> path of the built release
     "$rel/venv/bin/python" -m compileall -q app alembic >/dev/null
   ) >&2
 
-  local web_ref
-  if web_ref="$(web_build_ref "$rev")"; then
-    log "Unpacking the web interface built by CI"
-    mkdir -p "$rel/frontend/dist"
-    git_ -C "$REPO_DIR" archive "$web_ref:$rev" | tar -x -C "$rel/frontend/dist"
-  else
-    no_web_build "$rev"
-    build_web "$rel"
-  fi
+  build_web "$rel"
   [[ -f "$rel/frontend/dist/index.html" ]] || die "web interface build produced no index.html"
   echo "$rel"
 }
 
-build_web() {  # build_web RELEASE: the fallback when CI hasn't published a build of this commit
+# The web interface is built on each server: Node.js (pinned, checksum-verified, under $TOOLS) fetches
+# the packages and esbuild bundles them, in about 300 MB of memory. node_modules is removed afterwards.
+build_web() {  # build_web RELEASE
   local rel="$1"
-  log "Building the web interface here (--build-web)"
+  log "Building the web interface"
   install_node
   check_build_memory
   log "Downloading web interface packages"
   web_step "$rel" 900 "the package download" \
     npm ci --ignore-scripts --no-audit --no-fund --prefer-offline --fetch-timeout=60000 --fetch-retries=4
   log "Bundling the web interface"
-  # Type-checking is CI's job; the installer only needs the bundle (esbuild, about 130 MB).
+  # Type-checking is part of ./test.sh; the server only needs the bundle (esbuild, about 130 MB).
   web_step "$rel" 900 "bundling" node build.mjs
   rm -rf "$rel/frontend/node_modules"
 }
@@ -422,10 +373,16 @@ web_step() {  # web_step RELEASE LIMIT DESCRIPTION CMD...
   die "$what failed (exit $rc, see above; full log: $out)"
 }
 
+BUILD_NEEDS_KB=$((350 * 1024))  # the build's measured peak (~300 MB) plus some room
+
+free_memory_kb() {
+  awk '/^(MemAvailable|SwapFree):/ {s += $2} END {print s + 0}' /proc/meminfo 2>/dev/null || echo 0
+}
+
 check_build_memory() {
   local kb
-  kb="$(awk '/^(MemAvailable|SwapFree):/ {s += $2} END {print s + 0}' /proc/meminfo 2>/dev/null || echo 0)"
-  if ((kb > 0 && kb < 300 * 1024)); then
+  kb="$(free_memory_kb)"
+  if ((kb > 0 && kb < BUILD_NEEDS_KB)); then
     warn "only $((kb / 1024)) MB of memory is free; building the web interface needs about 300 MB, so it may be slow or fail (adding swap helps)"
   fi
 }
@@ -765,6 +722,24 @@ service_start() {
   fi
 }
 
+# On a small machine the running app (~190 MB) and the build (~300 MB) don't fit side by side, so the
+# app stops while the new release builds; if the build fails, the old release starts again on exit.
+pause_for_build() {
+  local kb
+  kb="$(free_memory_kb)"
+  [[ "$(service_state)" == active || "$(service_state)" == running ]] || return 0
+  ((kb == 0 || kb >= BUILD_NEEDS_KB)) && return 0
+  warn "only $((kb / 1024)) MB of memory is free, so Mealplan stops while the new version builds (a few minutes)"
+  service_stop
+  trap resume_after_build EXIT
+}
+
+resume_after_build() {
+  [[ "$(service_state)" == active || "$(service_state)" == running ]] && return 0
+  warn "starting the previous release again"
+  service_start || true
+}
+
 service_state() {
   if [[ "$SERVICE_KIND" == process ]]; then
     if [[ -f "$VAR_DIR/server.pid" ]] && kill -0 "$(cat "$VAR_DIR/server.pid")" 2>/dev/null; then echo running
@@ -810,7 +785,7 @@ cmd_install() {
       --listen) die "--listen is no longer supported: the app only listens on 127.0.0.1 (system-wide, Caddy serves it to the network)" ;;
       --db) DB_KIND="${2:?--db needs a value}"; shift 2 ;;
       --no-linger) NO_LINGER=1; shift ;;
-      --build-web) BUILD_WEB=1; shift ;;
+      --build-web) shift ;;  # always on now; accepted so older commands keep working
       --yes|-y) ASSUME_YES=1; shift ;;
       *) die "unknown option for install: $1 (see: mealplan help)" ;;
     esac
@@ -898,7 +873,7 @@ cmd_upgrade() {
     case "$1" in
       --ref) ref="${2:?--ref needs a value}"; shift 2 ;;
       --force) force=1; shift ;;
-      --build-web) BUILD_WEB=1; shift ;;
+      --build-web) shift ;;  # always on now; accepted so older commands keep working
       *) die "unknown option for upgrade: $1" ;;
     esac
   done
@@ -922,7 +897,8 @@ cmd_upgrade() {
   log "Upgrading ${old_rev:0:12} -> ${new_rev:0:12}"
   local new_rel backup old_db migrated=0
   [[ "$new_rev" == "$old_rev" ]] && old_rel=""  # --force rebuild of the same commit: no separate release to fall back to
-  new_rel="$(build_release "$new_rev")"          # the old release keeps serving while this builds
+  pause_for_build
+  new_rel="$(build_release "$new_rev")"          # the old release keeps serving while this builds, memory permitting
   backup="$(backup_db)"
   old_db="$(db_revision "$new_rel")"
 
@@ -944,6 +920,7 @@ cmd_upgrade() {
   }
 
   service_stop
+  trap - EXIT  # from here on, rollback restarts the right release
   if ! alembic_ "$new_rel" upgrade head; then rollback; fi
   migrated=1
   switch_to "$new_rel"

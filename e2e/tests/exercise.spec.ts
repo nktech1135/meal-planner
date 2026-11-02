@@ -19,15 +19,19 @@ test("logging a workout raises the day's energy target", async ({ page }) => {
   await page.getByLabel("Duration (min)").fill("40");
   await page.getByRole("button", { name: "Log workout" }).click();
 
-  // (7.5 - 1) MET × 60 kg × 40/60 h = 260 kcal
+  // (7.5 - 1) MET × weight × 40/60 h, with the latest weigh-in (other specs record some) or the profile weight
   const recent = page.getByRole("region", { name: "Last 30 days" });
-  await expect(recent.getByText("+260 kcal · Compendium METs")).toBeVisible();
+  await expect(recent.getByText(/kcal · Compendium METs/)).toBeVisible();
+  const [logged] = await api(page.request, "GET", "/api/exercise");
+  const kcal = Math.round(6.5 * logged.weight_kg * (40 / 60));
+  expect(Math.round(logged.kcal)).toBe(kcal);
+  await expect(recent.getByText(`+${kcal} kcal · Compendium METs`)).toBeVisible();
   const after = await api(page.request, "GET", "/api/summary/day");
-  expect(target(after)).toBe(target(before) + 260);
+  expect(target(after)).toBe(target(before) + kcal);
 
   await page.goto("/");
-  await expect(page.getByText("260 kcal above resting is included in this day's energy target.")).toBeVisible();
-  await expect(page.getByText(/Includes 260 kcal of logged exercise/).first()).toBeVisible();
+  await expect(page.getByText(`${kcal} kcal above resting is included in this day's energy target.`)).toBeVisible();
+  await expect(page.getByText(new RegExp(`Includes ${kcal} kcal of logged exercise`)).first()).toBeVisible();
 
   await page.goto("/exercise");
   await recent.getByRole("button", { name: /^Delete Jogging/ }).click();
@@ -42,14 +46,16 @@ test("importing a GPX file estimates energy from the activity type", async ({ pa
     `<trk><type>hiking</type><trkseg>${points}</trkseg></trk></gpx>`;
 
   await page.goto("/exercise");
-  await page.getByLabel("Files").setInputFiles({ name: "hike.gpx", mimeType: "application/gpx+xml", buffer: Buffer.from(gpx) });
+  const files = page.getByLabel("Files", { exact: true });
+  await files.setInputFiles({ name: "hike.gpx", mimeType: "application/gpx+xml", buffer: Buffer.from(gpx) });
   await page.getByRole("button", { name: "Import 1 file" }).click();
   await expect(page.getByText("Imported 1 workout.")).toBeVisible();
-  // (5.3 - 1) MET × 60 kg × 0.5 h = 129 kcal
-  await expect(page.getByText("+129 kcal · Compendium METs")).toBeVisible();
-  await expect(page.getByText(/Hiking or walking at a normal pace/).first()).toBeVisible();
+  // (5.3 - 1) MET × weight × 0.5 h
+  const [hike] = await api(page.request, "GET", "/api/exercise");
+  await expect(page.getByText(`+${Math.round(4.3 * hike.weight_kg * 0.5)} kcal · Compendium METs`)).toBeVisible();
+  await expect(page.getByRole("region", { name: "Last 30 days" }).getByText(/Hiking or walking at a normal pace/).first()).toBeVisible();
 
-  await page.getByLabel("Files").setInputFiles({ name: "hike.gpx", mimeType: "application/gpx+xml", buffer: Buffer.from(gpx) });
+  await files.setInputFiles({ name: "hike.gpx", mimeType: "application/gpx+xml", buffer: Buffer.from(gpx) });
   await page.getByRole("button", { name: "Import 1 file" }).click();
   await expect(page.getByText("Imported 0 workouts, skipped 1 already imported.")).toBeVisible();
 });

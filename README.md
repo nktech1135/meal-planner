@@ -83,15 +83,38 @@ Bootstrap configuration (database, `SECRET_KEY`) comes from the environment or
 `backend/.env`; see [.env.example](.env.example). Everything else, including
 API keys, is set in the app under **Settings** once you're signed in as the admin.
 
-Tests and lint:
+### Tests
+
+There is no CI: every check runs locally with one command, and should pass
+before you push.
 
 ```bash
-cd backend && uv run pytest && uv run ruff check .
-cd frontend && npm run build
+./test.sh                    # everything
+./test.sh backend frontend   # only some stages
+./test.sh --skip e2e         # all but some
 ```
 
-Browser tests (Playwright) drive the built app on a throwaway database. They
-cover:
+| Stage | What it runs |
+|---|---|
+| `backend` | `ruff`, then the backend tests on in-memory SQLite |
+| `postgres` | the backend tests and migrations (up, `alembic check`, down) on a throwaway PostgreSQL cluster in a temporary directory |
+| `installer` | `shellcheck` on `install.sh` and the test scripts |
+| `frontend` | `npm ci`, the TypeScript type-check and the esbuild build |
+| `e2e` | the Playwright browser tests against the built app on a throwaway database |
+
+A stage whose tools are missing fails and says how to install them, so a green
+run means everything ran. One-time setup on Debian/Ubuntu:
+
+```bash
+sudo apt-get install postgresql shellcheck
+sudo systemctl disable --now postgresql   # optional: the tests start their own cluster
+cd e2e && npm ci && sudo env "PATH=$PATH" npx playwright install-deps chromium  # PATH: finds npx from nvm
+```
+
+Set `TEST_DATABASE_URL` to use an existing scratch PostgreSQL database instead of a
+throwaway cluster. It is wiped for each test.
+
+The browser tests cover:
 - logging, supplement forms, settings and keys, planning, invitations and
   password resets;
 - every page rendering with no errors or sideways scrolling at desktop and phone
@@ -99,15 +122,6 @@ cover:
 - accessibility: axe checks against WCAG 2.2 A/AA on every page and opened
   state, in light and dark themes, plus screen-reader behaviour (focus on
   navigation, live announcements, tabs, menus, charts, form errors).
-
-```bash
-cd frontend && npm run build
-cd ../e2e && npm ci && npx playwright install --with-deps chromium && npx playwright test
-```
-
-The backend tests use in-memory SQLite. To run them against PostgreSQL, point
-`TEST_DATABASE_URL` at a scratch database, which is wiped for each test:
-`TEST_DATABASE_URL=postgresql+psycopg://user@localhost/mealplan_test uv run pytest`.
 
 Schema changes: edit `backend/app/models.py`, then
 `uv run alembic revision --autogenerate -m "describe change"` and review the
@@ -164,15 +178,13 @@ The installer:
   local socket, so there's no database password to manage. On a machine with
   less than 1 GB of memory it uses SQLite instead, which runs inside the app
   and saves the 60–100 MB PostgreSQL takes (`--db postgres|sqlite` overrides);
-- installs pinned, checksum-verified copies of uv and Python 3.12 under
-  `/opt/mealplan/tools`, independent of the OS versions;
-- unpacks the web interface that CI built and published to the `web-builds`
-  branch after the tests passed, so the server needs no Node.js and does no
-  building. If the newest commit isn't published yet, it installs the newest
-  one that is. Installs from a local copy, mirror or fork also use the
-  official builds for the commits they share. Building the interface on the
-  server instead (esbuild, about 300 MB including the package download) only
-  happens with `--build-web`;
+- installs pinned, checksum-verified copies of uv, Python 3.12 and Node.js
+  under `/opt/mealplan/tools`, independent of the OS versions;
+- builds the web interface on the server: npm fetches the packages and esbuild
+  bundles them, in about 300 MB of memory, and the packages are removed
+  afterwards. On an upgrade the running version keeps serving during the build,
+  unless the machine is short of memory; then it stops for the few minutes the
+  build takes, and starts again if the build fails;
 - puts the app in `/opt/mealplan/releases/<commit>`, runs migrations, and
   starts the `mealplan` systemd service with a hardened unit (read-only system,
   no capabilities);
