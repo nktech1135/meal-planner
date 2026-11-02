@@ -126,6 +126,9 @@ def _category(food: dict[str, str], classes: dict[str, str]) -> str | None:
     return None
 
 
+VALUE_COLUMNS = ("EUFDNAME", "METHIND", "METHTYPE", "BESTLOC")
+
+
 def parse(files: dict[str, Path]) -> Iterator[ExternalFood]:
     with zipfile.ZipFile(files["zip"]) as zf:
         units = {r["EUFDNAME"]: UNITS.get(r["COMPUNIT"].upper()) for r in _read(zf, "component.csv")}
@@ -138,8 +141,8 @@ def parse(files: dict[str, Path]) -> Iterator[ExternalFood]:
             recipes[r["FOODID"]].add(r["CONFDID"])
         values: dict[str, list[dict[str, str]]] = defaultdict(list)
         for r in _read(zf, "component_value.csv"):
-            if r["EUFDNAME"] in MAPPING:
-                values[r["FOODID"]].append(r)
+            if r["EUFDNAME"] in MAPPING:  # only the columns used below: the full rows took ~100 MB
+                values[r["FOODID"]].append({k: r[k] for k in VALUE_COLUMNS})
         portions: dict[str, list[tuple[str, float]]] = defaultdict(list)
         for r in _read(zf, "foodaddunit.csv"):
             label = PORTIONS.get(r["FOODUNIT"])

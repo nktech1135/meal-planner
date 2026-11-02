@@ -27,6 +27,8 @@ import re
 from collections.abc import Iterator
 from pathlib import Path
 
+import ijson
+
 from app.services.datasets import BY_KEY
 from app.sources.base import ExternalFood
 from app.sources.intl.common import Components, make_food
@@ -134,9 +136,10 @@ def parse(files: dict[str, Path]) -> Iterator[ExternalFood]:
     groups = {g["foodGroupId"]: g for g in _load(files["groups"], "foodGroups")}
     sources = {s["sourceId"]: s.get("description") or "" for s in _load(files["sources"], "sources")} \
         if files.get("sources") else {}
-    for food in _load(files["foods"], "foods"):
-        if not food.get("foodId") or not food.get("foodName"):
-            continue
-        parsed = _food(food, eurofir, groups, sources)
-        if parsed.nutrients:
-            yield parsed
+    with files["foods"].open("rb") as fh:  # streamed: the foods file is ~15 MB of JSON, ~150 MB once parsed
+        for food in ijson.items(fh, "foods.item", use_float=True):
+            if not food.get("foodId") or not food.get("foodName"):
+                continue
+            parsed = _food(food, eurofir, groups, sources)
+            if parsed.nutrients:
+                yield parsed

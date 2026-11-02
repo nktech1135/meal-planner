@@ -4,8 +4,8 @@ import json
 import logging
 import re
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
-import anthropic
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,9 @@ from app.advisor.tools import TOOLS, run_tool
 from app.config import Settings
 from app.models import AdvisorConversation, AdvisorMessage, User
 from app.services.summary import local_today
+
+if TYPE_CHECKING:
+    import anthropic  # imported where it's used: the SDK costs ~35 MB, and many installs never use the advisor
 
 log = logging.getLogger(__name__)
 
@@ -116,13 +119,15 @@ def _blocks(content) -> list[dict]:
 
 
 def run_turn(
-    db: Session, client: anthropic.Anthropic, settings: Settings, user: User,
+    db: Session, client: "anthropic.Anthropic", settings: Settings, user: User,
     conversation: AdvisorConversation, text: str,
 ) -> None:
     """Append the user's message and the advisor's reply (with any tool rounds) to the conversation.
 
     The whole turn is committed at the end, so a failure leaves the conversation unchanged.
     """
+    import anthropic
+
     history = [{"role": m.role, "content": m.content} for m in conversation.messages]
     tz = (user.profile.timezone if user.profile else None) or "UTC"
     user_content = [

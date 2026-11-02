@@ -126,12 +126,13 @@ Commands:
                 --port N         port the app listens on at 127.0.0.1 (default 8080)
                 --repo URL|PATH  git repository to install from
                 --branch NAME    branch to track (default main)
-                --build-web      build the web interface here (needs about 1 GB of memory)
+                --build-web      build the web interface here (needs about 300 MB of memory)
                                  when CI hasn't published one for the commit
               System-wide only:
                 --domain NAME    serve over HTTPS at NAME (DNS must point here); without it,
                                  Caddy serves plain HTTP on port 80
-                --db postgres|sqlite   database (default postgres; per-user always uses sqlite)
+                --db postgres|sqlite   database (default postgres, or sqlite on machines with
+                                 under 1 GB of memory; per-user always uses sqlite)
               Per-user only:
                 --no-linger      don't keep running after you log out / start at boot
   upgrade     Upgrade to the latest commit of the tracked branch
@@ -319,7 +320,7 @@ resolve_ref() {  # resolve_ref REF -> full commit id
 # After the tests pass, CI publishes each main commit's built web interface to the
 # web-builds branch, as a directory named after the commit. Unpacking that spares the
 # server a Node.js download, about 150 MB of packages and the build itself.
-# Building it here instead needs about 1 GB of memory, so that only happens with --build-web.
+# Building it here instead (about 300 MB of memory) only happens with --build-web.
 web_build_ref() {  # web_build_ref REV -> the ref whose tree has REV's build; fails if none does
   local ref
   for ref in "refs/heads/$WEB_BRANCH" "$OFFICIAL_WEB_REF"; do
@@ -330,7 +331,7 @@ web_build_ref() {  # web_build_ref REV -> the ref whose tree has REV's build; fa
 
 no_web_build() {  # no_web_build REV: stop, unless building here was asked for
   ((BUILD_WEB)) && return 0
-  die "there's no prebuilt web interface for ${1:0:12}. CI publishes one a few minutes after each push to main once the tests pass, so try again shortly. To build it on this machine instead (needs about 1 GB of memory), add --build-web."
+  die "there's no prebuilt web interface for ${1:0:12}. CI publishes one a few minutes after each push to main once the tests pass, so try again shortly. To build it on this machine instead (needs about 300 MB of memory), add --build-web."
 }
 
 pick_rev() {  # pick_rev BRANCH -> the newest commit on BRANCH that has a published web build
@@ -393,8 +394,8 @@ build_web() {  # build_web RELEASE: the fallback when CI hasn't published a buil
   web_step "$rel" 900 "the package download" \
     npm ci --ignore-scripts --no-audit --no-fund --prefer-offline --fetch-timeout=60000 --fetch-retries=4
   log "Bundling the web interface"
-  # Type-checking is CI's job; the installer only needs the bundle, which takes less memory.
-  web_step "$rel" 900 "bundling" node_modules/.bin/vite build --logLevel warn
+  # Type-checking is CI's job; the installer only needs the bundle (esbuild, about 130 MB).
+  web_step "$rel" 900 "bundling" node build.mjs
   rm -rf "$rel/frontend/node_modules"
 }
 
@@ -424,8 +425,8 @@ web_step() {  # web_step RELEASE LIMIT DESCRIPTION CMD...
 check_build_memory() {
   local kb
   kb="$(awk '/^(MemAvailable|SwapFree):/ {s += $2} END {print s + 0}' /proc/meminfo 2>/dev/null || echo 0)"
-  if ((kb > 0 && kb < 600 * 1024)); then
-    warn "only $((kb / 1024)) MB of memory is free; building the web interface needs about 1 GB, so it may be slow or fail (adding swap helps)"
+  if ((kb > 0 && kb < 300 * 1024)); then
+    warn "only $((kb / 1024)) MB of memory is free; building the web interface needs about 300 MB, so it may be slow or fail (adding swap helps)"
   fi
 }
 
@@ -454,6 +455,20 @@ install_cli() {  # install_cli RELEASE_DIR
 }
 
 # --- Configuration -------------------------------------------------------------------
+# PostgreSQL takes 60-100 MB; on a small machine SQLite (inside the app process) leaves room for the app.
+SMALL_MACHINE_KB=$((1024 * 1024))
+
+default_db() {
+  local kb
+  kb="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+  if ((kb > 0 && kb < SMALL_MACHINE_KB)); then
+    log "This machine has $((kb / 1024)) MB of memory, so Mealplan will use SQLite rather than PostgreSQL (--db postgres to override)"
+    echo sqlite
+  else
+    echo postgres
+  fi
+}
+
 random_secret() { head -c 48 /dev/urandom | base64 -w0 | tr '+/' '-_' | tr -d '='; }
 
 write_config() {
@@ -801,7 +816,7 @@ cmd_install() {
     esac
   done
   if is_system; then
-    DB_KIND="${DB_KIND:-postgres}"
+    DB_KIND="${DB_KIND:-$(default_db)}"
   else
     [[ -z "$DOMAIN" ]] || die "--domain needs the system-wide install (HTTPS on ports 80/443 requires root); run with sudo"
     [[ "${DB_KIND:-sqlite}" == sqlite ]] || die "--db postgres needs the system-wide install; run with sudo"

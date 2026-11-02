@@ -49,7 +49,7 @@ A web app for tracking meals and supplements, with an AI nutrition advisor.
 ## Architecture
 
 ```
-frontend/   React + TypeScript (Vite); the built files are served by the API process
+frontend/   React + TypeScript, bundled by esbuild (build.mjs); the built files are served by the API process
 backend/    FastAPI + SQLAlchemy 2 + Alembic; PostgreSQL in production, SQLite for dev/tests
   app/sources/    one adapter per data source (USDA FDC, NIH DSLD, Nutritionix, Edamam, Open Food Facts)
   app/services/   nutrient arithmetic, raw↔cooked conversion, targets (DRIs), daily summaries
@@ -73,7 +73,7 @@ uv sync
 uv run alembic upgrade head          # creates ./mealplan.db (SQLite)
 uv run uvicorn app.main:app --reload
 
-# Web (http://localhost:5173, proxies /api to :8000)
+# Web (http://localhost:5173, proxies /api to :8000, reloads on change)
 cd frontend
 npm install
 npm run dev
@@ -161,17 +161,18 @@ sudo ./install.sh install
 The installer:
 - installs PostgreSQL, Caddy, git and curl from apt;
 - creates a `mealplan` system user and a PostgreSQL database it reaches over the
-  local socket, so there's no database password to manage (`--db sqlite` is
-  also available);
+  local socket, so there's no database password to manage. On a machine with
+  less than 1 GB of memory it uses SQLite instead, which runs inside the app
+  and saves the 60–100 MB PostgreSQL takes (`--db postgres|sqlite` overrides);
 - installs pinned, checksum-verified copies of uv and Python 3.12 under
   `/opt/mealplan/tools`, independent of the OS versions;
 - unpacks the web interface that CI built and published to the `web-builds`
   branch after the tests passed, so the server needs no Node.js and does no
   building. If the newest commit isn't published yet, it installs the newest
   one that is. Installs from a local copy, mirror or fork also use the
-  official builds for the commits they share. The whole install runs on a
-  machine with less than 1 GB of memory. Building the interface on the
-  server instead needs about 1 GB and only happens with `--build-web`;
+  official builds for the commits they share. Building the interface on the
+  server instead (esbuild, about 300 MB including the package download) only
+  happens with `--build-web`;
 - puts the app in `/opt/mealplan/releases/<commit>`, runs migrations, and
   starts the `mealplan` systemd service with a hardened unit (read-only system,
   no capabilities);
@@ -180,6 +181,14 @@ The installer:
   generated `SECRET_KEY`. The key also encrypts the API keys stored in
   Settings, so don't change it;
 - puts Caddy in front of the app, which itself only listens on 127.0.0.1.
+
+**Small machines.** Mealplan builds and runs in 512 MB of memory. Measured with
+hard memory limits (2026-11-02): a full build from scratch (npm packages, the
+esbuild bundle and the Python environment) completed under a 300 MB limit; the
+app on SQLite starts at about 90 MB, settles near 190 MB with every national
+database imported, and peaked at 236 MB during imports under a 256 MB limit.
+The 3 GB USDA Branded Foods import peaks at about 120 MB. Temporary files such
+as dataset downloads go to `/var/tmp`, because `/tmp` is often held in memory.
   Without `--domain`, Caddy serves plain HTTP on port 80. With `--domain`, it
   serves HTTPS with an automatic certificate (and redirects HTTP to it). If
   Caddy's own Caddyfile is still the packaged one, the installer sets it aside as

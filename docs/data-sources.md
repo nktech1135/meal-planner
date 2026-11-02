@@ -45,7 +45,7 @@ because the date was entered in the factor column; those rows are skipped rather
 than guessed.
 
 **Branded Foods** is large: about a 200 MB download (3.2 GB of JSON). Measured on
-a laptop, it imported in under two minutes with about 440 MB peak memory and
+a laptop, it imported 434,001 foods in a few minutes with about 120 MB peak memory and
 took about 1 GB in SQLite. Values are manufacturer label data (trust: `label`).
 Search ranks generic foods before branded products. On PostgreSQL, trigram
 indexes (`pg_trgm`) keep searches fast at this size: a no-match search over

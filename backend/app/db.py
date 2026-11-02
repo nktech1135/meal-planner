@@ -18,8 +18,13 @@ def make_engine(url: str, **extra):
     if url.startswith("sqlite"):
 
         @event.listens_for(engine, "connect")
-        def _fk_on(dbapi_conn, _):
+        def _sqlite_setup(dbapi_conn, _):
             dbapi_conn.execute("PRAGMA foreign_keys=ON")
+            # Readers don't block the writer (e.g. a dataset import running beside page loads), and a
+            # writer waits for another instead of failing with "database is locked".
+            dbapi_conn.execute("PRAGMA journal_mode=WAL")
+            dbapi_conn.execute("PRAGMA synchronous=NORMAL")
+            dbapi_conn.execute("PRAGMA busy_timeout=10000")
 
     return engine
 

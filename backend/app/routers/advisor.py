@@ -1,6 +1,5 @@
 from datetime import UTC, datetime
 
-import anthropic
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,10 +16,13 @@ from app.settings_store import get_runtime
 router = APIRouter(prefix="/api/advisor", tags=["advisor"])
 
 
-def get_anthropic_client(settings: Settings = Depends(get_runtime)) -> anthropic.Anthropic:
+def get_anthropic_client(settings: Settings = Depends(get_runtime)):
+    """An anthropic.Anthropic client (the SDK is imported only when the advisor is used)."""
     if not settings.anthropic_api_key:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
                             "The advisor isn't set up yet: an admin can add an Anthropic API key in Settings")
+    import anthropic
+
     return anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
 
@@ -59,7 +61,7 @@ def chat(
     body: ChatIn,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    client: anthropic.Anthropic = Depends(get_anthropic_client),
+    client=Depends(get_anthropic_client),
     settings: Settings = Depends(get_runtime),
 ):
     if messages_today(db, user) >= settings.advisor_daily_message_limit:

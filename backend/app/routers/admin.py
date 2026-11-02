@@ -1,6 +1,5 @@
 import secrets
 
-import anthropic
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
@@ -43,6 +42,8 @@ def write_settings(body: SettingsUpdate, user: User = Depends(admin_user), db: S
 def test_integration(integration: str, _: User = Depends(admin_user), settings: Settings = Depends(get_runtime)):
     """Check that the configured credentials work. Uses only free/cheap calls."""
     if integration == "anthropic":
+        import anthropic
+
         if not settings.anthropic_api_key:
             return {"ok": False, "message": "No Anthropic API key set"}
         try:

@@ -26,10 +26,11 @@ from urllib.parse import urlsplit
 
 import httpx
 import ijson
-from sqlalchemy import select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import Row, select
+from sqlalchemy.orm import Session, aliased, sessionmaker
 
-from app.models import CookingYield, Food, ImportJob, RetentionProfile
+from app.memory import release_free_memory
+from app.models import CookingYield, Food, FoodNutrient, ImportJob, RetentionProfile
 from app.nutrients import BY_FDC_NUMBER, Trust, weakest
 from app.sources.registry import bulk_upsert_external_foods
 from app.sources.usda_fdc import parse_fdc_food
@@ -305,6 +306,7 @@ def _run_job(factory: sessionmaker, job_id: int, ds: Dataset, client: httpx.Clie
         db.commit()
     finally:
         db.close()
+        release_free_memory()
 
 
 def _download(client: httpx.Client, url: str, dest, report: _Progress) -> None:
@@ -465,11 +467,17 @@ def derive_usda_yields(db: Session) -> int:
     lab datasets (Survey/FNDDS dishes include coatings, oil and sauces, which breaks the pairing).
     Returns the number of derived yields now on file.
     """
-    foods = list(db.scalars(select(Food).where(
-        Food.source == "usda_fdc", Food.owner_id.is_(None),
-        Food.source_data_type.in_(("Foundation", "SR Legacy")))))
-    raws: dict[tuple, Food] = {}
-    cooked: list[tuple[tuple, Food, list[str]]] = []
+    # Only the columns the pairing needs, with protein joined in: loading whole Food objects (and their
+    # eagerly loaded nutrients) for every USDA food took hundreds of MB.
+    protein = aliased(FoodNutrient)
+    foods = db.execute(
+        select(Food.id, Food.name, Food.state, Food.category, Food.trust_level, Food.source_id,
+               protein.amount.label("protein_g"))
+        .outerjoin(protein, (protein.food_id == Food.id) & (protein.nutrient_code == "protein_g"))
+        .where(Food.source == "usda_fdc", Food.owner_id.is_(None),
+               Food.source_data_type.in_(("Foundation", "SR Legacy"))))
+    raws: dict[tuple, Row] = {}
+    cooked: list[tuple[tuple, Row, list[str]]] = []
     for f in foods:
         parts = [p for p in _parts(f.name) if p not in NEUTRAL_WORDS and p not in SHAPE_WORDS]
         if f.state == "raw" or (f.state is None and "dry" in parts and f.category in DRY_GOODS):
@@ -487,7 +495,7 @@ def derive_usda_yields(db: Session) -> int:
         raw = raws.get(key)
         if raw is None:
             continue
-        rp, cp = raw.nutrient_map().get("protein_g"), cook.nutrient_map().get("protein_g")
+        rp, cp = raw.protein_g, cook.protein_g
         if not rp or not cp or rp < 5:
             continue
         factor = rp / cp

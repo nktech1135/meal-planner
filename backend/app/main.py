@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.config import DEV_SECRET_KEY, get_settings
+from app.memory import disk_temp_dir, limit_arenas
 from app.routers import (
     account,
     admin,
@@ -54,6 +55,8 @@ def mount_frontend(app: FastAPI, dist: Path) -> None:
 
 
 def create_app() -> FastAPI:
+    limit_arenas()
+    disk_temp_dir()
     settings = get_settings()
     if settings.secret_key == DEV_SECRET_KEY and not settings.database_url.startswith("sqlite"):
         raise RuntimeError("Set SECRET_KEY before running against a real database")
